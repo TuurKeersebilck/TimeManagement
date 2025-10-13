@@ -35,7 +35,7 @@ namespace TimeManagementBackend.Migrations
                     StartTime = table.Column<TimeSpan>(type: "TEXT", nullable: false),
                     EndTime = table.Column<TimeSpan>(type: "TEXT", nullable: false),
                     Break = table.Column<TimeSpan>(type: "TEXT", nullable: false),
-                    UserId = table.Column<int>(type: "INTEGER", nullable: false)
+                    UserId = table.Column<int>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -44,8 +44,7 @@ namespace TimeManagementBackend.Migrations
                         name: "FK_TimeLogs_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateIndex(

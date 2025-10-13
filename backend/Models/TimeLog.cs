@@ -9,7 +9,4 @@ public class TimeLog
 
     // Computed property (wordt niet opgeslagen in DB)
     public double TotalHours => (EndTime - StartTime - Break).TotalHours;
-
-    public int UserId { get; set; }
-    public User? User { get; set; }
 }

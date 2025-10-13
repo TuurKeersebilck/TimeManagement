@@ -11,7 +11,7 @@ using TimeManagementBackend.Data;
 namespace TimeManagementBackend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251010155006_InitialCreate")]
+    [Migration("20251013151618_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -38,7 +38,7 @@ namespace TimeManagementBackend.Migrations
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -69,13 +69,9 @@ namespace TimeManagementBackend.Migrations
 
             modelBuilder.Entity("TimeManagementBackend.Models.TimeLog", b =>
                 {
-                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                    b.HasOne("TimeManagementBackend.Models.User", null)
                         .WithMany("TimeLogs")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
+                        .HasForeignKey("UserId");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.User", b =>

@@ -35,7 +35,7 @@ namespace TimeManagementBackend.Migrations
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("TEXT");
 
-                    b.Property<int>("UserId")
+                    b.Property<int?>("UserId")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -66,13 +66,9 @@ namespace TimeManagementBackend.Migrations
 
             modelBuilder.Entity("TimeManagementBackend.Models.TimeLog", b =>
                 {
-                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                    b.HasOne("TimeManagementBackend.Models.User", null)
                         .WithMany("TimeLogs")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
+                        .HasForeignKey("UserId");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.User", b =>
