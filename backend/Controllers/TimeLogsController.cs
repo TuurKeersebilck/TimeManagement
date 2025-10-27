@@ -1,61 +1,97 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using TimeManagementBackend.Data;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 using TimeManagementBackend.Models;
+using TimeManagementBackend.Models.DTOs;
+using TimeManagementBackend.Services;
 
 namespace TimeManagementBackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class TimeLogsController : Controller
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+public class TimeLogsController(
+    ITimeLogService service,
+    UserManager<User> userManager,
+    ILogger<TimeLogsController> logger) : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly ITimeLogService _service = service;
+    private readonly UserManager<User> _userManager = userManager;
+    private readonly ILogger<TimeLogsController> _logger = logger;
 
-    public TimeLogsController(AppDbContext context)
-    {
-        _context = context;
-    }
+    private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<TimeLog>>> GetTimeLogs()
+    public async Task<ActionResult<IEnumerable<TimeLogDto>>> GetTimeLogs(CancellationToken ct)
     {
-        return await _context.TimeLogs.ToListAsync();
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var items = await _service.GetForUserAsync(user.Id, ct);
+        return Ok(items);
     }
 
-    [HttpGet("{id}")]
-    public async Task<ActionResult<TimeLog>> GetTimeLog(int id)
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<TimeLogDto>> GetTimeLog(int id, CancellationToken ct)
     {
-        var log = await _context.TimeLogs.FindAsync(id);
-        if (log == null) return NotFound();
-        return log;
+        if (id <= 0) return BadRequest("Invalid id");
+
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var item = await _service.GetByIdAsync(id, user.Id, ct);
+        if (item == null) return NotFound();
+        return Ok(item);
     }
 
     [HttpPost]
-    public async Task<ActionResult<TimeLog>> CreateTimeLog(TimeLog log)
+    public async Task<ActionResult<TimeLogDto>> CreateTimeLog([FromBody] TimeLogCreateDto dto, CancellationToken ct)
     {
-        _context.TimeLogs.Add(log);
-        await _context.SaveChangesAsync();
-        return CreatedAtAction(nameof(GetTimeLog), new { id = log.Id }, log);
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        if (dto.EndTime <= dto.StartTime)
+            return BadRequest("End time must be after start time");
+
+        if (dto.Break < TimeSpan.Zero || dto.Break >= (dto.EndTime - dto.StartTime))
+            return BadRequest("Invalid break time");
+
+        var created = await _service.CreateAsync(dto, user.Id, ct);
+        return CreatedAtAction(nameof(GetTimeLog), new { id = created.Id }, created);
     }
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> UpdateTimeLog(int id, TimeLog log)
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateTimeLog(int id, [FromBody] TimeLogUpdateDto dto, CancellationToken ct)
     {
-        if (id != log.Id) return BadRequest();
+        if (id <= 0) return BadRequest("Invalid id");
 
-        _context.Entry(log).State = EntityState.Modified;
-        await _context.SaveChangesAsync();
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        if (dto.EndTime <= dto.StartTime)
+            return BadRequest("End time must be after start time");
+
+        if (dto.Break < TimeSpan.Zero || dto.Break >= (dto.EndTime - dto.StartTime))
+            return BadRequest("Invalid break time");
+
+        var updated = await _service.UpdateAsync(id, dto, user.Id, ct);
+        if (!updated) return NotFound();
+
         return NoContent();
     }
 
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteTimeLog(int id)
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteTimeLog(int id, CancellationToken ct)
     {
-        var log = await _context.TimeLogs.FindAsync(id);
-        if (log == null) return NotFound();
+        if (id <= 0) return BadRequest("Invalid id");
 
-        _context.TimeLogs.Remove(log);
-        await _context.SaveChangesAsync();
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var deleted = await _service.DeleteAsync(id, user.Id, ct);
+        if (!deleted) return NotFound();
+
         return NoContent();
     }
 }

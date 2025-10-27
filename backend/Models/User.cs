@@ -1,10 +1,8 @@
-﻿namespace TimeManagementBackend.Models;
+﻿using Microsoft.AspNetCore.Identity;
 
-public class User
+namespace TimeManagementBackend.Models;
+
+public class User : IdentityUser
 {
-    public int Id { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public string PasswordHash { get; set; } = string.Empty;
-
     public ICollection<TimeLog> TimeLogs { get; set; } = new List<TimeLog>();
 }
