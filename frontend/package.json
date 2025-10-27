@@ -12,12 +12,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@primeuix/themes": "^1.2.5",
     "@tailwindcss/vite": "^4.1.14",
     "axios": "^1.12.2",
-    "primeflex": "^4.0.0",
-    "primeicons": "^7.0.0",
-    "primevue": "^4.4.1",
     "vue": "^3.5.22",
     "vue-router": "^4.5.1"
   },
@@ -25,7 +21,7 @@
     "@vitejs/plugin-vue": "^6.0.1",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.14",
+    "tailwindcss": "^4.1.16",
     "vite": "^7.1.7",
     "vite-plugin-vue-devtools": "^8.0.2"
   }
