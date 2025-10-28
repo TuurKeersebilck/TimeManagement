@@ -1,0 +1,50 @@
+# .NET build output
+bin/
+obj/
+out/
+
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.dbmdl
+*.jfm
+*.pfx
+*.publishsettings
+orleans.codegen.cs
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Environment files
+.env
+appsettings.Development.json
+appsettings.Production.json
+appsettings.Staging.json
+
+# Node.js files (for any frontend work)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+
+# IDE files
+.idea/
+.vscode/
+*.sln.iml
+
+# MacOS files
+.DS_Store
+
+# Windows files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Log files
+*.log
+logs/
