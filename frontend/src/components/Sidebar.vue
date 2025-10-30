@@ -65,7 +65,7 @@ const handleNavClick = (): void => {
 	>
 		<div
 			v-if="isOpen"
-			class="fixed inset-0 lg:hidden backdrop-blur-sm"
+			class="fixed inset-0 z-40 lg:hidden backdrop-blur-sm"
 			@click="handleToggle"
 			@touchstart="handleToggle"
 		>
@@ -76,9 +76,9 @@ const handleNavClick = (): void => {
 	<!-- Sidebar -->
 	<div
 		:class="[
-			'fixed inset-y-0 left-0 bg-white shadow-2xl transform transition-all duration-300 ease-out flex flex-col ',
+			'fixed inset-y-0 left-0 z-50 bg-white shadow-2xl transform transition-all duration-300 ease-out flex flex-col',
 			isOpen
-				? 'w-70 translate-x-0'
+				? 'w-72 translate-x-0'
 				: 'w-0 -translate-x-full lg:translate-x-0 lg:w-16',
 		]"
 	>

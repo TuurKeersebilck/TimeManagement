@@ -18,8 +18,14 @@ const routes: Array<RouteRecordRaw> = [
 	},
 	{
 		path: "/",
-		name: "home",
+		name: "dashboard",
 		component: () => import("../views/DashboardView.vue"),
+		meta: { requiresAuth: true },
+	},
+	{
+		path: "/time-tracking",
+		name: "time-tracking",
+		component: () => import("../views/TimeTrackingView.vue"),
 		meta: { requiresAuth: true },
 	},
 	{ path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
