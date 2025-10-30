@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { RouterLink } from "vue-router";
+</script>
+
 <template>
 	<div
 		class="flex flex-col items-center justify-center min-h-[80vh] text-center px-4"
@@ -17,7 +21,3 @@
 		</RouterLink>
 	</div>
 </template>
-
-<script setup>
-import { RouterLink } from "vue-router";
-</script>

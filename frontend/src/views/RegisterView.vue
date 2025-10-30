@@ -1,19 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-const email = ref("");
-const password = ref("");
-const confirmPassword = ref("");
-const loading = ref(false);
-const error = ref("");
+const email = ref<string>("");
+const password = ref<string>("");
+const confirmPassword = ref<string>("");
+const loading = ref<boolean>(false);
+const error = ref<string>("");
 
-const passwordsMatch = computed(() => {
+const passwordsMatch = computed<boolean>(() => {
 	return password.value === confirmPassword.value;
 });
 
-const passwordStrength = computed(() => {
+type PasswordStrength = "weak" | "medium" | "strong" | null;
+
+const passwordStrength = computed<PasswordStrength>(() => {
 	const pwd = password.value;
 	if (pwd.length === 0) return null;
 	if (pwd.length < 8) return "weak";
@@ -28,7 +30,7 @@ const passwordStrength = computed(() => {
 	return "medium";
 });
 
-const handleRegister = async () => {
+const handleRegister = async (): Promise<void> => {
 	error.value = "";
 
 	if (!passwordsMatch.value) {
@@ -64,7 +66,8 @@ const handleRegister = async () => {
 		localStorage.setItem("token", data.token);
 		router.push("/");
 	} catch (err) {
-		error.value = err.message || "Registration failed. Please try again.";
+		error.value =
+			(err as Error).message || "Registration failed. Please try again.";
 	} finally {
 		loading.value = false;
 	}
@@ -91,7 +94,7 @@ const handleRegister = async () => {
 						class="bg-red-50 border-l-4 border-red-500 p-4 rounded"
 					>
 						<div class="flex">
-							<div class="flex-shrink-0">
+							<div class="shrink-0">
 								<svg
 									class="h-5 w-5 text-red-400"
 									viewBox="0 0 20 20"

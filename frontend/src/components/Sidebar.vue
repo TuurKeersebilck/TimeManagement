@@ -1,20 +1,30 @@
-<script setup>
+<script setup lang="ts">
 import { useRouter } from "vue-router";
 
 const router = useRouter();
 
 // Props
-const props = defineProps({
-	isOpen: {
-		type: Boolean,
-		default: true,
-	},
+interface Props {
+	isOpen?: boolean;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+	isOpen: true,
 });
 
 // Emits
-const emit = defineEmits(["toggle", "logout"]);
+const emit = defineEmits<{
+	toggle: [];
+	logout: [];
+}>();
 
-const navigationItems = [
+interface NavigationItem {
+	name: string;
+	to: { name: string };
+	icon: string;
+}
+
+const navigationItems: NavigationItem[] = [
 	{
 		name: "Dashboard",
 		to: { name: "dashboard" },
@@ -27,15 +37,15 @@ const navigationItems = [
 	},
 ];
 
-const handleToggle = () => {
+const handleToggle = (): void => {
 	emit("toggle");
 };
 
-const handleLogout = () => {
+const handleLogout = (): void => {
 	emit("logout");
 };
 
-const handleNavClick = () => {
+const handleNavClick = (): void => {
 	// Only close sidebar on mobile (screen width < 1024px)
 	if (window.innerWidth < 1024) {
 		emit("toggle");

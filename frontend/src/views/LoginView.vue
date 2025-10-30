@@ -1,15 +1,15 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-const email = ref("");
-const password = ref("");
-const rememberMe = ref(false);
-const loading = ref(false);
-const error = ref("");
+const email = ref<string>("");
+const password = ref<string>("");
+const rememberMe = ref<boolean>(false);
+const loading = ref<boolean>(false);
+const error = ref<string>("");
 
-const handleLogin = async () => {
+const handleLogin = async (): Promise<void> => {
 	error.value = "";
 	loading.value = true;
 
@@ -33,7 +33,7 @@ const handleLogin = async () => {
 		localStorage.setItem("token", data.token);
 		router.push("/");
 	} catch (err) {
-		error.value = err.message || "Invalid email or password";
+		error.value = (err as Error).message || "Invalid email or password";
 	} finally {
 		loading.value = false;
 	}
@@ -41,9 +41,7 @@ const handleLogin = async () => {
 </script>
 
 <template>
-	<div
-		class="min-h-screen flex items-center justify-center py-12 px-4"
-	>
+	<div class="min-h-screen flex items-center justify-center py-12 px-4">
 		<div class="max-w-md w-full">
 			<!-- Header -->
 			<div class="text-center mb-8">
@@ -62,7 +60,7 @@ const handleLogin = async () => {
 						class="bg-red-50 border-l-4 border-red-500 p-4 rounded"
 					>
 						<div class="flex">
-							<div class="flex-shrink-0">
+							<div class="shrink-0">
 								<svg
 									class="h-5 w-5 text-red-400"
 									viewBox="0 0 20 20"

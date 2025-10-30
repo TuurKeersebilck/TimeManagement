@@ -1,21 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { useRouter } from "vue-router";
 import { ref } from "vue";
 import Sidebar from "@/components/Sidebar.vue";
 
 const router = useRouter();
-const sidebarOpen = ref(true);
+const sidebarOpen = ref<boolean>(true);
 
-const handleLogout = () => {
+const handleLogout = (): void => {
 	localStorage.removeItem("token");
 	router.push("/login");
 };
 
-const toggleSidebar = () => {
+const toggleSidebar = (): void => {
 	sidebarOpen.value = !sidebarOpen.value;
 };
 
-const today = new Date().toLocaleDateString();
+const today: string = new Date().toLocaleDateString();
 </script>
 
 <template>
