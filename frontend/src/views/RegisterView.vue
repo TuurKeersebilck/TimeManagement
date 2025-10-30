@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
+import { authService } from "../services/authService";
 
 const router = useRouter();
 const email = ref<string>("");
@@ -46,24 +47,14 @@ const handleRegister = async (): Promise<void> => {
 	loading.value = true;
 
 	try {
-		const response = await fetch("https://localhost:7055/api/auth/register", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				username: email.value.split("@")[0], // Generate username from email
-				email: email.value,
-				password: password.value,
-				confirmPassword: password.value,
-			}),
+		const response = await authService.register({
+			username: email.value.split("@")[0], // Generate username from email
+			email: email.value,
+			password: password.value,
+			confirmPassword: password.value,
 		});
 
-		if (!response.ok) {
-			const data = await response.json();
-			throw new Error(data.message || "Registration failed");
-		}
-
-		const data = await response.json();
-		localStorage.setItem("token", data.token);
+		authService.setToken(response.token);
 		router.push("/");
 	} catch (err) {
 		error.value =

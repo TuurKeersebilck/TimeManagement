@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
+import { authService } from "../services/authService";
 
 const router = useRouter();
 const email = ref<string>("");
@@ -14,23 +15,13 @@ const handleLogin = async (): Promise<void> => {
 	loading.value = true;
 
 	try {
-		const response = await fetch("https://localhost:7055/api/auth/login", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				email: email.value,
-				password: password.value,
-				rememberMe: rememberMe.value,
-			}),
+		const response = await authService.login({
+			email: email.value,
+			password: password.value,
+			rememberMe: rememberMe.value,
 		});
 
-		if (!response.ok) {
-			const data = await response.json();
-			throw new Error(data.message || "Login failed");
-		}
-
-		const data = await response.json();
-		localStorage.setItem("token", data.token);
+		authService.setToken(response.token);
 		router.push("/");
 	} catch (err) {
 		error.value = (err as Error).message || "Invalid email or password";

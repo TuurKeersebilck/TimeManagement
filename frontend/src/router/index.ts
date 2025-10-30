@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import NotFoundView from "../views/NotFoundView.vue";
+import { authService } from "../services/authService";
 
 const routes: Array<RouteRecordRaw> = [
 	{
@@ -38,11 +39,11 @@ const router = createRouter({
 
 // Navigation guard
 router.beforeEach((to, from, next) => {
-	const token = localStorage.getItem("token");
+	const isAuthenticated = authService.isAuthenticated();
 
-	if (to.meta.requiresAuth && !token) {
+	if (to.meta.requiresAuth && !isAuthenticated) {
 		next("/login");
-	} else if (to.meta.guest && token) {
+	} else if (to.meta.guest && isAuthenticated) {
 		next("/");
 	} else {
 		next();
