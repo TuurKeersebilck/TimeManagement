@@ -76,7 +76,7 @@ const handleNavClick = (): void => {
 	<!-- Sidebar -->
 	<div
 		:class="[
-			'fixed inset-y-0 left-0 z-50 bg-white shadow-2xl transform transition-all duration-300 ease-out flex flex-col',
+			'fixed inset-y-0 left-0 z-50 bg-white shadow-2xl transform transition-all duration-300 ease-out flex flex-col overflow-hidden',
 			isOpen
 				? 'w-72 translate-x-0'
 				: 'w-0 -translate-x-full lg:translate-x-0 lg:w-16',
