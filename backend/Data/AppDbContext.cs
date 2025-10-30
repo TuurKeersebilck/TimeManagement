@@ -52,5 +52,28 @@ public class AppDbContext : IdentityDbContext<User>
         {
             entity.Property(e => e.RoleId).HasColumnType("varchar(255)");
         });
+
+        // Configure TimeLog properties
+        builder.Entity<TimeLog>(entity =>
+        {
+            // Store TimeSpan as varchar to avoid MySQL casting issues
+            entity.Property(e => e.StartTime)
+                .HasConversion(
+                    v => v.ToString(@"hh\:mm\:ss"),
+                    v => TimeSpan.Parse(v))
+                .HasColumnType("varchar(8)");
+            
+            entity.Property(e => e.EndTime)
+                .HasConversion(
+                    v => v.ToString(@"hh\:mm\:ss"),
+                    v => TimeSpan.Parse(v))
+                .HasColumnType("varchar(8)");
+            
+            entity.Property(e => e.Break)
+                .HasConversion(
+                    v => v.ToString(@"hh\:mm\:ss"),
+                    v => TimeSpan.Parse(v))
+                .HasColumnType("varchar(8)");
+        });
     }
 }

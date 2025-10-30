@@ -8,9 +8,7 @@ public class AutoMapperProfile : Profile
 {
     public AutoMapperProfile()
     {
-        CreateMap<TimeLog, TimeLogDto>()
-            .ForMember(dest => dest.TotalHours, opt => opt.MapFrom(src => (src.EndTime - src.StartTime - src.Break).TotalHours));
-
+        CreateMap<TimeLog, TimeLogDto>();
         CreateMap<TimeLogCreateDto, TimeLog>();
         CreateMap<TimeLogUpdateDto, TimeLog>();
         CreateMap<TimeLog, TimeLogCreateDto>();

@@ -19,8 +19,4 @@ public class TimeLog
     public TimeSpan Break { get; set; }
     
     public string? UserId { get; set; }
-
-    // Computed property
-    [Display(Name = "Total Hours")]
-    public double TotalHours => (EndTime - StartTime - Break).TotalHours;
 }

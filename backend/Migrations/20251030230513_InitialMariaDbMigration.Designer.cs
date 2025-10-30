@@ -12,8 +12,8 @@ using TimeManagementBackend.Data;
 namespace TimeManagementBackend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251030174413_AddFullNameToUser")]
-    partial class AddFullNameToUser
+    [Migration("20251030230513_InitialMariaDbMigration")]
+    partial class InitialMariaDbMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -165,17 +165,20 @@ namespace TimeManagementBackend.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<TimeSpan>("Break")
-                        .HasColumnType("time(6)");
+                    b.Property<string>("Break")
+                        .IsRequired()
+                        .HasColumnType("varchar(8)");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime(6)");
 
-                    b.Property<TimeSpan>("EndTime")
-                        .HasColumnType("time(6)");
+                    b.Property<string>("EndTime")
+                        .IsRequired()
+                        .HasColumnType("varchar(8)");
 
-                    b.Property<TimeSpan>("StartTime")
-                        .HasColumnType("time(6)");
+                    b.Property<string>("StartTime")
+                        .IsRequired()
+                        .HasColumnType("varchar(8)");
 
                     b.Property<string>("UserId")
                         .HasColumnType("varchar(255)");
