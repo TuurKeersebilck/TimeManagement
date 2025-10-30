@@ -74,18 +74,21 @@ app.Run();
 // Configure Database Context
 void ConfigureDatabaseContext(WebApplicationBuilder builder)
 {
-    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ?? 
-                          builder.Configuration.GetConnectionString("DefaultConnection");
-
-    if (string.IsNullOrEmpty(connectionString))
-    {
-        Console.WriteLine("Warning: CONNECTION_STRING is not set. Using default SQLite connection string.");
-        connectionString = "Data Source=timemanagement.db";
-    }
+    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ??
+                           builder.Configuration.GetConnectionString("DefaultConnection") ??
+                           "Data Source=timemanagement.db";
 
     builder.Services.AddDbContext<AppDbContext>(options =>
-        options.UseSqlite(connectionString));
+    {
+        
+            // Use MySQL/MariaDB
+            options.UseMySql(connectionString,
+                new MySqlServerVersion(new Version(11, 0, 0))
+            );
+        
+    });
 }
+
 
 // Configure Identity Services
 void ConfigureIdentity(WebApplicationBuilder builder)

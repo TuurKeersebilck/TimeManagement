@@ -16,7 +16,10 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
         }
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseSqlite(connectionString);
+        optionsBuilder.UseMySql(
+            connectionString,
+            new MySqlServerVersion(new Version(11, 0, 0))
+        );
 
         return new AppDbContext(optionsBuilder.Options);
     }
