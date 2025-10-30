@@ -43,12 +43,12 @@ public class AuthController : ControllerBase
             });
         }
 
-        if (string.IsNullOrEmpty(registerDto.Email) || string.IsNullOrEmpty(registerDto.Username))
+        if (string.IsNullOrEmpty(registerDto.Email) || string.IsNullOrEmpty(registerDto.FullName))
         {
             return BadRequest(new AuthResponseDto
             {
                 IsSuccess = false,
-                Message = "Username and email are required"
+                Message = "Full name and email are required"
             });
         }
 
@@ -72,29 +72,19 @@ public class AuthController : ControllerBase
             });
         }
 
-        // Check if username already exists
-        var existingUserByName = await _userManager.FindByNameAsync(registerDto.Username);
-        if (existingUserByName != null)
-        {
-            return Conflict(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "Username is already taken"
-            });
-        }
-
         var user = new User
         {
-            UserName = registerDto.Username,
-            Email = registerDto.Email
+            UserName = registerDto.Email, // Use email as username for Identity
+            Email = registerDto.Email,
+            FullName = registerDto.FullName
         };
 
         var result = await _userManager.CreateAsync(user, registerDto.Password);
 
         if (!result.Succeeded)
         {
-            _logger.LogWarning("Failed to create user {Username}: {Errors}",
-                registerDto.Username,
+            _logger.LogWarning("Failed to create user {Email}: {Errors}",
+                registerDto.Email,
                 string.Join(", ", result.Errors.Select(e => e.Description)));
 
             return BadRequest(new AuthResponseDto
@@ -110,12 +100,12 @@ public class AuthController : ControllerBase
             var roleResult = await _userManager.AddToRoleAsync(user, "User");
             if (!roleResult.Succeeded)
             {
-                _logger.LogWarning("Failed to add user {Username} to role: {Errors}",
-                    user.UserName,
+                _logger.LogWarning("Failed to add user {Email} to role: {Errors}",
+                    user.Email,
                     string.Join(", ", roleResult.Errors.Select(e => e.Description)));
             }
 
-            _logger.LogInformation("User {Username} created successfully", user.UserName);
+            _logger.LogInformation("User {Email} created successfully", user.Email);
 
             // Generate JWT token
             var roles = await _userManager.GetRolesAsync(user);
@@ -126,15 +116,15 @@ public class AuthController : ControllerBase
                 IsSuccess = true,
                 Message = "User registered successfully",
                 Token = token,
-                Username = user.UserName ?? string.Empty,
-                Email = user.Email ?? string.Empty,
-                Roles = roles.ToList(),
+                Email = user.Email,
+                FullName = user.FullName,
+                Roles = [.. roles],
                 Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during user registration for {Username}", registerDto.Username);
+            _logger.LogError(ex, "Error during user registration for {Email}", registerDto.Email);
             return StatusCode(500, new AuthResponseDto
             {
                 IsSuccess = false,
@@ -192,9 +182,8 @@ public class AuthController : ControllerBase
                 IsSuccess = true,
                 Message = "Login successful",
                 Token = token,
-                Username = user.UserName ?? string.Empty,
                 Email = user.Email ?? string.Empty,
-                Roles = roles.ToList(),
+                Roles = [.. roles],
                 Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
             });
         }

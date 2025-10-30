@@ -4,9 +4,9 @@ namespace TimeManagementBackend.Models.DTOs;
 
 public class RegisterDto
 {
-    [Required(ErrorMessage = "Username is required")]
-    [StringLength(50, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 50 characters")]
-    public string Username { get; set; } = string.Empty;
+    [Required(ErrorMessage = "Full name is required")]
+    [StringLength(100, MinimumLength = 3, ErrorMessage = "Full name must be between 3 and 100 characters")]
+    public string FullName { get; set; } = string.Empty;
     
     [Required(ErrorMessage = "Email is required")]
     [EmailAddress(ErrorMessage = "Invalid email address")]
@@ -39,8 +39,8 @@ public class AuthResponseDto
     public bool IsSuccess { get; set; }
     public string Message { get; set; } = string.Empty;
     public string Token { get; set; } = string.Empty;
-    public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public List<string> Roles { get; set; } = new();
+    public string FullName { get; set; } = string.Empty;
+    public List<string> Roles { get; set; } = [];
     public DateTime Expiration { get; set; }
 }

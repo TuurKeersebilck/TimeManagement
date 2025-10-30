@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { authService } from "../services/authService";
 
 const router = useRouter();
+const fullname = ref<string>("");
 const email = ref<string>("");
 const password = ref<string>("");
 const confirmPassword = ref<string>("");
@@ -48,7 +49,7 @@ const handleRegister = async (): Promise<void> => {
 
 	try {
 		const response = await authService.register({
-			username: email.value.split("@")[0], // Generate username from email
+			fullname: fullname.value,
 			email: email.value,
 			password: password.value,
 			confirmPassword: password.value,
@@ -102,6 +103,25 @@ const handleRegister = async (): Promise<void> => {
 								<p class="text-sm text-red-700">{{ error }}</p>
 							</div>
 						</div>
+					</div>
+
+					<!-- Name Field -->
+					<div>
+						<label
+							for="fullname"
+							class="block text-sm font-medium text-gray-700 mb-2"
+						>
+							Full name
+						</label>
+						<input
+							id="fullname"
+							v-model="fullname"
+							type="fullname"
+							required
+							autocomplete="fullname"
+							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+							placeholder="John Doe"
+						/>
 					</div>
 
 					<!-- Email Field -->
