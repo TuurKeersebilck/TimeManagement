@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using TimeManagementBackend.Config;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
@@ -183,6 +185,7 @@ public class AuthController : ControllerBase
                 Message = "Login successful",
                 Token = token,
                 Email = user.Email ?? string.Empty,
+                FullName = user.FullName,
                 Roles = [.. roles],
                 Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
             });
@@ -195,6 +198,44 @@ public class AuthController : ControllerBase
                 IsSuccess = false,
                 Message = "An error occurred during login"
             });
+        }
+    }
+
+    [Authorize]
+    [HttpGet("profile")]
+    public async Task<ActionResult<UserDto>> GetCurrentUser()
+    {
+        try
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { message = "User not authenticated" });
+            }
+
+            var user = await _userManager.FindByIdAsync(userId);
+            
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found" });
+            }
+
+            var roles = await _userManager.GetRolesAsync(user);
+
+            return Ok(new UserDto
+            {
+                Id = user.Id,
+                Email = user.Email ?? string.Empty,
+                FullName = user.FullName,
+                UserName = user.UserName ?? string.Empty,
+                Roles = [.. roles]
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching current user");
+            return StatusCode(500, new { message = "An error occurred while fetching user information" });
         }
     }
 }

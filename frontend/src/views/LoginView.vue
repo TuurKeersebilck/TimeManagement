@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { authService } from "../services/authService";
+import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
 const email = ref<string>("");
@@ -9,6 +10,7 @@ const password = ref<string>("");
 const rememberMe = ref<boolean>(false);
 const loading = ref<boolean>(false);
 const error = ref<string>("");
+const { fetchUser } = useAuth();
 
 const handleLogin = async (): Promise<void> => {
 	error.value = "";
@@ -22,6 +24,10 @@ const handleLogin = async (): Promise<void> => {
 		});
 
 		authService.setToken(response.token);
+
+		// Fetch user data immediately after login
+		await fetchUser(true);
+
 		router.push("/");
 	} catch (err) {
 		error.value = (err as Error).message || "Invalid email or password";

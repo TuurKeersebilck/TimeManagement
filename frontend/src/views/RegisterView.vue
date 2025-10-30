@@ -2,6 +2,7 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { authService } from "../services/authService";
+import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
 const fullname = ref<string>("");
@@ -10,6 +11,7 @@ const password = ref<string>("");
 const confirmPassword = ref<string>("");
 const loading = ref<boolean>(false);
 const error = ref<string>("");
+const { fetchUser } = useAuth();
 
 const passwordsMatch = computed<boolean>(() => {
 	return password.value === confirmPassword.value;
@@ -56,6 +58,10 @@ const handleRegister = async (): Promise<void> => {
 		});
 
 		authService.setToken(response.token);
+
+		// Fetch user data immediately after registration
+		await fetchUser(true);
+
 		router.push("/");
 	} catch (err) {
 		error.value =

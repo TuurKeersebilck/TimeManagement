@@ -15,7 +15,18 @@ export interface RegisterCredentials {
 
 export interface AuthResponse {
 	token: string;
+	email: string;
+	fullName: string;
+	roles: string[];
 	message?: string;
+}
+
+export interface User {
+	id: string;
+	email: string;
+	fullName: string;
+	userName: string;
+	roles: string[];
 }
 
 export const authService = {
@@ -32,6 +43,11 @@ export const authService = {
 			"/auth/register",
 			credentials
 		);
+		return response.data;
+	},
+
+	async getCurrentUser(): Promise<User> {
+		const response = await apiClient.get<User>("/auth/profile");
 		return response.data;
 	},
 

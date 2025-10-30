@@ -3,11 +3,14 @@ import { ref } from "vue";
 import { useRouter } from "vue-router";
 import Sidebar from "@/components/Sidebar.vue";
 import { authService } from "../services/authService";
+import { useAuth } from "../composables/useAuth";
 
 const router = useRouter();
 const sidebarOpen = ref<boolean>(true);
+const { clearUser } = useAuth();
 
 const handleLogout = (): void => {
+	clearUser();
 	authService.logout();
 	router.push("/login");
 };

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { useRouter } from "vue-router";
-
-const router = useRouter();
+import { onMounted } from "vue";
+import { useAuth } from "../composables/useAuth";
 
 // Props
 interface Props {
@@ -37,6 +36,9 @@ const navigationItems: NavigationItem[] = [
 	},
 ];
 
+// Use auth composable with shared state
+const { currentUser, isLoadingUser, userInitials, fetchUser } = useAuth();
+
 const handleToggle = (): void => {
 	emit("toggle");
 };
@@ -51,6 +53,11 @@ const handleNavClick = (): void => {
 		emit("toggle");
 	}
 };
+
+onMounted(() => {
+	// This will only fetch if not already fetched
+	fetchUser();
+});
 </script>
 
 <template>
@@ -154,15 +161,28 @@ const handleNavClick = (): void => {
 			<div
 				class="bg-linear-to-r from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200"
 			>
-				<div class="flex items-center space-x-3">
+				<div v-if="isLoadingUser" class="flex items-center space-x-3">
+					<div
+						class="w-10 h-10 bg-slate-200 rounded-full animate-pulse shrink-0"
+					></div>
+					<div class="flex-1 min-w-0 space-y-2">
+						<div class="h-4 bg-slate-200 rounded animate-pulse"></div>
+						<div class="h-3 bg-slate-200 rounded w-3/4 animate-pulse"></div>
+					</div>
+				</div>
+				<div v-else-if="currentUser" class="flex items-center space-x-3">
 					<div
 						class="w-10 h-10 bg-linear-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shrink-0"
 					>
-						<span class="text-sm font-bold text-white">TK</span>
+						<span class="text-sm font-bold text-white">{{ userInitials }}</span>
 					</div>
 					<div class="flex-1 min-w-0">
-						<p class="text-sm font-medium text-slate-900">Tuur Keersebilck</p>
-						<p class="text-xs text-slate-500">tuur@example.com</p>
+						<p class="text-sm font-medium text-slate-900 truncate">
+							{{ currentUser.fullName }}
+						</p>
+						<p class="text-xs text-slate-500 truncate">
+							{{ currentUser.email }}
+						</p>
 					</div>
 				</div>
 			</div>
@@ -174,9 +194,11 @@ const handleNavClick = (): void => {
 			class="absolute bottom-20 left-0 right-0 px-2 lg:flex lg:justify-center hidden"
 		>
 			<div
+				v-if="currentUser"
 				class="w-10 h-10 bg-linear-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center"
+				:title="currentUser.fullName"
 			>
-				<span class="text-sm font-bold text-white">TK</span>
+				<span class="text-sm font-bold text-white">{{ userInitials }}</span>
 			</div>
 		</div>
 
