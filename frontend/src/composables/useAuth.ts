@@ -1,8 +1,8 @@
 import { ref, computed } from "vue";
 import { authService, type User } from "../services/authService";
 import { useRouter } from "vue-router";
+import { useTimeLogsStore } from "./useTimeLogsStore";
 
-// Shared state across all components
 const currentUser = ref<User | null>(null);
 const isLoadingUser = ref(false);
 const isUserFetched = ref(false);
@@ -36,6 +36,8 @@ export function useAuth() {
 	const clearUser = () => {
 		currentUser.value = null;
 		isUserFetched.value = false;
+		const { clearCache } = useTimeLogsStore();
+		clearCache();
 	};
 
 	const userInitials = computed(() => {

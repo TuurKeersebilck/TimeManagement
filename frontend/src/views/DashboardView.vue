@@ -1,12 +1,22 @@
 <script setup lang="ts">
+import { onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
+import { useTimeCalculations } from "../composables/useTimeCalculations";
+import { useTimeLogsStore } from "../composables/useTimeLogsStore";
 
-const today: string = new Date().toLocaleDateString();
+const { timeLogs, loading, fetchTimeLogs } = useTimeLogsStore();
+
+const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } =
+	useTimeCalculations(timeLogs);
+
+onMounted(async () => {
+	await fetchTimeLogs();
+});
 </script>
 
 <template>
 	<AuthenticatedLayout>
-		<div class="p-4 sm:p-6 lg:p-8">
+		<div class="page-background p-4 sm:p-6 lg:p-8">
 			<!-- Header for desktop -->
 			<div class="hidden lg:block mb-10">
 				<div class="max-w-7xl mx-auto">
@@ -16,45 +26,34 @@ const today: string = new Date().toLocaleDateString();
 
 			<div class="max-w-7xl mx-auto">
 				<!-- Quick Stats Cards -->
-				<div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-					<!-- Today's Time -->
-					<div
-						class="bg-white/70 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-101"
-					>
-						<div class="flex items-center">
-							<div
-								class="p-3 bg-linear-to-r from-blue-500 to-blue-600 rounded-xl"
-							>
-								<i class="pi pi-clock text-white text-2xl"></i>
-							</div>
-							<div class="ml-4">
-								<p class="text-sm font-medium text-slate-600">
-									Hours Today
-									<span class="text-xs text-slate-400">{{ today }}</span>
-								</p>
-								<p class="text-2xl font-bold text-slate-900">
-									To be implemented
-								</p>
-							</div>
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+					<div class="card-gradient-blue p-6">
+						<div>
+							<p class="text-blue-100 text-sm font-medium mb-1">Today</p>
+							<p class="text-4xl font-bold">
+								<span v-if="loading" class="animate-pulse">--</span>
+								<span v-else>{{ totalHoursToday }}h</span>
+							</p>
 						</div>
 					</div>
-
-					<!-- This Week -->
-					<div
-						class="bg-white/70 backdrop-blur-lg rounded-2xl p-6 border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-101"
-					>
-						<div class="flex items-center">
-							<div
-								class="p-3 bg-linear-to-r from-purple-500 to-purple-600 rounded-xl"
-							>
-								<i class="pi pi-chart-bar text-white text-2xl"></i>
-							</div>
-							<div class="ml-4">
-								<p class="text-sm font-medium text-slate-600">Hours Week</p>
-								<p class="text-2xl font-bold text-slate-900">
-									To be implemented
-								</p>
-							</div>
+					<div class="card-gradient-purple p-6">
+						<div>
+							<p class="text-purple-100 text-sm font-medium mb-1">This Week</p>
+							<p class="text-4xl font-bold">
+								<span v-if="loading" class="animate-pulse">--</span>
+								<span v-else>{{ totalHoursThisWeek }}h</span>
+							</p>
+						</div>
+					</div>
+					<div class="card-gradient-green p-6">
+						<div>
+							<p class="text-emerald-100 text-sm font-medium mb-1">
+								This Month
+							</p>
+							<p class="text-4xl font-bold">
+								<span v-if="loading" class="animate-pulse">--</span>
+								<span v-else>{{ totalHoursThisMonth }}h</span>
+							</p>
 						</div>
 					</div>
 				</div>

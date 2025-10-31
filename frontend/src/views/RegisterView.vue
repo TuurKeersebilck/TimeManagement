@@ -77,8 +77,8 @@ const handleRegister = async (): Promise<void> => {
 		<div class="max-w-md w-full">
 			<!-- Header -->
 			<div class="text-center mb-8">
-				<h2 class="text-3xl font-bold text-gray-900">Create your account</h2>
-				<p class="mt-2 text-sm text-gray-600">
+				<h2 class="text-3xl font-bold text-slate-900">Create your account</h2>
+				<p class="mt-2 text-sm text-slate-600">
 					Start tracking your time efficiently
 				</p>
 			</div>
@@ -115,7 +115,7 @@ const handleRegister = async (): Promise<void> => {
 					<div>
 						<label
 							for="fullname"
-							class="block text-sm font-medium text-gray-700 mb-2"
+							class="block text-sm font-medium text-slate-700 mb-2"
 						>
 							Full name
 						</label>
@@ -125,7 +125,7 @@ const handleRegister = async (): Promise<void> => {
 							type="fullname"
 							required
 							autocomplete="fullname"
-							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+							class="input-field"
 							placeholder="John Doe"
 						/>
 					</div>
@@ -134,7 +134,7 @@ const handleRegister = async (): Promise<void> => {
 					<div>
 						<label
 							for="email"
-							class="block text-sm font-medium text-gray-700 mb-2"
+							class="block text-sm font-medium text-slate-700 mb-2"
 						>
 							Email address
 						</label>
@@ -144,7 +144,7 @@ const handleRegister = async (): Promise<void> => {
 							type="email"
 							required
 							autocomplete="email"
-							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+							class="input-field"
 							placeholder="you@example.com"
 						/>
 					</div>
@@ -153,7 +153,7 @@ const handleRegister = async (): Promise<void> => {
 					<div>
 						<label
 							for="password"
-							class="block text-sm font-medium text-gray-700 mb-2"
+							class="block text-sm font-medium text-slate-700 mb-2"
 						>
 							Password
 						</label>
@@ -163,13 +163,13 @@ const handleRegister = async (): Promise<void> => {
 							type="password"
 							required
 							autocomplete="new-password"
-							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+							class="input-field"
 							placeholder="••••••••"
 						/>
 						<!-- Password Strength Indicator -->
 						<div v-if="passwordStrength" class="mt-2">
 							<div class="flex items-center space-x-2">
-								<div class="flex-1 bg-gray-200 rounded-full h-2">
+								<div class="flex-1 bg-slate-200 rounded-full h-2">
 									<div
 										class="h-2 rounded-full transition-all duration-300"
 										:class="{
@@ -190,7 +190,7 @@ const handleRegister = async (): Promise<void> => {
 									{{ passwordStrength }}
 								</span>
 							</div>
-							<p class="text-xs text-gray-500 mt-1">
+							<p class="text-xs text-slate-500 mt-1">
 								Use at least 8 characters with uppercase, lowercase, and numbers
 							</p>
 						</div>
@@ -200,7 +200,7 @@ const handleRegister = async (): Promise<void> => {
 					<div>
 						<label
 							for="confirmPassword"
-							class="block text-sm font-medium text-gray-700 mb-2"
+							class="block text-sm font-medium text-slate-700 mb-2"
 						>
 							Confirm password
 						</label>
@@ -210,7 +210,7 @@ const handleRegister = async (): Promise<void> => {
 							type="password"
 							required
 							autocomplete="new-password"
-							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+							class="input-field"
 							:class="{ 'border-red-500': confirmPassword && !passwordsMatch }"
 							placeholder="••••••••"
 						/>
@@ -226,7 +226,7 @@ const handleRegister = async (): Promise<void> => {
 					<button
 						type="submit"
 						:disabled="loading || !passwordsMatch"
-						class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+						class="w-full btn-primary justify-center disabled:opacity-50 disabled:cursor-not-allowed"
 					>
 						<span v-if="!loading">Create account</span>
 						<span v-else class="flex items-center justify-center">
@@ -257,11 +257,11 @@ const handleRegister = async (): Promise<void> => {
 
 				<!-- Login Link -->
 				<div class="mt-6 text-center">
-					<p class="text-sm text-gray-600">
+					<p class="text-sm text-slate-600">
 						Already have an account?
 						<RouterLink
 							to="/login"
-							class="font-medium text-blue-600 hover:text-blue-500"
+							class="font-medium text-indigo-600 hover:text-indigo-700"
 						>
 							Sign in
 						</RouterLink>

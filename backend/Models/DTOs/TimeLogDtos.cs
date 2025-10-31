@@ -9,6 +9,7 @@ public class TimeLogDto
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
     public TimeSpan Break { get; set; }
+    public double TotalHours => (EndTime - StartTime - Break).TotalHours;
 }
 
 public class TimeLogCreateDto

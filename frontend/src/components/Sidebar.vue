@@ -91,7 +91,7 @@ onMounted(() => {
 	>
 		<!-- Sidebar Header -->
 		<div
-			class="flex items-center justify-between h-20 bg-linear-to-r from-indigo-600 to-purple-600"
+			class="flex items-center justify-between h-20 sidebar-gradient"
 			:class="isOpen ? 'px-6' : 'px-2'"
 		>
 			<div class="flex items-center">
@@ -131,11 +131,8 @@ onMounted(() => {
 					:key="item.name"
 					:to="item.to"
 					@click="handleNavClick"
-					:class="[
-						'flex items-center text-sm font-medium rounded-xl text-slate-700 hover:text-indigo-700 hover:bg-linear-to-r hover:from-indigo-50 hover:to-purple-50 transition-all duration-200 transform hover:scale-[1.02] relative p-3',
-						isOpen ? 'justify-between' : 'justify-center',
-					]"
-					active-class="bg-linear-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 hover:from-indigo-600 hover:to-purple-700"
+					:class="['nav-link', isOpen ? 'justify-between' : 'justify-center']"
+					active-class="nav-link-active"
 					:title="!isOpen ? item.name : ''"
 				>
 					<div
@@ -158,9 +155,7 @@ onMounted(() => {
 			v-if="isOpen"
 			class="absolute bottom-20 left-0 right-0 px-4 transition-opacity duration-200"
 		>
-			<div
-				class="bg-linear-to-r from-slate-50 to-slate-100 rounded-xl p-4 border border-slate-200"
-			>
+			<div class="user-profile-card p-4">
 				<div v-if="isLoadingUser" class="flex items-center space-x-3">
 					<div
 						class="w-10 h-10 bg-slate-200 rounded-full animate-pulse shrink-0"
@@ -171,9 +166,7 @@ onMounted(() => {
 					</div>
 				</div>
 				<div v-else-if="currentUser" class="flex items-center space-x-3">
-					<div
-						class="w-10 h-10 bg-linear-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center shrink-0"
-					>
+					<div class="w-10 h-10 user-avatar shrink-0">
 						<span class="text-sm font-bold text-white">{{ userInitials }}</span>
 					</div>
 					<div class="flex-1 min-w-0">
@@ -195,7 +188,7 @@ onMounted(() => {
 		>
 			<div
 				v-if="currentUser"
-				class="w-10 h-10 bg-linear-to-r from-indigo-500 to-purple-600 rounded-full flex items-center justify-center"
+				class="w-10 h-10 user-avatar"
 				:title="currentUser.fullName"
 			>
 				<span class="text-sm font-bold text-white">{{ userInitials }}</span>
@@ -210,7 +203,7 @@ onMounted(() => {
 			<button
 				@click="handleLogout"
 				:class="[
-					'w-full flex items-center text-sm font-medium rounded-xl text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 transition-all duration-200 transform hover:scale-[1.02] cursor-pointer',
+					'w-full btn-danger',
 					isOpen
 						? 'justify-center px-4 py-3'
 						: 'justify-center px-2 py-3 lg:px-3 lg:py-4',
