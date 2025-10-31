@@ -20,6 +20,9 @@ const toast = useToast();
 const { timeLogs, loading, fetchTimeLogs, refreshTimeLogs } =
 	useTimeLogsStore();
 
+const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } =
+	useTimeCalculations(timeLogs);
+
 const showDialog = ref(false);
 const editMode = ref(false);
 const currentLogId = ref<number | null>(null);
@@ -30,9 +33,6 @@ const formData = ref({
 	endTime: "",
 	break: "00:30",
 });
-
-const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } =
-	useTimeCalculations(timeLogs);
 
 const openNewDialog = () => {
 	editMode.value = false;
