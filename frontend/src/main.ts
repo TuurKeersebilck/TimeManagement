@@ -4,6 +4,7 @@ import router from "./router";
 import "./style.css";
 import PrimeVue from "primevue/config";
 import ToastService from "primevue/toastservice";
+import ConfirmationService from "primevue/confirmationservice";
 import Noir from "./presets/Noir";
 
 createApp(App)
@@ -19,4 +20,5 @@ createApp(App)
 		},
 	})
 	.use(ToastService)
+	.use(ConfirmationService)
 	.mount("#app");

@@ -62,17 +62,23 @@ public class AppDbContext : IdentityDbContext<User>
                     v => v.ToString(@"hh\:mm\:ss"),
                     v => TimeSpan.Parse(v))
                 .HasColumnType("varchar(8)");
-            
+
             entity.Property(e => e.EndTime)
                 .HasConversion(
                     v => v.ToString(@"hh\:mm\:ss"),
                     v => TimeSpan.Parse(v))
                 .HasColumnType("varchar(8)");
-            
-            entity.Property(e => e.Break)
+
+            entity.Property(e => e.BreakStart)
                 .HasConversion(
-                    v => v.ToString(@"hh\:mm\:ss"),
-                    v => TimeSpan.Parse(v))
+                    v => v.HasValue ? v.Value.ToString(@"hh\:mm\:ss") : null,
+                    v => v != null ? (TimeSpan?)TimeSpan.Parse(v) : null)
+                .HasColumnType("varchar(8)");
+
+            entity.Property(e => e.BreakEnd)
+                .HasConversion(
+                    v => v.HasValue ? v.Value.ToString(@"hh\:mm\:ss") : null,
+                    v => v != null ? (TimeSpan?)TimeSpan.Parse(v) : null)
                 .HasColumnType("varchar(8)");
         });
     }

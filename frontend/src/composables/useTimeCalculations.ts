@@ -2,29 +2,23 @@ import { computed, type Ref } from "vue";
 import type { TimeLog } from "../services/timeLogService";
 
 export function useTimeCalculations(timeLogs: Ref<TimeLog[]>) {
-	// Calculate total hours for today only
 	const totalHoursToday = computed(() => {
 		const today = new Date();
-		const year = today.getFullYear();
-		const month = String(today.getMonth() + 1).padStart(2, "0");
-		const day = String(today.getDate()).padStart(2, "0");
-		const todayStr = `${year}-${month}-${day}`;
+		const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
 		return timeLogs.value
-			.filter((log) => {
-				// Extract just the date part from the log (in case it has time component)
-				const logDateStr = log.date.split("T")[0];
-				return logDateStr === todayStr;
-			})
+			.filter((log) => log.date.split("T")[0] === todayStr)
 			.reduce((sum, log) => sum + (log.totalHours ?? 0), 0)
 			.toFixed(2);
 	});
 
-	// Calculate total hours for this week
 	const totalHoursThisWeek = computed(() => {
 		const today = new Date();
+		// Week starts on Monday (getDay(): 0=Sun, 1=Mon … 6=Sat)
+		const dayOfWeek = today.getDay();
+		const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 		const weekStart = new Date(today);
-		weekStart.setDate(today.getDate() - today.getDay());
+		weekStart.setDate(today.getDate() - daysFromMonday);
 		weekStart.setHours(0, 0, 0, 0);
 
 		return timeLogs.value
@@ -33,7 +27,6 @@ export function useTimeCalculations(timeLogs: Ref<TimeLog[]>) {
 			.toFixed(2);
 	});
 
-	// Calculate total hours for this month
 	const totalHoursThisMonth = computed(() => {
 		const today = new Date();
 		const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -45,9 +38,5 @@ export function useTimeCalculations(timeLogs: Ref<TimeLog[]>) {
 			.toFixed(2);
 	});
 
-	return {
-		totalHoursToday,
-		totalHoursThisWeek,
-		totalHoursThisMonth,
-	};
+	return { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth };
 }

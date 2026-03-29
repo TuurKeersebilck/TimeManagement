@@ -5,7 +5,9 @@ export interface TimeLog {
 	date: string;
 	startTime: string;
 	endTime: string;
-	break: string;
+	breakStart?: string;
+	breakEnd?: string;
+	description?: string;
 	totalHours: number;
 }
 
@@ -13,14 +15,18 @@ export interface TimeLogCreate {
 	date: string;
 	startTime: string;
 	endTime: string;
-	break: string;
+	breakStart?: string;
+	breakEnd?: string;
+	description?: string;
 }
 
 export interface TimeLogUpdate {
 	date: string;
 	startTime: string;
 	endTime: string;
-	break: string;
+	breakStart?: string;
+	breakEnd?: string;
+	description?: string;
 }
 
 export const timeLogService = {
