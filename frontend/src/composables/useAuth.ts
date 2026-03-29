@@ -49,9 +49,14 @@ export function useAuth() {
 		return currentUser.value.fullName.substring(0, 2).toUpperCase();
 	});
 
+	const isAdmin = computed(() =>
+		currentUser.value?.roles?.includes("Admin") ?? false
+	);
+
 	return {
 		currentUser,
 		isLoadingUser,
+		isAdmin,
 		userInitials,
 		fetchUser,
 		clearUser,

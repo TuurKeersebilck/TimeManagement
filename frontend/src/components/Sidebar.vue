@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
+import { useTheme } from "../composables/useTheme";
 
-// Props
 interface Props {
 	isOpen?: boolean;
 }
@@ -11,57 +12,51 @@ const props = withDefaults(defineProps<Props>(), {
 	isOpen: true,
 });
 
-// Emits
 const emit = defineEmits<{
 	toggle: [];
 	logout: [];
 }>();
 
-interface NavigationItem {
+const route = useRoute();
+const { currentUser, isLoadingUser, isAdmin, userInitials, fetchUser } =
+	useAuth();
+const { isDark, toggleTheme } = useTheme();
+
+const isActive = (path: string) =>
+	path === "/" ? route.path === "/" : route.path.startsWith(path);
+
+interface NavItem {
 	name: string;
-	to: { name: string };
+	to: string;
 	icon: string;
 }
 
-const navigationItems: NavigationItem[] = [
-	{
-		name: "Dashboard",
-		to: { name: "dashboard" },
-		icon: "pi-th-large",
-	},
-	{
-		name: "Time Tracking",
-		to: { name: "time-tracking" },
-		icon: "pi-clock",
-	},
+const employeeNav: NavItem[] = [
+	{ name: "Dashboard", to: "/", icon: "pi-th-large" },
+	{ name: "My Time Logs", to: "/time-tracking", icon: "pi-clock" },
+	{ name: "My Vacations", to: "/vacations", icon: "pi-calendar" },
 ];
 
-// Use auth composable with shared state
-const { currentUser, isLoadingUser, userInitials, fetchUser } = useAuth();
+const adminNav: NavItem[] = [
+	{ name: "Dashboard", to: "/", icon: "pi-th-large" },
+	{ name: "All Time Logs", to: "/admin/time-logs", icon: "pi-clock" },
+	{ name: "Vacation Overview", to: "/admin/vacations", icon: "pi-calendar" },
+	{ name: "Manage Employees", to: "/admin/employees", icon: "pi-users" },
+];
 
-const handleToggle = (): void => {
-	emit("toggle");
+const navigationItems = computed(() =>
+	isAdmin.value ? adminNav : employeeNav
+);
+
+const handleNavClick = () => {
+	if (window.innerWidth < 1024) emit("toggle");
 };
 
-const handleLogout = (): void => {
-	emit("logout");
-};
-
-const handleNavClick = (): void => {
-	// Only close sidebar on mobile (screen width < 1024px)
-	if (window.innerWidth < 1024) {
-		emit("toggle");
-	}
-};
-
-onMounted(() => {
-	// This will only fetch if not already fetched
-	fetchUser();
-});
+onMounted(() => fetchUser());
 </script>
 
 <template>
-	<!-- Mobile sidebar blur -->
+	<!-- Mobile backdrop -->
 	<Transition
 		enter-active-class="transition-opacity duration-300 ease-out"
 		leave-active-class="transition-opacity duration-300 ease-in"
@@ -72,149 +67,115 @@ onMounted(() => {
 	>
 		<div
 			v-if="isOpen"
-			class="fixed inset-0 z-40 lg:hidden backdrop-blur-sm"
-			@click="handleToggle"
-			@touchstart="handleToggle"
-		>
-			<div class="absolute inset-0 bg-black/30"></div>
-		</div>
+			class="fixed inset-0 z-40 lg:hidden bg-black/40 backdrop-blur-sm"
+			@click="emit('toggle')"
+		/>
 	</Transition>
 
 	<!-- Sidebar -->
-	<div
+	<aside
 		:class="[
-			'fixed inset-y-0 left-0 z-50 bg-white shadow-2xl transform transition-all duration-300 ease-out flex flex-col overflow-hidden',
-			isOpen
-				? 'w-72 translate-x-0'
-				: 'w-0 -translate-x-full lg:translate-x-0 lg:w-16',
+			'fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-out overflow-hidden',
+			isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-16 lg:translate-x-0',
 		]"
 	>
-		<!-- Sidebar Header -->
-		<div
-			class="flex items-center justify-between h-20 sidebar-gradient"
-			:class="isOpen ? 'px-6' : 'px-2'"
-		>
-			<div class="flex items-center">
-				<div v-if="isOpen">
-					<h2 class="text-xl font-bold text-white">Time management</h2>
-				</div>
-			</div>
-			<div class="space-x-2">
-				<!-- Collapse button for desktop -->
-				<button
-					@click="handleToggle"
-					class="hidden lg:block p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors duration-200 cursor-pointer"
-					title="Toggle Sidebar"
-				>
-					<i
-						:class="[
-							'pi text-lg transform transition-transform duration-200',
-							isOpen ? 'pi-angle-left' : 'pi-angle-right',
-						]"
-					></i>
-				</button>
-				<!-- Close button for mobile -->
-				<button
-					@click="handleToggle"
-					class="lg:hidden p-2 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors duration-200"
-				>
-					<i class="pi pi-times text-lg"></i>
-				</button>
-			</div>
+		<!-- Header -->
+		<div class="flex items-center h-16 px-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+			<span v-if="isOpen" class="flex-1 text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+				Time Management
+			</span>
+			<button
+				@click="emit('toggle')"
+				class="btn-ghost !px-2 !py-2 shrink-0"
+				:title="isOpen ? 'Collapse sidebar' : 'Expand sidebar'"
+			>
+				<i :class="['pi text-base', isOpen ? 'pi-angle-left' : 'pi-angle-right']"></i>
+			</button>
 		</div>
 
 		<!-- Navigation -->
-		<nav class="mt-8 px-1">
-			<div class="space-y-2">
+		<nav class="flex-1 overflow-y-auto py-4 px-2">
+			<!-- Role label -->
+			<p
+				v-if="isOpen"
+				class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+			>
+				{{ isAdmin ? "Admin" : "Employee" }}
+			</p>
+			<div class="space-y-0.5">
 				<router-link
 					v-for="item in navigationItems"
 					:key="item.name"
 					:to="item.to"
 					@click="handleNavClick"
-					:class="['nav-link', isOpen ? 'justify-between' : 'justify-center']"
-					active-class="nav-link-active"
-					:title="!isOpen ? item.name : ''"
+					:class="['nav-link', !isOpen && 'lg:justify-center lg:!px-0', isActive(item.to) && 'nav-link-active']"
+					:title="!isOpen ? item.name : undefined"
 				>
-					<div
-						class="flex items-center"
-						:class="isOpen ? '' : 'justify-center w-full'"
-					>
-						<div class="p-2">
-							<i :class="['pi text-lg', item.icon]"></i>
-						</div>
-						<span v-if="isOpen">
-							{{ item.name }}
-						</span>
-					</div>
+					<i :class="['pi text-base shrink-0', item.icon]"></i>
+					<span v-if="isOpen" class="truncate">{{ item.name }}</span>
 				</router-link>
 			</div>
 		</nav>
 
-		<!-- User Profile Section -->
-		<div
-			v-if="isOpen"
-			class="absolute bottom-20 left-0 right-0 px-4 transition-opacity duration-200"
-		>
-			<div class="user-profile-card p-4">
-				<div v-if="isLoadingUser" class="flex items-center space-x-3">
-					<div
-						class="w-10 h-10 bg-slate-200 rounded-full animate-pulse shrink-0"
-					></div>
-					<div class="flex-1 min-w-0 space-y-2">
-						<div class="h-4 bg-slate-200 rounded animate-pulse"></div>
-						<div class="h-3 bg-slate-200 rounded w-3/4 animate-pulse"></div>
-					</div>
-				</div>
-				<div v-else-if="currentUser" class="flex items-center space-x-3">
-					<div class="w-10 h-10 user-avatar shrink-0">
-						<span class="text-sm font-bold text-white">{{ userInitials }}</span>
-					</div>
-					<div class="flex-1 min-w-0">
-						<p class="text-sm font-medium text-slate-900 truncate">
-							{{ currentUser.fullName }}
-						</p>
-						<p class="text-xs text-slate-500 truncate">
-							{{ currentUser.email }}
-						</p>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Collapsed Profile Icon -->
-		<div
-			v-if="!isOpen"
-			class="absolute bottom-20 left-0 right-0 px-2 lg:flex lg:justify-center hidden"
-		>
-			<div
-				v-if="currentUser"
-				class="w-10 h-10 user-avatar"
-				:title="currentUser.fullName"
-			>
-				<span class="text-sm font-bold text-white">{{ userInitials }}</span>
-			</div>
-		</div>
-
-		<!-- Logout-->
-		<div
-			class="absolute bottom-4 left-0 right-0"
-			:class="isOpen ? 'px-4' : 'px-2'"
-		>
-			<button
-				@click="handleLogout"
-				:class="[
-					'w-full btn-danger',
-					isOpen
-						? 'justify-center px-4 py-3'
-						: 'justify-center px-2 py-3 lg:px-3 lg:py-4',
-				]"
-				:title="!isOpen ? 'Sign Out' : ''"
-			>
-				<i :class="['pi pi-sign-out text-lg', isOpen ? 'mr-3' : '']"></i>
-				<span v-if="isOpen" class="transition-opacity duration-200"
-					>Sign Out</span
+		<!-- Bottom section -->
+		<div class="shrink-0 border-t border-slate-200 dark:border-slate-800">
+			<!-- Theme toggle -->
+			<div class="px-2 pt-3 pb-1">
+				<button
+					@click="toggleTheme"
+					:class="['nav-link w-full', !isOpen && 'lg:justify-center lg:!px-0']"
+					:title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
 				>
-			</button>
+					<i :class="['pi text-base shrink-0', isDark ? 'pi-sun' : 'pi-moon']"></i>
+					<span v-if="isOpen">{{ isDark ? "Light mode" : "Dark mode" }}</span>
+				</button>
+			</div>
+
+			<!-- User profile -->
+			<div class="px-2 pb-2">
+				<!-- Loading skeleton -->
+				<div v-if="isLoadingUser" class="flex items-center gap-3 px-3 py-2">
+					<div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse shrink-0" />
+					<div v-if="isOpen" class="flex-1 space-y-1.5">
+						<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+						<div class="h-2.5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 animate-pulse" />
+					</div>
+				</div>
+
+				<!-- User info + logout -->
+				<div v-else-if="currentUser">
+					<div :class="['flex items-center gap-3 px-3 py-2 rounded-lg', isOpen ? '' : 'lg:justify-center']">
+						<div class="w-8 h-8 user-avatar shrink-0" :title="!isOpen ? currentUser.fullName : undefined">
+							<span class="text-xs font-bold text-white">{{ userInitials }}</span>
+						</div>
+						<div v-if="isOpen" class="flex-1 min-w-0">
+							<p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+								{{ currentUser.fullName }}
+							</p>
+							<p class="text-xs text-slate-500 dark:text-slate-400 truncate">
+								{{ currentUser.email }}
+							</p>
+						</div>
+						<button
+							v-if="isOpen"
+							@click="emit('logout')"
+							class="btn-ghost !px-2 !py-1.5 shrink-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+							title="Sign out"
+						>
+							<i class="pi pi-sign-out text-sm"></i>
+						</button>
+					</div>
+					<!-- Logout when collapsed -->
+					<button
+						v-if="!isOpen"
+						@click="emit('logout')"
+						class="nav-link w-full lg:justify-center lg:!px-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
+						title="Sign out"
+					>
+						<i class="pi pi-sign-out text-base"></i>
+					</button>
+				</div>
+			</div>
 		</div>
-	</div>
+	</aside>
 </template>

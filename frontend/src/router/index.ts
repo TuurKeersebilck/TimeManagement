@@ -5,6 +5,7 @@ import NotFoundView from "../views/NotFoundView.vue";
 import { authService } from "../services/authService";
 
 const routes: Array<RouteRecordRaw> = [
+	// Guest routes
 	{
 		path: "/login",
 		name: "login",
@@ -17,18 +18,49 @@ const routes: Array<RouteRecordRaw> = [
 		component: RegisterView,
 		meta: { guest: true },
 	},
+
+	// Shared (employee + admin)
 	{
 		path: "/",
 		name: "dashboard",
 		component: () => import("../views/DashboardView.vue"),
 		meta: { requiresAuth: true },
 	},
+
+	// Employee routes
 	{
 		path: "/time-tracking",
 		name: "time-tracking",
 		component: () => import("../views/TimeTrackingView.vue"),
 		meta: { requiresAuth: true },
 	},
+	{
+		path: "/vacations",
+		name: "vacations",
+		component: () => import("../views/VacationsView.vue"),
+		meta: { requiresAuth: true },
+	},
+
+	// Admin routes
+	{
+		path: "/admin/time-logs",
+		name: "admin-time-logs",
+		component: () => import("../views/admin/TimeLogsView.vue"),
+		meta: { requiresAuth: true },
+	},
+	{
+		path: "/admin/vacations",
+		name: "admin-vacations",
+		component: () => import("../views/admin/VacationsView.vue"),
+		meta: { requiresAuth: true },
+	},
+	{
+		path: "/admin/employees",
+		name: "admin-employees",
+		component: () => import("../views/admin/EmployeesView.vue"),
+		meta: { requiresAuth: true },
+	},
+
 	{ path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
 ];
 
@@ -37,7 +69,6 @@ const router = createRouter({
 	routes,
 });
 
-// Navigation guard
 router.beforeEach((to, from, next) => {
 	const isAuthenticated = authService.isAuthenticated();
 

@@ -13,7 +13,7 @@ createApp(App)
 			preset: Noir,
 			options: {
 				prefix: "p",
-				darkModeSelector: ".p-dark",
+				darkModeSelector: ".dark",
 				cssLayer: false,
 			},
 		},
