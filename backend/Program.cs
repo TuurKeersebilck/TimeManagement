@@ -44,6 +44,7 @@ builder.Services.AddCors(options =>
 
 // Register application services
 builder.Services.AddScoped<ITimeLogService, TimeLogService>();
+builder.Services.AddScoped<IAdminService, AdminService>();
 
 var app = builder.Build();
 
