@@ -53,6 +53,7 @@ export const authService = {
 
 	logout(): void {
 		localStorage.removeItem("token");
+		localStorage.removeItem("roles");
 	},
 
 	isAuthenticated(): boolean {
@@ -65,5 +66,17 @@ export const authService = {
 
 	setToken(token: string): void {
 		localStorage.setItem("token", token);
+	},
+
+	getRoles(): string[] {
+		try {
+			return JSON.parse(localStorage.getItem("roles") ?? "[]");
+		} catch {
+			return [];
+		}
+	},
+
+	setRoles(roles: string[]): void {
+		localStorage.setItem("roles", JSON.stringify(roles));
 	},
 };
