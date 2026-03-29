@@ -22,6 +22,16 @@ public class TimeLogService(AppDbContext db, IMapper mapper) : ITimeLogService
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<bool> ExistsForDateAsync(string userId, DateTime date, int? excludeId = null, CancellationToken cancellationToken = default)
+    {
+        var dateOnly = date.Date;
+        return await _db.TimeLogs
+            .AnyAsync(t => t.UserId == userId
+                && t.Date.Date == dateOnly
+                && (excludeId == null || t.Id != excludeId.Value),
+                cancellationToken);
+    }
+
     public async Task<TimeLogDto?> GetByIdAsync(int id, string userId, CancellationToken cancellationToken = default)
     {
         var t = await _db.TimeLogs

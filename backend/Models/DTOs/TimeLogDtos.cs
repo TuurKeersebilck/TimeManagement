@@ -8,8 +8,20 @@ public class TimeLogDto
     public DateTime Date { get; set; }
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
-    public TimeSpan Break { get; set; }
-    public double TotalHours => (EndTime - StartTime - Break).TotalHours;
+    public TimeSpan? BreakStart { get; set; }
+    public TimeSpan? BreakEnd { get; set; }
+    public string? Description { get; set; }
+
+    public double TotalHours
+    {
+        get
+        {
+            var worked = EndTime - StartTime;
+            if (BreakStart.HasValue && BreakEnd.HasValue)
+                worked -= BreakEnd.Value - BreakStart.Value;
+            return worked.TotalHours;
+        }
+    }
 }
 
 public class TimeLogCreateDto
@@ -23,8 +35,11 @@ public class TimeLogCreateDto
     [Required]
     public TimeSpan EndTime { get; set; }
 
-    [Required]
-    public TimeSpan Break { get; set; }
+    public TimeSpan? BreakStart { get; set; }
+
+    public TimeSpan? BreakEnd { get; set; }
+
+    public string? Description { get; set; }
 }
 
 public class TimeLogUpdateDto
@@ -38,6 +53,9 @@ public class TimeLogUpdateDto
     [Required]
     public TimeSpan EndTime { get; set; }
 
-    [Required]
-    public TimeSpan Break { get; set; }
+    public TimeSpan? BreakStart { get; set; }
+
+    public TimeSpan? BreakEnd { get; set; }
+
+    public string? Description { get; set; }
 }

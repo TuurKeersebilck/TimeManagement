@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -21,6 +21,29 @@ public class TimeLogsController(
     private readonly ILogger<TimeLogsController> _logger = logger;
 
     private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
+
+    private static string? ValidateTimes(TimeSpan startTime, TimeSpan endTime, TimeSpan? breakStart, TimeSpan? breakEnd)
+    {
+        if (endTime <= startTime)
+            return "End time must be after start time";
+
+        var hasBreakStart = breakStart.HasValue;
+        var hasBreakEnd = breakEnd.HasValue;
+
+        if (hasBreakStart != hasBreakEnd)
+            return "Both break start and break end must be provided together";
+
+        if (hasBreakStart && hasBreakEnd)
+        {
+            if (breakStart!.Value < startTime || breakEnd!.Value > endTime)
+                return "Break must fall within the working hours";
+
+            if (breakEnd!.Value <= breakStart!.Value)
+                return "Break end must be after break start";
+        }
+
+        return null;
+    }
 
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TimeLogDto>>> GetTimeLogs(CancellationToken ct)
@@ -51,11 +74,11 @@ public class TimeLogsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        if (dto.EndTime <= dto.StartTime)
-            return BadRequest("End time must be after start time");
+        var validationError = ValidateTimes(dto.StartTime, dto.EndTime, dto.BreakStart, dto.BreakEnd);
+        if (validationError != null) return BadRequest(validationError);
 
-        if (dto.Break < TimeSpan.Zero || dto.Break >= (dto.EndTime - dto.StartTime))
-            return BadRequest("Invalid break time");
+        if (await _service.ExistsForDateAsync(user.Id, dto.Date, cancellationToken: ct))
+            return Conflict("A time log already exists for this date");
 
         var created = await _service.CreateAsync(dto, user.Id, ct);
         return CreatedAtAction(nameof(GetTimeLog), new { id = created.Id }, created);
@@ -69,11 +92,8 @@ public class TimeLogsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        if (dto.EndTime <= dto.StartTime)
-            return BadRequest("End time must be after start time");
-
-        if (dto.Break < TimeSpan.Zero || dto.Break >= (dto.EndTime - dto.StartTime))
-            return BadRequest("Invalid break time");
+        var validationError = ValidateTimes(dto.StartTime, dto.EndTime, dto.BreakStart, dto.BreakEnd);
+        if (validationError != null) return BadRequest(validationError);
 
         var updated = await _service.UpdateAsync(id, dto, user.Id, ct);
         if (!updated) return NotFound();
