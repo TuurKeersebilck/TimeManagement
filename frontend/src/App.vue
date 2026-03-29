@@ -1,8 +1,8 @@
 <script setup lang="ts">
-// useTheme applies the dark class to <html> on module load — importing it here
-// ensures it runs before the first render, even on non-sidebar pages (login/register).
-import { useTheme } from "./composables/useTheme";
-useTheme();
+// Imported for its module-level side effects: applies the stored dark/light
+// class to <html> before first render, including on guest pages (login/register)
+// that don't mount the Sidebar.
+import "./composables/useTheme";
 </script>
 
 <template>

@@ -41,24 +41,24 @@ const routes: Array<RouteRecordRaw> = [
 		meta: { requiresAuth: true },
 	},
 
-	// Admin routes
+	// Admin-only routes
 	{
 		path: "/admin/time-logs",
 		name: "admin-time-logs",
 		component: () => import("../views/admin/TimeLogsView.vue"),
-		meta: { requiresAuth: true },
+		meta: { requiresAuth: true, requiresAdmin: true },
 	},
 	{
 		path: "/admin/vacations",
 		name: "admin-vacations",
 		component: () => import("../views/admin/VacationsView.vue"),
-		meta: { requiresAuth: true },
+		meta: { requiresAuth: true, requiresAdmin: true },
 	},
 	{
 		path: "/admin/employees",
 		name: "admin-employees",
 		component: () => import("../views/admin/EmployeesView.vue"),
-		meta: { requiresAuth: true },
+		meta: { requiresAuth: true, requiresAdmin: true },
 	},
 
 	{ path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
@@ -74,11 +74,20 @@ router.beforeEach((to, from, next) => {
 
 	if (to.meta.requiresAuth && !isAuthenticated) {
 		next("/login");
-	} else if (to.meta.guest && isAuthenticated) {
-		next("/");
-	} else {
-		next();
+		return;
 	}
+
+	if (to.meta.guest && isAuthenticated) {
+		next("/");
+		return;
+	}
+
+	if (to.meta.requiresAdmin && !authService.getRoles().includes("Admin")) {
+		next("/");
+		return;
+	}
+
+	next();
 });
 
 export default router;

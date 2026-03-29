@@ -6,12 +6,12 @@ import { useTimeLogsStore } from "./useTimeLogsStore";
 const currentUser = ref<User | null>(null);
 const isLoadingUser = ref(false);
 const isUserFetched = ref(false);
+const storedRoles = ref<string[]>(authService.getRoles());
 
 export function useAuth() {
 	const router = useRouter();
 
 	const fetchUser = async (force = false) => {
-		// Only fetch if not already fetched or if forced
 		if (isUserFetched.value && !force) {
 			return currentUser.value;
 		}
@@ -20,10 +20,10 @@ export function useAuth() {
 			isLoadingUser.value = true;
 			currentUser.value = await authService.getCurrentUser();
 			isUserFetched.value = true;
+			storedRoles.value = currentUser.value.roles ?? [];
 			return currentUser.value;
 		} catch (error) {
 			console.error("Failed to fetch user:", error);
-			// If token is invalid, redirect to login
 			clearUser();
 			authService.logout();
 			router.push("/login");
@@ -36,6 +36,7 @@ export function useAuth() {
 	const clearUser = () => {
 		currentUser.value = null;
 		isUserFetched.value = false;
+		storedRoles.value = [];
 		const { clearCache } = useTimeLogsStore();
 		clearCache();
 	};
@@ -49,9 +50,7 @@ export function useAuth() {
 		return currentUser.value.fullName.substring(0, 2).toUpperCase();
 	});
 
-	const isAdmin = computed(() =>
-		currentUser.value?.roles?.includes("Admin") ?? false
-	);
+	const isAdmin = computed(() => storedRoles.value.includes("Admin"));
 
 	return {
 		currentUser,

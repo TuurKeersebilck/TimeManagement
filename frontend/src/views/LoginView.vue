@@ -24,8 +24,8 @@ const handleLogin = async (): Promise<void> => {
 		});
 
 		authService.setToken(response.token);
+		authService.setRoles(response.roles);
 
-		// Fetch user data immediately after login
 		await fetchUser(true);
 
 		router.push("/");

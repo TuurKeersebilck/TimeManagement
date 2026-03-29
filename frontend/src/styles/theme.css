@@ -54,7 +54,7 @@ body {
 }
 
 .input-field-dialog {
-	@apply input-field;
+	@apply w-full px-3.5 py-2.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-colors duration-200;
 }
 
 /* Sidebar nav links */

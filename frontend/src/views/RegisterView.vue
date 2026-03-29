@@ -58,8 +58,8 @@ const handleRegister = async (): Promise<void> => {
 		});
 
 		authService.setToken(response.token);
+		authService.setRoles(response.roles);
 
-		// Fetch user data immediately after registration
 		await fetchUser(true);
 
 		router.push("/");
