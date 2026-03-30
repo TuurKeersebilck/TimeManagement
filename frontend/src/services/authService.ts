@@ -7,14 +7,24 @@ export interface LoginCredentials {
 }
 
 export interface RegisterCredentials {
-	fullname: string;
+	fullName: string;
 	email: string;
 	password: string;
 	confirmPassword: string;
 }
 
+export interface UpdateProfilePayload {
+	fullName: string;
+	email: string;
+}
+
+export interface ChangePasswordPayload {
+	currentPassword: string;
+	newPassword: string;
+	confirmPassword: string;
+}
+
 export interface AuthResponse {
-	token: string;
 	email: string;
 	fullName: string;
 	roles: string[];
@@ -51,32 +61,48 @@ export const authService = {
 		return response.data;
 	},
 
-	logout(): void {
-		localStorage.removeItem("token");
-		localStorage.removeItem("roles");
+	async updateProfile(payload: UpdateProfilePayload): Promise<User> {
+		const response = await apiClient.put<User>("/auth/profile", payload);
+		return response.data;
 	},
 
-	isAuthenticated(): boolean {
-		return !!localStorage.getItem("token");
+	async changePassword(payload: ChangePasswordPayload): Promise<void> {
+		await apiClient.put("/auth/change-password", payload);
 	},
 
-	getToken(): string | null {
-		return localStorage.getItem("token");
-	},
-
-	setToken(token: string): void {
-		localStorage.setItem("token", token);
-	},
-
-	getRoles(): string[] {
+	async logout(): Promise<void> {
 		try {
-			return JSON.parse(localStorage.getItem("roles") ?? "[]");
+			await apiClient.post("/auth/logout");
 		} catch {
-			return [];
+			// Ignore errors — session is cleared regardless
+		}
+		this.clearSession();
+	},
+
+	// Stores non-sensitive user info for UI use only.
+	// The actual auth token lives exclusively in the HttpOnly cookie set by the backend.
+	setUserInfo(email: string, fullName: string, roles: string[]): void {
+		localStorage.setItem("user_info", JSON.stringify({ email, fullName, roles }));
+	},
+
+	getUserInfo(): { email: string; fullName: string; roles: string[] } | null {
+		try {
+			const raw = localStorage.getItem("user_info");
+			return raw ? JSON.parse(raw) : null;
+		} catch {
+			return null;
 		}
 	},
 
-	setRoles(roles: string[]): void {
-		localStorage.setItem("roles", JSON.stringify(roles));
+	clearSession(): void {
+		localStorage.removeItem("user_info");
+	},
+
+	isAuthenticated(): boolean {
+		return !!localStorage.getItem("user_info");
+	},
+
+	getRoles(): string[] {
+		return this.getUserInfo()?.roles ?? [];
 	},
 };

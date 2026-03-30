@@ -44,11 +44,13 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials(); // Required for HttpOnly cookie auth
     });
 });
 
 // Register application services
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddScoped<ITimeLogService, TimeLogService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IVacationService, VacationService>();
@@ -175,7 +177,27 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
             ValidIssuer = jwtConfig.Issuer,
             ValidAudience = jwtConfig.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfig.Secret)),
-            ClockSkew = TimeSpan.Zero // Removes the default 5 minute tolerance for token expiration
+            ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                // Read JWT from HttpOnly cookie; fall back to Authorization header
+                if (context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+                    context.Token = cookieToken;
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var blacklist = context.HttpContext.RequestServices
+                    .GetRequiredService<ITokenBlacklistService>();
+                var jti = context.Principal?.FindFirst(
+                    System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                if (jti != null && blacklist.IsRevoked(jti))
+                    context.Fail("Token has been revoked.");
+                return Task.CompletedTask;
+            }
         };
     });
 }
