@@ -340,6 +340,16 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = string.Join(", ", result.Errors.Select(e => e.Description)) });
         }
 
+        // Revoke the current token so the user must log in again with the new password
+        var jti = User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+        var expClaim = User.FindFirstValue(JwtRegisteredClaimNames.Exp);
+        if (jti != null && long.TryParse(expClaim, out var expUnix))
+        {
+            var expiry = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+            _blacklist.Revoke(jti, expiry);
+        }
+
+        Response.Cookies.Delete("access_token");
         return NoContent();
     }
 }
