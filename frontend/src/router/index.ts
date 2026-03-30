@@ -43,6 +43,12 @@ const routes: Array<RouteRecordRaw> = [
 
 	// Admin-only routes
 	{
+		path: "/admin/dashboard",
+		name: "admin-dashboard",
+		component: () => import("../views/admin/AdminDashboardView.vue"),
+		meta: { requiresAuth: true, requiresAdmin: true },
+	},
+	{
 		path: "/admin/time-logs",
 		name: "admin-time-logs",
 		component: () => import("../views/admin/TimeLogsView.vue"),

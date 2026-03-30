@@ -38,7 +38,7 @@ const employeeNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
-	{ name: "Dashboard", to: "/", icon: "pi-th-large" },
+	{ name: "Dashboard", to: "/admin/dashboard", icon: "pi-th-large" },
 	{ name: "All Time Logs", to: "/admin/time-logs", icon: "pi-clock" },
 	{ name: "Vacation Overview", to: "/admin/vacations", icon: "pi-calendar" },
 	{ name: "Manage Employees", to: "/admin/employees", icon: "pi-users" },
