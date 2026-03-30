@@ -83,6 +83,9 @@ public class AppDbContext : IdentityDbContext<User>
                     v => v.HasValue ? v.Value.ToString(@"hh\:mm\:ss") : null,
                     v => v != null ? (TimeSpan?)TimeSpan.Parse(v) : null)
                 .HasColumnType("varchar(8)");
+
+            entity.HasIndex(e => e.Date);
+            entity.HasIndex(e => new { e.UserId, e.Date });
         });
 
         builder.Entity<VacationType>()
@@ -97,6 +100,8 @@ public class AppDbContext : IdentityDbContext<User>
         builder.Entity<VacationDay>(entity =>
         {
             entity.Property(e => e.UserId).HasColumnType("varchar(255)");
+            entity.HasIndex(d => new { d.UserId, d.Date });
+            entity.HasIndex(d => d.VacationTypeId);
         });
     }
 }
