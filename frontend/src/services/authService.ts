@@ -25,7 +25,6 @@ export interface ChangePasswordPayload {
 }
 
 export interface AuthResponse {
-	token: string;
 	email: string;
 	fullName: string;
 	roles: string[];
@@ -80,32 +79,30 @@ export const authService = {
 		this.clearSession();
 	},
 
-	clearSession(): void {
-		localStorage.removeItem("token");
-		localStorage.removeItem("roles");
+	// Stores non-sensitive user info for UI use only.
+	// The actual auth token lives exclusively in the HttpOnly cookie set by the backend.
+	setUserInfo(email: string, fullName: string, roles: string[]): void {
+		localStorage.setItem("user_info", JSON.stringify({ email, fullName, roles }));
 	},
 
-	isAuthenticated(): boolean {
-		return !!localStorage.getItem("token");
-	},
-
-	getToken(): string | null {
-		return localStorage.getItem("token");
-	},
-
-	setToken(token: string): void {
-		localStorage.setItem("token", token);
-	},
-
-	getRoles(): string[] {
+	getUserInfo(): { email: string; fullName: string; roles: string[] } | null {
 		try {
-			return JSON.parse(localStorage.getItem("roles") ?? "[]");
+			const raw = localStorage.getItem("user_info");
+			return raw ? JSON.parse(raw) : null;
 		} catch {
-			return [];
+			return null;
 		}
 	},
 
-	setRoles(roles: string[]): void {
-		localStorage.setItem("roles", JSON.stringify(roles));
+	clearSession(): void {
+		localStorage.removeItem("user_info");
+	},
+
+	isAuthenticated(): boolean {
+		return !!localStorage.getItem("user_info");
+	},
+
+	getRoles(): string[] {
+		return this.getUserInfo()?.roles ?? [];
 	},
 };

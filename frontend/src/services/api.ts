@@ -3,24 +3,16 @@ import { authService } from "./authService";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://localhost:7055/api";
 
-// Create axios instance with default config
+// Create axios instance — withCredentials sends the HttpOnly auth cookie automatically
 const apiClient = axios.create({
 	baseURL: API_BASE_URL,
+	withCredentials: true,
 	headers: {
 		"Content-Type": "application/json",
 	},
 });
 
-// Attach JWT token to every request
-apiClient.interceptors.request.use((config) => {
-	const token = authService.getToken();
-	if (token) {
-		config.headers.Authorization = `Bearer ${token}`;
-	}
-	return config;
-});
-
-// On 401, clear session and redirect to login
+// On 401, clear local session state and redirect to login
 apiClient.interceptors.response.use(
 	(response) => response,
 	(error) => {

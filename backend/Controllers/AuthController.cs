@@ -116,12 +116,12 @@ public class AuthController : ControllerBase
             // Generate JWT token
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwtService.GenerateToken(user, roles);
+            SetAuthCookie(token);
 
             return Ok(new AuthResponseDto
             {
                 IsSuccess = true,
                 Message = "User registered successfully",
-                Token = token,
                 Email = user.Email,
                 FullName = user.FullName,
                 Roles = [.. roles],
@@ -179,15 +179,15 @@ public class AuthController : ControllerBase
 
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-            // Generate JWT token
+            // Generate JWT token and set as HttpOnly cookie
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwtService.GenerateToken(user, roles);
+            SetAuthCookie(token);
 
             return Ok(new AuthResponseDto
             {
                 IsSuccess = true,
                 Message = "Login successful",
-                Token = token,
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 Roles = [.. roles],
@@ -256,7 +256,22 @@ public class AuthController : ControllerBase
             _blacklist.Revoke(jti, expiry);
         }
 
+        Response.Cookies.Delete("access_token");
         return NoContent();
+    }
+
+    private void SetAuthCookie(string token)
+    {
+        var isDev = HttpContext.RequestServices
+            .GetRequiredService<IWebHostEnvironment>().IsDevelopment();
+
+        Response.Cookies.Append("access_token", token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !isDev,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes)
+        });
     }
 
     [Authorize]

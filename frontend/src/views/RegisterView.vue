@@ -57,8 +57,7 @@ const handleRegister = async (): Promise<void> => {
 			confirmPassword: password.value,
 		});
 
-		authService.setToken(response.token);
-		authService.setRoles(response.roles);
+		authService.setUserInfo(response.email, response.fullName, response.roles);
 
 		await fetchUser(true);
 
