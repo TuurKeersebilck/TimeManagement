@@ -1,0 +1,221 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
+import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
+import { useToast } from "primevue/usetoast";
+import Toast from "primevue/toast";
+
+const toast = useToast();
+const router = useRouter();
+
+const allLogs = ref<AdminTimeLog[]>([]);
+const employees = ref<Employee[]>([]);
+const loading = ref(false);
+
+// ─── Today helpers ────────────────────────────────────────────────────────────
+
+const todayStr = (() => {
+	const d = new Date();
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+})();
+
+const todayLabel = new Date().toLocaleDateString("en-GB", {
+	weekday: "long",
+	year: "numeric",
+	month: "long",
+	day: "numeric",
+});
+
+// ─── Derived data ─────────────────────────────────────────────────────────────
+
+const todayLogs = computed(() =>
+	allLogs.value.filter((l) => l.date.split("T")[0] === todayStr)
+);
+
+const employeesLoggedToday = computed(() => {
+	const ids = new Set(todayLogs.value.map((l) => l.userId));
+	return employees.value.filter((e) => ids.has(e.id));
+});
+
+const employeesNotLoggedToday = computed(() => {
+	const ids = new Set(todayLogs.value.map((l) => l.userId));
+	return employees.value.filter((e) => !ids.has(e.id));
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const formatTime = (t?: string) => (t ? t.substring(0, 5) : "—");
+
+const formatBreak = (log: AdminTimeLog) =>
+	log.breakStart && log.breakEnd
+		? `${formatTime(log.breakStart)} – ${formatTime(log.breakEnd)}`
+		: "—";
+
+// ─── Mount ────────────────────────────────────────────────────────────────────
+
+onMounted(async () => {
+	loading.value = true;
+	try {
+		[allLogs.value, employees.value] = await Promise.all([
+			adminService.getAllTimeLogs(),
+			adminService.getEmployees(),
+		]);
+	} catch {
+		toast.add({ severity: "error", summary: "Error", detail: "Failed to load dashboard data", life: 3000 });
+	} finally {
+		loading.value = false;
+	}
+});
+</script>
+
+<template>
+	<AuthenticatedLayout>
+		<Toast />
+
+		<div class="p-6 lg:p-8">
+			<div class="max-w-6xl mx-auto">
+
+				<!-- Header -->
+				<div class="mb-8">
+					<h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
+					<p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ todayLabel }}</p>
+				</div>
+
+				<!-- Stats -->
+				<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+					<div class="stat-card">
+						<p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Total employees</p>
+						<p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+							<span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+							<span v-else>{{ employees.length }}</span>
+						</p>
+					</div>
+					<div class="stat-card">
+						<p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Logged today</p>
+						<p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+							<span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+							<span v-else>{{ employeesLoggedToday.length }}</span>
+						</p>
+					</div>
+					<div class="stat-card">
+						<p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Not logged today</p>
+						<p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+							<span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+							<span v-else :class="employeesNotLoggedToday.length > 0 ? 'text-amber-500 dark:text-amber-400' : ''">
+								{{ employeesNotLoggedToday.length }}
+							</span>
+						</p>
+					</div>
+				</div>
+
+				<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+					<!-- Today's time log entries -->
+					<div class="lg:col-span-2">
+						<div class="flex items-center justify-between mb-3">
+							<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's entries</h2>
+							<button
+								@click="router.push({ name: 'admin-time-logs' })"
+								class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+							>
+								View all logs →
+							</button>
+						</div>
+
+						<div class="card overflow-hidden">
+							<!-- Loading skeleton -->
+							<div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+								<div v-for="i in 4" :key="i" class="flex items-center gap-4 px-4 py-3">
+									<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
+									<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+									<div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+								</div>
+							</div>
+
+							<!-- Empty state -->
+							<div v-else-if="todayLogs.length === 0" class="text-center py-12">
+								<i class="pi pi-clock text-3xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+								<p class="text-sm text-slate-500 dark:text-slate-400">No entries logged yet today.</p>
+							</div>
+
+							<!-- Entries list -->
+							<ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+								<li
+									v-for="log in todayLogs"
+									:key="log.id"
+									class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+									@click="router.push({ name: 'admin-time-logs', query: { employeeId: log.userId } })"
+								>
+									<div class="flex-1 min-w-0">
+										<p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">{{ log.employeeName }}</p>
+										<p v-if="log.description" class="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5">
+											{{ log.description }}
+										</p>
+									</div>
+									<div class="text-xs text-slate-500 dark:text-slate-400 shrink-0">
+										{{ formatTime(log.startTime) }} – {{ formatTime(log.endTime) }}
+										<span v-if="log.breakStart" class="ml-1 text-slate-400 dark:text-slate-500">(brk {{ formatBreak(log) }})</span>
+									</div>
+									<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 shrink-0">
+										{{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+									</span>
+								</li>
+							</ul>
+						</div>
+					</div>
+
+					<!-- Right column -->
+					<div class="flex flex-col gap-6">
+
+						<!-- Who hasn't logged -->
+						<div>
+							<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Not logged today</h2>
+							<div class="card overflow-hidden">
+								<div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+									<div v-for="i in 3" :key="i" class="flex items-center gap-3 px-4 py-3">
+										<div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse shrink-0" />
+										<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
+									</div>
+								</div>
+								<div v-else-if="employeesNotLoggedToday.length === 0" class="text-center py-8">
+									<i class="pi pi-check-circle text-2xl text-emerald-400 mb-1 block"></i>
+									<p class="text-xs text-slate-500 dark:text-slate-400">Everyone has logged today.</p>
+								</div>
+								<ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+									<li
+										v-for="emp in employeesNotLoggedToday"
+										:key="emp.id"
+										class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+										@click="router.push({ name: 'admin-time-logs', query: { employeeId: emp.id } })"
+									>
+										<div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0">
+											<span class="text-xs font-bold text-slate-500 dark:text-slate-400">
+												{{ emp.fullName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase() }}
+											</span>
+										</div>
+										<span class="text-sm text-slate-700 dark:text-slate-300 truncate">{{ emp.fullName }}</span>
+									</li>
+								</ul>
+							</div>
+						</div>
+
+						<!-- Upcoming vacations placeholder -->
+						<div>
+							<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Upcoming vacations</h2>
+							<div class="card flex items-center gap-3 py-6 px-4 text-center flex-col opacity-60">
+								<i class="pi pi-calendar text-2xl text-slate-400 dark:text-slate-500"></i>
+								<p class="text-xs text-slate-500 dark:text-slate-400">Vacation overview coming soon.</p>
+							</div>
+						</div>
+
+					</div>
+				</div>
+
+			</div>
+		</div>
+	</AuthenticatedLayout>
+</template>

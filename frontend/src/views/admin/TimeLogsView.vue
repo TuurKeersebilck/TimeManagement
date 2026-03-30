@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
 import DataTable from "primevue/datatable";
@@ -10,6 +11,7 @@ import { useToast } from "primevue/usetoast";
 import Toast from "primevue/toast";
 
 const toast = useToast();
+const route = useRoute();
 
 const allLogs = ref<AdminTimeLog[]>([]);
 const employees = ref<Employee[]>([]);
@@ -83,6 +85,10 @@ onMounted(async () => {
 			adminService.getAllTimeLogs(),
 			adminService.getEmployees(),
 		]);
+		const preselect = route.query.employeeId as string | undefined;
+		if (preselect) {
+			selectedEmployee.value = employees.value.find((e) => e.id === preselect) ?? null;
+		}
 	} catch {
 		toast.add({ severity: "error", summary: "Error", detail: "Failed to load data", life: 3000 });
 	} finally {
