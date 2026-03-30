@@ -16,6 +16,11 @@ namespace TimeManagementBackend.Migrations
                 column: "Date");
 
             migrationBuilder.CreateIndex(
+                name: "IX_TimeLogs_UserId_Date",
+                table: "TimeLogs",
+                columns: ["UserId", "Date"]);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_VacationDays_UserId_Date",
                 table: "VacationDays",
                 columns: ["UserId", "Date"]);
@@ -31,6 +36,10 @@ namespace TimeManagementBackend.Migrations
         {
             migrationBuilder.DropIndex(
                 name: "IX_TimeLogs_Date",
+                table: "TimeLogs");
+
+            migrationBuilder.DropIndex(
+                name: "IX_TimeLogs_UserId_Date",
                 table: "TimeLogs");
 
             migrationBuilder.DropIndex(

@@ -77,7 +77,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Name = v.Name,
                 Description = v.Description,
                 Color = v.Color,
-                AssignedEmployeeCount = v.EmployeeBalances.Count,
+                AssignedEmployeeCount = _context.EmployeeVacationBalances.Count(b => b.VacationTypeId == v.Id),
             })
             .ToListAsync(ct);
     }

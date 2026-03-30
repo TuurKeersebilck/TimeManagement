@@ -85,6 +85,7 @@ public class AppDbContext : IdentityDbContext<User>
                 .HasColumnType("varchar(8)");
 
             entity.HasIndex(e => e.Date);
+            entity.HasIndex(e => new { e.UserId, e.Date });
         });
 
         builder.Entity<EmployeeVacationBalance>(entity =>
