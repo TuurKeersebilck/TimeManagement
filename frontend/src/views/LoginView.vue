@@ -23,8 +23,7 @@ const handleLogin = async (): Promise<void> => {
 			rememberMe: rememberMe.value,
 		});
 
-		authService.setToken(response.token);
-		authService.setRoles(response.roles);
+		authService.setUserInfo(response.email, response.fullName, response.roles);
 
 		await fetchUser(true);
 

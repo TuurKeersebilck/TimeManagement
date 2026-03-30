@@ -51,14 +51,13 @@ const handleRegister = async (): Promise<void> => {
 
 	try {
 		const response = await authService.register({
-			fullname: fullname.value,
+			fullName: fullname.value,
 			email: email.value,
 			password: password.value,
 			confirmPassword: password.value,
 		});
 
-		authService.setToken(response.token);
-		authService.setRoles(response.roles);
+		authService.setUserInfo(response.email, response.fullName, response.roles);
 
 		await fetchUser(true);
 

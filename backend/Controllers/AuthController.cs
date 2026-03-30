@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using TimeManagementBackend.Config;
 using TimeManagementBackend.Models;
@@ -18,18 +19,21 @@ public class AuthController : ControllerBase
     private readonly JwtService _jwtService;
     private readonly ILogger<AuthController> _logger;
     private readonly JwtConfig _jwtConfig;
+    private readonly ITokenBlacklistService _blacklist;
 
     public AuthController(
         UserManager<User> userManager,
         SignInManager<User> signInManager,
         JwtService jwtService,
         JwtConfig jwtConfig,
+        ITokenBlacklistService blacklist,
         ILogger<AuthController> logger)
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _jwtService = jwtService;
         _jwtConfig = jwtConfig;
+        _blacklist = blacklist;
         _logger = logger;
     }
 
@@ -84,12 +88,12 @@ public class AuthController : ControllerBase
             // Generate JWT token
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwtService.GenerateToken(user, roles);
+            SetAuthCookie(token);
 
             return Ok(new AuthResponseDto
             {
                 IsSuccess = true,
                 Message = "User registered successfully",
-                Token = token,
                 Email = user.Email,
                 FullName = user.FullName,
                 Roles = [.. roles],
@@ -129,15 +133,15 @@ public class AuthController : ControllerBase
 
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-            // Generate JWT token
+            // Generate JWT token and set as HttpOnly cookie
             var roles = await _userManager.GetRolesAsync(user);
             var token = _jwtService.GenerateToken(user, roles);
+            SetAuthCookie(token);
 
             return Ok(new AuthResponseDto
             {
                 IsSuccess = true,
                 Message = "Login successful",
-                Token = token,
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 Roles = [.. roles],
@@ -183,5 +187,115 @@ public class AuthController : ControllerBase
             _logger.LogError(ex, "Error fetching current user");
             return StatusCode(500, new ErrorResponseDto { Message = "An error occurred while fetching user information" });
         }
+    }
+
+    [Authorize]
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        var jti = User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+        var expClaim = User.FindFirstValue(JwtRegisteredClaimNames.Exp);
+
+        if (jti != null && long.TryParse(expClaim, out var expUnix))
+        {
+            var expiry = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+            _blacklist.Revoke(jti, expiry);
+        }
+
+        Response.Cookies.Delete("access_token");
+        return NoContent();
+    }
+
+    private void SetAuthCookie(string token)
+    {
+        var isDev = HttpContext.RequestServices
+            .GetRequiredService<IWebHostEnvironment>().IsDevelopment();
+
+        Response.Cookies.Append("access_token", token, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !isDev,
+            SameSite = SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes)
+        });
+    }
+
+    [Authorize]
+    [HttpPut("profile")]
+    public async Task<ActionResult<UserDto>> UpdateProfile(UpdateProfileDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new ErrorResponseDto { Message = "Invalid profile data" });
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await _userManager.FindByIdAsync(userId!);
+        if (user == null)
+            return NotFound(new ErrorResponseDto { Message = "User not found" });
+
+        // Check email uniqueness if it changed
+        if (!string.Equals(user.Email, dto.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var existing = await _userManager.FindByEmailAsync(dto.Email);
+            if (existing != null)
+                return Conflict(new ErrorResponseDto { Message = "Email is already in use", Code = "DUPLICATE_EMAIL" });
+
+            user.Email = dto.Email;
+            user.UserName = dto.Email;
+            user.NormalizedEmail = dto.Email.ToUpperInvariant();
+            user.NormalizedUserName = dto.Email.ToUpperInvariant();
+        }
+
+        user.FullName = dto.FullName;
+
+        var result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            _logger.LogWarning("Profile update failed for {UserId}: {Errors}", userId,
+                string.Join(", ", result.Errors.Select(e => e.Description)));
+            return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
+        }
+
+        var roles = await _userManager.GetRolesAsync(user);
+        return Ok(new UserDto
+        {
+            Id = user.Id,
+            Email = user.Email ?? string.Empty,
+            FullName = user.FullName,
+            UserName = user.UserName ?? string.Empty,
+            Roles = [.. roles]
+        });
+    }
+
+    [Authorize]
+    [HttpPut("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new ErrorResponseDto { Message = "Invalid password data" });
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var user = await _userManager.FindByIdAsync(userId!);
+        if (user == null)
+            return NotFound(new ErrorResponseDto { Message = "User not found" });
+
+        var result = await _userManager.ChangePasswordAsync(user, dto.CurrentPassword, dto.NewPassword);
+        if (!result.Succeeded)
+        {
+            _logger.LogWarning("Password change failed for {UserId}: {Errors}", userId,
+                string.Join(", ", result.Errors.Select(e => e.Description)));
+            return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
+        }
+
+        // Revoke the current token so the user must log in again with the new password
+        var jti = User.FindFirstValue(JwtRegisteredClaimNames.Jti);
+        var expClaim = User.FindFirstValue(JwtRegisteredClaimNames.Exp);
+        if (jti != null && long.TryParse(expClaim, out var expUnix))
+        {
+            var expiry = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+            _blacklist.Revoke(jti, expiry);
+        }
+
+        Response.Cookies.Delete("access_token");
+        return NoContent();
     }
 }

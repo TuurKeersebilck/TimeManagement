@@ -33,8 +33,7 @@ export interface AdminVacationDay {
 }
 
 export const adminService = {
-	async getAllTimeLogs(userId?: string): Promise<AdminTimeLog[]> {
-		const params = userId ? { userId } : {};
+	async getAllTimeLogs(params?: { userId?: string; dateFrom?: string; dateTo?: string }): Promise<AdminTimeLog[]> {
 		const response = await apiClient.get<AdminTimeLog[]>("/admin/timelogs", { params });
 		return response.data;
 	},
@@ -44,7 +43,7 @@ export const adminService = {
 		return response.data;
 	},
 
-	async getAllVacationDays(filters?: { userId?: string; vacationTypeId?: number }): Promise<AdminVacationDay[]> {
+	async getAllVacationDays(filters?: { userId?: string; vacationTypeId?: number; year?: number; month?: number }): Promise<AdminVacationDay[]> {
 		const response = await apiClient.get<AdminVacationDay[]>("/admin/vacations", { params: filters });
 		return response.data;
 	},

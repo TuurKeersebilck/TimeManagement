@@ -112,13 +112,13 @@ const initials = computed(() =>
 	employee.value?.fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() ?? ""
 );
 
-const currentYear = new Date().getFullYear();
+const currentYear = new Date().getUTCFullYear();
 
 // Calculate used days per vacation type from planned vacation days (current year)
 const usedByType = computed(() => {
 	const map = new Map<number, number>();
 	for (const d of vacationDays.value) {
-		if (new Date(d.date).getFullYear() === currentYear) {
+		if (new Date(d.date).getUTCFullYear() === currentYear) {
 			map.set(d.vacationTypeId, (map.get(d.vacationTypeId) ?? 0) + d.amount);
 		}
 	}

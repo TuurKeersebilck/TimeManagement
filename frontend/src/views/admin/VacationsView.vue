@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
@@ -120,13 +120,34 @@ const selectedLabel = computed(() => {
 	});
 });
 
+// ─── Data loading ─────────────────────────────────────────────────────────────
+
+const fetchVacationDays = async () => {
+	loading.value = true;
+	try {
+		vacationDays.value = await adminService.getAllVacationDays({
+			year: currentMonth.value.getFullYear(),
+			month: currentMonth.value.getMonth() + 1,
+		});
+	} catch {
+		toast.add({ severity: "error", summary: "Error", detail: "Failed to load vacation data", life: 3000 });
+	} finally {
+		loading.value = false;
+	}
+};
+
+watch(currentMonth, fetchVacationDays);
+
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
 	loading.value = true;
 	try {
 		const [days, emps, types] = await Promise.all([
-			adminService.getAllVacationDays(),
+			adminService.getAllVacationDays({
+				year: currentMonth.value.getFullYear(),
+				month: currentMonth.value.getMonth() + 1,
+			}),
 			adminService.getEmployees(),
 			vacationTypeService.getAll(),
 		]);
