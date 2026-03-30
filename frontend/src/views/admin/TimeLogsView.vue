@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
@@ -23,29 +23,26 @@ const dateTo = ref<Date | null>(null);
 
 // ─── Filters ────────────────────────────────────────────────────────────────
 
-const filteredLogs = computed(() => {
-	let logs = allLogs.value;
-
-	if (selectedEmployee.value) {
-		logs = logs.filter((l) => l.userId === selectedEmployee.value!.id);
-	}
-
-	if (dateFrom.value) {
-		const from = localDateStr(dateFrom.value);
-		logs = logs.filter((l) => l.date.split("T")[0] >= from);
-	}
-
-	if (dateTo.value) {
-		const to = localDateStr(dateTo.value);
-		logs = logs.filter((l) => l.date.split("T")[0] <= to);
-	}
-
-	return logs;
-});
-
 const totalHoursFiltered = computed(() =>
-	filteredLogs.value.reduce((sum, l) => sum + (l.totalHours ?? 0), 0).toFixed(2)
+	allLogs.value.reduce((sum, l) => sum + (l.totalHours ?? 0), 0).toFixed(2)
 );
+
+const fetchLogs = async () => {
+	loading.value = true;
+	try {
+		allLogs.value = await adminService.getAllTimeLogs({
+			userId: selectedEmployee.value?.id,
+			dateFrom: dateFrom.value ? localDateStr(dateFrom.value) : undefined,
+			dateTo: dateTo.value ? localDateStr(dateTo.value) : undefined,
+		});
+	} catch {
+		toast.add({ severity: "error", summary: "Error", detail: "Failed to load time logs", life: 3000 });
+	} finally {
+		loading.value = false;
+	}
+};
+
+watch([selectedEmployee, dateFrom, dateTo], fetchLogs);
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -88,6 +85,7 @@ onMounted(async () => {
 		const preselect = route.query.employeeId as string | undefined;
 		if (preselect) {
 			selectedEmployee.value = employees.value.find((e) => e.id === preselect) ?? null;
+			// watch will trigger a refetch automatically
 		}
 	} catch {
 		toast.add({ severity: "error", summary: "Error", detail: "Failed to load data", life: 3000 });
@@ -123,7 +121,7 @@ onMounted(async () => {
 						<p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Entries shown</p>
 						<p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
 							<span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-							<span v-else>{{ filteredLogs.length }}</span>
+							<span v-else>{{ allLogs.length }}</span>
 						</p>
 					</div>
 					<div class="stat-card">
@@ -180,7 +178,7 @@ onMounted(async () => {
 				<!-- Table -->
 				<div class="card overflow-hidden">
 					<DataTable
-						:value="filteredLogs"
+						:value="allLogs"
 						:loading="loading"
 						paginator
 						:rows="15"

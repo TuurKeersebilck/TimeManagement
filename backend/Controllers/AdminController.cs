@@ -16,9 +16,11 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpGet("timelogs")]
     public async Task<ActionResult<IEnumerable<AdminTimeLogDto>>> GetAllTimeLogs(
         [FromQuery] string? userId,
+        [FromQuery] DateTime? dateFrom,
+        [FromQuery] DateTime? dateTo,
         CancellationToken ct)
     {
-        var logs = await _adminService.GetAllTimeLogsAsync(userId, ct);
+        var logs = await _adminService.GetAllTimeLogsAsync(userId, dateFrom, dateTo, ct);
         return Ok(logs);
     }
 
@@ -112,9 +114,11 @@ public class AdminController(IAdminService adminService) : ControllerBase
     public async Task<ActionResult<IEnumerable<AdminVacationDayDto>>> GetAllVacationDays(
         [FromQuery] string? userId,
         [FromQuery] int? vacationTypeId,
+        [FromQuery] int? year,
+        [FromQuery] int? month,
         CancellationToken ct)
     {
-        var days = await _adminService.GetAllVacationDaysAsync(userId, vacationTypeId, ct);
+        var days = await _adminService.GetAllVacationDaysAsync(userId, vacationTypeId, year, month, ct);
         return Ok(days);
     }
 }

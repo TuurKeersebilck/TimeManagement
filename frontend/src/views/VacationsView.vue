@@ -51,8 +51,8 @@ const liveRemaining = computed(() => {
 	let base = balance.remainingDays;
 	if (editingDay.value && editingDay.value.vacationTypeId === form.value.vacationTypeId) {
 		// Only add back if the original day is in the current year
-		const origYear = new Date(editingDay.value.date).getFullYear();
-		if (origYear === new Date().getFullYear()) base += editingDay.value.amount;
+		const origYear = new Date(editingDay.value.date).getUTCFullYear();
+		if (origYear === new Date().getUTCFullYear()) base += editingDay.value.amount;
 	}
 	return base - form.value.amount;
 });

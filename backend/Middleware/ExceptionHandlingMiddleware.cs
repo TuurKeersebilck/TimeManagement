@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using TimeManagementBackend.Exceptions;
+using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Middleware;
 
@@ -58,7 +59,7 @@ public class ExceptionHandlingMiddleware
         }
 
         var payload = JsonSerializer.Serialize(
-            new { message },
+            new ErrorResponseDto { Message = message },
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         context.Response.StatusCode = (int)statusCode;

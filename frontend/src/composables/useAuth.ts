@@ -25,7 +25,7 @@ export function useAuth() {
 		} catch (error) {
 			console.error("Failed to fetch user:", error);
 			clearUser();
-			authService.logout();
+			authService.clearSession();
 			router.push("/login");
 			return null;
 		} finally {

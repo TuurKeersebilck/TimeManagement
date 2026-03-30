@@ -15,8 +15,15 @@ public class VacationService(AppDbContext db) : IVacationService
         var currentYear = DateTime.UtcNow.Year;
 
         var balances = await _db.EmployeeVacationBalances
-            .Include(b => b.VacationType)
+            .AsNoTracking()
             .Where(b => b.UserId == userId)
+            .Select(b => new
+            {
+                b.VacationTypeId,
+                b.VacationType.Name,
+                b.VacationType.Color,
+                b.YearlyBalance,
+            })
             .ToListAsync(ct);
 
         var usedByType = await _db.VacationDays
@@ -31,8 +38,8 @@ public class VacationService(AppDbContext db) : IVacationService
             return new VacationBalanceDto
             {
                 VacationTypeId = b.VacationTypeId,
-                VacationTypeName = b.VacationType.Name,
-                VacationTypeColor = b.VacationType.Color,
+                VacationTypeName = b.Name,
+                VacationTypeColor = b.Color,
                 YearlyBalance = b.YearlyBalance,
                 UsedDays = used,
                 RemainingDays = b.YearlyBalance - used,
@@ -43,10 +50,19 @@ public class VacationService(AppDbContext db) : IVacationService
     public async Task<IEnumerable<VacationDayDto>> GetMyVacationDaysAsync(string userId, CancellationToken ct = default)
     {
         return await _db.VacationDays
-            .Include(d => d.VacationType)
+            .AsNoTracking()
             .Where(d => d.UserId == userId)
             .OrderByDescending(d => d.Date)
-            .Select(d => ToDto(d))
+            .Select(d => new VacationDayDto
+            {
+                Id = d.Id,
+                VacationTypeId = d.VacationTypeId,
+                VacationTypeName = d.VacationType.Name,
+                VacationTypeColor = d.VacationType.Color,
+                Date = d.Date,
+                Amount = d.Amount,
+                Note = d.Note,
+            })
             .ToListAsync(ct);
     }
 
@@ -56,6 +72,8 @@ public class VacationService(AppDbContext db) : IVacationService
     public async Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, CancellationToken ct = default)
     {
         ValidateAmount(dto.Amount);
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
         var balance = await _db.EmployeeVacationBalances
             .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
@@ -81,6 +99,7 @@ public class VacationService(AppDbContext db) : IVacationService
 
         _db.VacationDays.Add(day);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         await _db.Entry(day).Reference(d => d.VacationType).LoadAsync(ct);
         return ToDto(day);

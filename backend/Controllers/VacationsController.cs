@@ -47,7 +47,7 @@ public class VacationsController(
         if (user == null) return Unauthorized();
 
         if (await _service.ExistsForDateAndTypeAsync(user.Id, dto.Date, dto.VacationTypeId, ct))
-            return Conflict("A vacation day of this type already exists for this date");
+            return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
 
         var created = await _service.CreateVacationDayAsync(user.Id, dto, ct);
         return CreatedAtAction(nameof(GetVacationDays), created);

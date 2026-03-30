@@ -12,7 +12,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     private readonly AppDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
 
-    public async Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, CancellationToken ct = default)
+    public async Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken ct = default)
     {
         var query = _context.TimeLogs
             .AsNoTracking()
@@ -25,8 +25,12 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         if (!string.IsNullOrEmpty(userId))
             query = query.Where(x => x.log.UserId == userId);
+        if (dateFrom.HasValue)
+            query = query.Where(x => x.log.Date.Date >= dateFrom.Value.Date);
+        if (dateTo.HasValue)
+            query = query.Where(x => x.log.Date.Date <= dateTo.Value.Date);
 
-        var results = await query
+        return await query
             .OrderByDescending(x => x.log.Date)
             .Select(x => new AdminTimeLogDto
             {
@@ -42,22 +46,23 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Description = x.log.Description,
             })
             .ToListAsync(ct);
-
-        return results;
     }
 
     public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(CancellationToken ct = default)
     {
-        var employees = await _userManager.GetUsersInRoleAsync("User");
-
-        return employees
-            .OrderBy(u => u.FullName)
-            .Select(u => new EmployeeDto
+        return await _context.Users
+            .AsNoTracking()
+            .Join(_context.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
+            .Join(_context.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, r })
+            .Where(x => x.r.Name == "User")
+            .OrderBy(x => x.u.FullName)
+            .Select(x => new EmployeeDto
             {
-                Id = u.Id,
-                FullName = u.FullName,
-                Email = u.Email!,
-            });
+                Id = x.u.Id,
+                FullName = x.u.FullName,
+                Email = x.u.Email!,
+            })
+            .ToListAsync(ct);
     }
 
     // ─── Vacation types ───────────────────────────────────────────────────────
@@ -73,7 +78,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Name = v.Name,
                 Description = v.Description,
                 Color = v.Color,
-                AssignedEmployeeCount = v.EmployeeBalances.Count,
+                AssignedEmployeeCount = _context.EmployeeVacationBalances.Count(b => b.VacationTypeId == v.Id),
             })
             .ToListAsync(ct);
     }
@@ -103,7 +108,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeUpdateDto dto, CancellationToken ct = default)
     {
         var entity = await _context.VacationTypes
-            .Include(v => v.EmployeeBalances)
             .FirstOrDefaultAsync(v => v.Id == id, ct)
             ?? throw new ResourceNotFoundException($"Vacation type {id} not found.");
 
@@ -113,13 +117,15 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         await _context.SaveChangesAsync(ct);
 
+        var assignedCount = await _context.EmployeeVacationBalances.CountAsync(b => b.VacationTypeId == id, ct);
+
         return new VacationTypeDto
         {
             Id = entity.Id,
             Name = entity.Name,
             Description = entity.Description,
             Color = entity.Color,
-            AssignedEmployeeCount = entity.EmployeeBalances.Count,
+            AssignedEmployeeCount = assignedCount,
         };
     }
 
@@ -128,7 +134,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var entity = await _context.VacationTypes.FindAsync([id], ct)
             ?? throw new ResourceNotFoundException($"Vacation type {id} not found.");
 
-        _context.VacationTypes.Remove(entity);
+        entity.IsDeleted = true;
+        entity.DeletedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
     }
 
@@ -139,7 +146,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return await _context.EmployeeVacationBalances
             .AsNoTracking()
             .Where(b => b.UserId == userId)
-            .Include(b => b.VacationType)
             .OrderBy(b => b.VacationType.Name)
             .Select(b => new EmployeeVacationBalanceDto
             {
@@ -210,12 +216,12 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(
         string? userId = null,
         int? vacationTypeId = null,
+        int? year = null,
+        int? month = null,
         CancellationToken ct = default)
     {
         var query = _context.VacationDays
             .AsNoTracking()
-            .Include(d => d.VacationType)
-            .Include(d => d.User)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(userId))
@@ -223,6 +229,12 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         if (vacationTypeId.HasValue)
             query = query.Where(d => d.VacationTypeId == vacationTypeId.Value);
+
+        if (year.HasValue)
+            query = query.Where(d => d.Date.Year == year.Value);
+
+        if (month.HasValue)
+            query = query.Where(d => d.Date.Month == month.Value);
 
         return await query
             .OrderBy(d => d.Date)

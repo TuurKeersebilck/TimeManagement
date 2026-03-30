@@ -32,7 +32,7 @@ try
     builder.Services.AddSwaggerGen();
 
     // Register AutoMapper
-    builder.Services.AddAutoMapper(typeof(AutoMapperProfile));
+    builder.Services.AddAutoMapper(cfg => cfg.AddProfile<AutoMapperProfile>());
 
     // Configure DbContext
     ConfigureDatabaseContext(builder);
@@ -46,15 +46,23 @@ try
     // Configure CORS
     builder.Services.AddCors(options =>
     {
-        options.AddPolicy("AllowAll", policy =>
+        var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
+            ?? (builder.Environment.IsDevelopment() ? "http://localhost:5173" : null))
+            ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            ?? throw new InvalidOperationException("CORS_ORIGINS environment variable must be set in production.");
+
+        options.AddPolicy("AllowFrontend", policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // Required for HttpOnly cookie auth
         });
     });
 
     // Register application services
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
     builder.Services.AddScoped<ITimeLogService, TimeLogService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
@@ -72,7 +80,7 @@ try
     }
 
     app.UseHttpsRedirection();
-    app.UseCors("AllowAll");
+    app.UseCors("AllowFrontend");
 
     // Add authentication and authorization middleware
     app.UseAuthentication();
@@ -97,9 +105,11 @@ finally
 // Configure Database Context
 void ConfigureDatabaseContext(WebApplicationBuilder builder)
 {
-    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ??
-                           builder.Configuration.GetConnectionString("DefaultConnection") ??
-                           "Data Source=timemanagement.db";
+    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? (builder.Environment.IsDevelopment()
+            ? "Data Source=timemanagement.db"
+            : throw new InvalidOperationException("CONNECTION_STRING environment variable must be set in production."));
 
     builder.Services.AddDbContext<AppDbContext>(options =>
     {
@@ -147,9 +157,11 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
                    builder.Configuration["JWT:Audience"] ??
                    "TimeManagementAPI",
 
-        Secret = Environment.GetEnvironmentVariable("JWT_SECRET") ??
-                 builder.Configuration["JWT:Secret"] ??
-                 "YourSuperSecretKeyWithAtLeast32Characters!",
+        Secret = Environment.GetEnvironmentVariable("JWT_SECRET")
+                 ?? builder.Configuration["JWT:Secret"]
+                 ?? (builder.Environment.IsDevelopment()
+                     ? "YourSuperSecretKeyWithAtLeast32Characters!"
+                     : throw new InvalidOperationException("JWT_SECRET environment variable must be set in production.")),
 
         ExpiryInMinutes = int.TryParse(
             Environment.GetEnvironmentVariable("JWT_EXPIRY_MINUTES") ??
@@ -174,7 +186,7 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
     .AddJwtBearer(options =>
     {
         options.SaveToken = true;
-        options.RequireHttpsMetadata = false;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -184,7 +196,27 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
             ValidIssuer = jwtConfig.Issuer,
             ValidAudience = jwtConfig.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfig.Secret)),
-            ClockSkew = TimeSpan.Zero // Removes the default 5 minute tolerance for token expiration
+            ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                // Read JWT from HttpOnly cookie; fall back to Authorization header
+                if (context.Request.Cookies.TryGetValue("access_token", out var cookieToken))
+                    context.Token = cookieToken;
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var blacklist = context.HttpContext.RequestServices
+                    .GetRequiredService<ITokenBlacklistService>();
+                var jti = context.Principal?.FindFirst(
+                    System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                if (jti != null && blacklist.IsRevoked(jti))
+                    context.Fail("Token has been revoked.");
+                return Task.CompletedTask;
+            }
         };
     });
 }
