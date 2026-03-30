@@ -85,6 +85,9 @@ public class AppDbContext : IdentityDbContext<User>
                 .HasColumnType("varchar(8)");
         });
 
+        builder.Entity<VacationType>()
+            .HasQueryFilter(v => !v.IsDeleted);
+
         builder.Entity<EmployeeVacationBalance>(entity =>
         {
             entity.Property(e => e.UserId).HasColumnType("varchar(255)");

@@ -53,6 +53,8 @@ public class VacationService(AppDbContext db) : IVacationService
     {
         ValidateAmount(dto.Amount);
 
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
         var balance = await _db.EmployeeVacationBalances
             .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
             ?? throw new InvalidOperationException("This vacation type is not assigned to you.");
@@ -77,6 +79,7 @@ public class VacationService(AppDbContext db) : IVacationService
 
         _db.VacationDays.Add(day);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
         await _db.Entry(day).Reference(d => d.VacationType).LoadAsync(ct);
         return ToDto(day);

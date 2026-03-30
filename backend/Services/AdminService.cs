@@ -127,7 +127,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var entity = await _context.VacationTypes.FindAsync([id], ct)
             ?? throw new KeyNotFoundException($"Vacation type {id} not found.");
 
-        _context.VacationTypes.Remove(entity);
+        entity.IsDeleted = true;
+        entity.DeletedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(ct);
     }
 

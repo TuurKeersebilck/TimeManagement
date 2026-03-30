@@ -18,4 +18,7 @@ public class VacationType
     public string? Color { get; set; }
 
     public ICollection<EmployeeVacationBalance> EmployeeBalances { get; set; } = new List<EmployeeVacationBalance>();
+
+    public bool IsDeleted { get; set; } = false;
+    public DateTime? DeletedAt { get; set; }
 }

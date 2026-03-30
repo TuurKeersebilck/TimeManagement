@@ -95,6 +95,9 @@ public class TimeLogsController(
         var validationError = ValidateTimes(dto.StartTime, dto.EndTime, dto.BreakStart, dto.BreakEnd);
         if (validationError != null) return BadRequest(validationError);
 
+        if (await _service.ExistsForDateAsync(user.Id, dto.Date, excludeId: id, cancellationToken: ct))
+            return Conflict("A time log already exists for this date");
+
         var updated = await _service.UpdateAsync(id, dto, user.Id, ct);
         if (!updated) return NotFound();
 
