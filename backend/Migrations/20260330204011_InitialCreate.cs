@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace TimeManagementBackend.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialMariaDbMigration : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -68,6 +68,27 @@ namespace TimeManagementBackend.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "VacationTypes",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    Name = table.Column<string>(type: "varchar(100)", maxLength: 100, nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Description = table.Column<string>(type: "varchar(255)", maxLength: 255, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Color = table.Column<string>(type: "varchar(7)", maxLength: 7, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    IsDeleted = table.Column<bool>(type: "tinyint(1)", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime(6)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VacationTypes", x => x.Id);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -209,7 +230,11 @@ namespace TimeManagementBackend.Migrations
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     EndTime = table.Column<string>(type: "varchar(8)", nullable: false)
                         .Annotation("MySql:CharSet", "utf8mb4"),
-                    Break = table.Column<string>(type: "varchar(8)", nullable: false)
+                    BreakStart = table.Column<string>(type: "varchar(8)", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    BreakEnd = table.Column<string>(type: "varchar(8)", nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    Description = table.Column<string>(type: "longtext", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4"),
                     UserId = table.Column<string>(type: "varchar(255)", nullable: true)
                         .Annotation("MySql:CharSet", "utf8mb4")
@@ -222,6 +247,67 @@ namespace TimeManagementBackend.Migrations
                         column: x => x.UserId,
                         principalTable: "AspNetUsers",
                         principalColumn: "Id");
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "EmployeeVacationBalances",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<string>(type: "varchar(255)", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    VacationTypeId = table.Column<int>(type: "int", nullable: false),
+                    YearlyBalance = table.Column<decimal>(type: "decimal(5,1)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EmployeeVacationBalances", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EmployeeVacationBalances_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_EmployeeVacationBalances_VacationTypes_VacationTypeId",
+                        column: x => x.VacationTypeId,
+                        principalTable: "VacationTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                })
+                .Annotation("MySql:CharSet", "utf8mb4");
+
+            migrationBuilder.CreateTable(
+                name: "VacationDays",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("MySql:ValueGenerationStrategy", MySqlValueGenerationStrategy.IdentityColumn),
+                    UserId = table.Column<string>(type: "varchar(255)", nullable: false)
+                        .Annotation("MySql:CharSet", "utf8mb4"),
+                    VacationTypeId = table.Column<int>(type: "int", nullable: false),
+                    Date = table.Column<DateOnly>(type: "date", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(3,1)", nullable: false),
+                    Note = table.Column<string>(type: "varchar(500)", maxLength: 500, nullable: true)
+                        .Annotation("MySql:CharSet", "utf8mb4")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_VacationDays", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_VacationDays_AspNetUsers_UserId",
+                        column: x => x.UserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_VacationDays_VacationTypes_VacationTypeId",
+                        column: x => x.VacationTypeId,
+                        principalTable: "VacationTypes",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 })
                 .Annotation("MySql:CharSet", "utf8mb4");
 
@@ -263,9 +349,35 @@ namespace TimeManagementBackend.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_TimeLogs_UserId",
+                name: "IX_EmployeeVacationBalances_UserId_VacationTypeId",
+                table: "EmployeeVacationBalances",
+                columns: new[] { "UserId", "VacationTypeId" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeVacationBalances_VacationTypeId",
+                table: "EmployeeVacationBalances",
+                column: "VacationTypeId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TimeLogs_Date",
                 table: "TimeLogs",
-                column: "UserId");
+                column: "Date");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_TimeLogs_UserId_Date",
+                table: "TimeLogs",
+                columns: new[] { "UserId", "Date" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VacationDays_UserId_Date",
+                table: "VacationDays",
+                columns: new[] { "UserId", "Date" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_VacationDays_VacationTypeId",
+                table: "VacationDays",
+                column: "VacationTypeId");
         }
 
         /// <inheritdoc />
@@ -287,13 +399,22 @@ namespace TimeManagementBackend.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "EmployeeVacationBalances");
+
+            migrationBuilder.DropTable(
                 name: "TimeLogs");
+
+            migrationBuilder.DropTable(
+                name: "VacationDays");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");
+
+            migrationBuilder.DropTable(
+                name: "VacationTypes");
         }
     }
 }

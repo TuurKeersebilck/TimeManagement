@@ -12,8 +12,8 @@ using TimeManagementBackend.Data;
 namespace TimeManagementBackend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20251030230513_InitialMariaDbMigration")]
-    partial class InitialMariaDbMigration
+    [Migration("20260330204011_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -157,6 +157,34 @@ namespace TimeManagementBackend.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.EmployeeVacationBalance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("VacationTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("YearlyBalance")
+                        .HasColumnType("decimal(5,1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VacationTypeId");
+
+                    b.HasIndex("UserId", "VacationTypeId")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeVacationBalances");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.TimeLog", b =>
                 {
                     b.Property<int>("Id")
@@ -165,12 +193,17 @@ namespace TimeManagementBackend.Migrations
 
                     MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<string>("Break")
-                        .IsRequired()
+                    b.Property<string>("BreakEnd")
+                        .HasColumnType("varchar(8)");
+
+                    b.Property<string>("BreakStart")
                         .HasColumnType("varchar(8)");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("longtext");
 
                     b.Property<string>("EndTime")
                         .IsRequired()
@@ -185,7 +218,9 @@ namespace TimeManagementBackend.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("Date");
+
+                    b.HasIndex("UserId", "Date");
 
                     b.ToTable("TimeLogs");
                 });
@@ -258,6 +293,72 @@ namespace TimeManagementBackend.Migrations
                     b.ToTable("AspNetUsers", (string)null);
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.VacationDay", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(3,1)");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<int>("VacationTypeId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VacationTypeId");
+
+                    b.HasIndex("UserId", "Date");
+
+                    b.ToTable("VacationDays");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.VacationType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
+                        .HasColumnType("varchar(7)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime(6)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("tinyint(1)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VacationTypes");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -309,6 +410,25 @@ namespace TimeManagementBackend.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.EmployeeVacationBalance", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TimeManagementBackend.Models.VacationType", "VacationType")
+                        .WithMany("EmployeeBalances")
+                        .HasForeignKey("VacationTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("VacationType");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.TimeLog", b =>
                 {
                     b.HasOne("TimeManagementBackend.Models.User", null)
@@ -316,9 +436,33 @@ namespace TimeManagementBackend.Migrations
                         .HasForeignKey("UserId");
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.VacationDay", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TimeManagementBackend.Models.VacationType", "VacationType")
+                        .WithMany()
+                        .HasForeignKey("VacationTypeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("VacationType");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.User", b =>
                 {
                     b.Navigation("TimeLogs");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.VacationType", b =>
+                {
+                    b.Navigation("EmployeeBalances");
                 });
 #pragma warning restore 612, 618
         }
