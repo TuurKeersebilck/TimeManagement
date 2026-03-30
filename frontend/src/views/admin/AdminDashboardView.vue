@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
+import { adminService, type AdminTimeLog, type Employee, type AdminVacationDay } from "../../services/adminService";
 import { useToast } from "primevue/usetoast";
 import Toast from "primevue/toast";
 
@@ -11,6 +11,7 @@ const router = useRouter();
 
 const allLogs = ref<AdminTimeLog[]>([]);
 const employees = ref<Employee[]>([]);
+const upcomingVacations = ref<AdminVacationDay[]>([]);
 const loading = ref(false);
 
 // ─── Today helpers ────────────────────────────────────────────────────────────
@@ -55,15 +56,40 @@ const formatBreak = (log: AdminTimeLog) =>
 		? `${formatTime(log.breakStart)} – ${formatTime(log.breakEnd)}`
 		: "—";
 
+// ─── Upcoming vacations (next 7 days) ─────────────────────────────────────────
+
+const upcomingDates = computed(() => {
+	const today = new Date();
+	const in7 = new Date(today);
+	in7.setDate(today.getDate() + 7);
+	const todayIso = todayStr;
+	const in7Iso = (() => {
+		const y = in7.getFullYear();
+		const m = String(in7.getMonth() + 1).padStart(2, "0");
+		const d = String(in7.getDate()).padStart(2, "0");
+		return `${y}-${m}-${d}`;
+	})();
+	return upcomingVacations.value
+		.filter((v) => v.date >= todayIso && v.date <= in7Iso)
+		.sort((a, b) => a.date.localeCompare(b.date));
+});
+
+const formatUpcomingDate = (iso: string) =>
+	new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
 	loading.value = true;
 	try {
-		[allLogs.value, employees.value] = await Promise.all([
+		const [logs, emps, vacations] = await Promise.all([
 			adminService.getAllTimeLogs(),
 			adminService.getEmployees(),
+			adminService.getAllVacationDays(),
 		]);
+		allLogs.value = logs;
+		employees.value = emps;
+		upcomingVacations.value = vacations;
 	} catch {
 		toast.add({ severity: "error", summary: "Error", detail: "Failed to load dashboard data", life: 3000 });
 	} finally {
@@ -203,12 +229,48 @@ onMounted(async () => {
 							</div>
 						</div>
 
-						<!-- Upcoming vacations placeholder -->
+						<!-- Upcoming vacations (next 7 days) -->
 						<div>
-							<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Upcoming vacations</h2>
-							<div class="card flex items-center gap-3 py-6 px-4 text-center flex-col opacity-60">
-								<i class="pi pi-calendar text-2xl text-slate-400 dark:text-slate-500"></i>
-								<p class="text-xs text-slate-500 dark:text-slate-400">Vacation overview coming soon.</p>
+							<div class="flex items-center justify-between mb-3">
+								<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Upcoming vacations</h2>
+								<button
+									@click="router.push({ name: 'admin-vacations' })"
+									class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+								>
+									Calendar →
+								</button>
+							</div>
+							<div class="card overflow-hidden">
+								<div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+									<div v-for="i in 3" :key="i" class="flex items-center gap-3 px-4 py-3">
+										<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+										<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse flex-1" />
+									</div>
+								</div>
+								<div v-else-if="upcomingDates.length === 0" class="text-center py-8">
+									<i class="pi pi-calendar text-2xl text-slate-300 dark:text-slate-600 mb-1 block"></i>
+									<p class="text-xs text-slate-500 dark:text-slate-400">No vacations in the next 7 days.</p>
+								</div>
+								<ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+									<li
+										v-for="v in upcomingDates"
+										:key="v.id"
+										class="flex items-center gap-3 px-4 py-2.5"
+									>
+										<div
+											class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+											:style="{ backgroundColor: v.vacationTypeColor ?? '#6366f1' }"
+										/>
+										<div class="flex-1 min-w-0">
+											<p class="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">{{ v.employeeName }}</p>
+											<p class="text-xs text-slate-400 dark:text-slate-500">{{ v.vacationTypeName }}</p>
+										</div>
+										<div class="text-right shrink-0">
+											<p class="text-xs text-slate-600 dark:text-slate-400">{{ formatUpcomingDate(v.date) }}</p>
+											<p class="text-xs text-slate-400 dark:text-slate-500">{{ v.amount === 0.5 ? "Half" : "Full" }}</p>
+										</div>
+									</li>
+								</ul>
 							</div>
 						</div>
 

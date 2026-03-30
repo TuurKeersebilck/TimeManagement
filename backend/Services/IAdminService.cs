@@ -18,4 +18,7 @@ public interface IAdminService
     Task<EmployeeVacationBalanceDto> AssignVacationTypeAsync(string userId, AssignVacationTypeDto dto, CancellationToken ct = default);
     Task<EmployeeVacationBalanceDto> UpdateEmployeeBalanceAsync(int balanceId, UpdateVacationBalanceDto dto, CancellationToken ct = default);
     Task RemoveEmployeeVacationTypeAsync(int balanceId, CancellationToken ct = default);
+
+    // Vacation overview (admin calendar)
+    Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(string? userId = null, int? vacationTypeId = null, CancellationToken ct = default);
 }

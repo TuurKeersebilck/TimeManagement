@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { adminService, type Employee } from "../../services/adminService";
+import { adminService, type Employee, type AdminVacationDay } from "../../services/adminService";
 import { vacationTypeService, type VacationType, type EmployeeVacationBalance } from "../../services/vacationTypeService";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
@@ -21,6 +21,7 @@ const userId = route.params.id as string;
 const employee = ref<Employee | null>(null);
 const balances = ref<EmployeeVacationBalance[]>([]);
 const allTypes = ref<VacationType[]>([]);
+const vacationDays = ref<AdminVacationDay[]>([]);
 const loading = ref(false);
 
 // ─── Assign dialog ────────────────────────────────────────────────────────────
@@ -111,13 +112,30 @@ const initials = computed(() =>
 	employee.value?.fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() ?? ""
 );
 
+const currentYear = new Date().getFullYear();
+
+// Calculate used days per vacation type from planned vacation days (current year)
+const usedByType = computed(() => {
+	const map = new Map<number, number>();
+	for (const d of vacationDays.value) {
+		if (new Date(d.date).getFullYear() === currentYear) {
+			map.set(d.vacationTypeId, (map.get(d.vacationTypeId) ?? 0) + d.amount);
+		}
+	}
+	return map;
+});
+
+const displayDate = (iso: string) =>
+	new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
 onMounted(async () => {
 	loading.value = true;
 	try {
-		const [employees, fetchedBalances, fetchedTypes] = await Promise.all([
+		const [employees, fetchedBalances, fetchedTypes, fetchedDays] = await Promise.all([
 			adminService.getEmployees(),
 			vacationTypeService.getEmployeeBalances(userId),
 			vacationTypeService.getAll(),
+			adminService.getAllVacationDays({ userId }),
 		]);
 		employee.value = employees.find((e) => e.id === userId) ?? null;
 		if (!employee.value) {
@@ -126,6 +144,7 @@ onMounted(async () => {
 		}
 		balances.value = fetchedBalances;
 		allTypes.value = fetchedTypes;
+		vacationDays.value = fetchedDays;
 	} catch {
 		toast.add({ severity: "error", summary: "Error", detail: "Failed to load employee", life: 3000 });
 	} finally {
@@ -218,34 +237,99 @@ onMounted(async () => {
 						<div
 							v-for="balance in balances"
 							:key="balance.id"
-							class="flex items-center gap-4 px-5 py-4"
+							class="px-5 py-4"
 						>
-							<div
-								class="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/10"
-								:style="{ backgroundColor: balance.vacationTypeColor ?? '#6366f1' }"
-							/>
-							<span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-								{{ balance.vacationTypeName }}
-							</span>
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-								{{ balance.yearlyBalance }} days / year
-							</span>
-							<div class="flex items-center gap-1 shrink-0">
-								<button
-									@click="openEdit(balance)"
-									class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-									title="Edit balance"
-								>
-									<i class="pi pi-pencil text-sm"></i>
-								</button>
-								<button
-									@click="removeBalance(balance)"
-									class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-									title="Remove"
-								>
-									<i class="pi pi-trash text-sm"></i>
-								</button>
+							<div class="flex items-center gap-4 mb-2">
+								<div
+									class="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/10"
+									:style="{ backgroundColor: balance.vacationTypeColor ?? '#6366f1' }"
+								/>
+								<span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+									{{ balance.vacationTypeName }}
+								</span>
+								<div class="flex items-center gap-1 shrink-0">
+									<button
+										@click="openEdit(balance)"
+										class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+										title="Edit balance"
+									>
+										<i class="pi pi-pencil text-sm"></i>
+									</button>
+									<button
+										@click="removeBalance(balance)"
+										class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+										title="Remove"
+									>
+										<i class="pi pi-trash text-sm"></i>
+									</button>
+								</div>
 							</div>
+							<!-- Usage bar -->
+							<div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-1.5">
+								<div
+									:class="[
+										'h-1.5 rounded-full transition-all',
+										(usedByType.get(balance.vacationTypeId) ?? 0) >= balance.yearlyBalance
+											? 'bg-red-500'
+											: (usedByType.get(balance.vacationTypeId) ?? 0) / balance.yearlyBalance >= 0.8
+												? 'bg-amber-400'
+												: 'bg-emerald-500',
+									]"
+									:style="{
+										width: balance.yearlyBalance > 0
+											? `${Math.min(((usedByType.get(balance.vacationTypeId) ?? 0) / balance.yearlyBalance) * 100, 100)}%`
+											: '0%'
+									}"
+								/>
+							</div>
+							<div class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+								<span>{{ usedByType.get(balance.vacationTypeId) ?? 0 }} / {{ balance.yearlyBalance }} days used ({{ new Date().getFullYear() }})</span>
+								<span
+									:class="(balance.yearlyBalance - (usedByType.get(balance.vacationTypeId) ?? 0)) <= 0
+										? 'text-red-600 dark:text-red-400 font-medium'
+										: 'text-emerald-600 dark:text-emerald-400 font-medium'"
+								>{{ balance.yearlyBalance - (usedByType.get(balance.vacationTypeId) ?? 0) }} remaining</span>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- Planned vacation days section -->
+				<div class="mt-6" v-if="!loading">
+					<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Planned vacation days</h2>
+
+					<div v-if="vacationDays.length === 0" class="card text-center py-8">
+						<i class="pi pi-calendar text-2xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+						<p class="text-sm text-slate-500 dark:text-slate-400">No vacation days planned.</p>
+					</div>
+
+					<div v-else class="card divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+						<div
+							v-for="day in vacationDays"
+							:key="day.id"
+							class="flex items-center gap-3 px-5 py-3"
+						>
+							<span class="text-sm font-medium text-slate-900 dark:text-slate-100 w-28 shrink-0">
+								{{ displayDate(day.date) }}
+							</span>
+							<div class="flex items-center gap-2 flex-1 min-w-0">
+								<div
+									class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+									:style="{ backgroundColor: day.vacationTypeColor ?? '#6366f1' }"
+								/>
+								<span class="text-sm text-slate-600 dark:text-slate-400 truncate">
+									{{ day.vacationTypeName }}
+									<span v-if="day.note" class="text-slate-400 dark:text-slate-500"> · {{ day.note }}</span>
+								</span>
+							</div>
+							<span
+								:class="[
+									'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
+									day.amount === 1
+										? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+										: 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
+								]"
+							>{{ day.amount === 1 ? "Full day" : "Half day" }}</span>
 						</div>
 					</div>
 				</div>
