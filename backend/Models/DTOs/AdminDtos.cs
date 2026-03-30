@@ -74,3 +74,16 @@ public class UpdateVacationBalanceDto
 {
     public decimal YearlyBalance { get; set; }
 }
+
+public class AdminVacationDayDto
+{
+    public int Id { get; set; }
+    public string UserId { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public int VacationTypeId { get; set; }
+    public string VacationTypeName { get; set; } = string.Empty;
+    public string? VacationTypeColor { get; set; }
+    public DateOnly Date { get; set; }
+    public decimal Amount { get; set; }
+    public string? Note { get; set; }
+}

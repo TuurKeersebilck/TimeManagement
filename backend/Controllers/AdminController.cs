@@ -105,4 +105,16 @@ public class AdminController(IAdminService adminService) : ControllerBase
         await _adminService.RemoveEmployeeVacationTypeAsync(balanceId, ct);
         return NoContent();
     }
+
+    // ─── Vacation overview ────────────────────────────────────────────────────
+
+    [HttpGet("vacations")]
+    public async Task<ActionResult<IEnumerable<AdminVacationDayDto>>> GetAllVacationDays(
+        [FromQuery] string? userId,
+        [FromQuery] int? vacationTypeId,
+        CancellationToken ct)
+    {
+        var days = await _adminService.GetAllVacationDaysAsync(userId, vacationTypeId, ct);
+        return Ok(days);
+    }
 }

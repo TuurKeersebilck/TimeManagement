@@ -203,4 +203,40 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         _context.EmployeeVacationBalances.Remove(entity);
         await _context.SaveChangesAsync(ct);
     }
+
+    // ─── Vacation overview ────────────────────────────────────────────────────
+
+    public async Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(
+        string? userId = null,
+        int? vacationTypeId = null,
+        CancellationToken ct = default)
+    {
+        var query = _context.VacationDays
+            .AsNoTracking()
+            .Include(d => d.VacationType)
+            .Include(d => d.User)
+            .AsQueryable();
+
+        if (!string.IsNullOrEmpty(userId))
+            query = query.Where(d => d.UserId == userId);
+
+        if (vacationTypeId.HasValue)
+            query = query.Where(d => d.VacationTypeId == vacationTypeId.Value);
+
+        return await query
+            .OrderBy(d => d.Date)
+            .Select(d => new AdminVacationDayDto
+            {
+                Id = d.Id,
+                UserId = d.UserId,
+                EmployeeName = d.User.FullName,
+                VacationTypeId = d.VacationTypeId,
+                VacationTypeName = d.VacationType.Name,
+                VacationTypeColor = d.VacationType.Color,
+                Date = d.Date,
+                Amount = d.Amount,
+                Note = d.Note,
+            })
+            .ToListAsync(ct);
+    }
 }
