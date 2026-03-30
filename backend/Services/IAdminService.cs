@@ -4,7 +4,7 @@ namespace TimeManagementBackend.Services;
 
 public interface IAdminService
 {
-    Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, CancellationToken ct = default);
+    Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken ct = default);
     Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(CancellationToken ct = default);
 
     // Vacation types
@@ -20,5 +20,5 @@ public interface IAdminService
     Task RemoveEmployeeVacationTypeAsync(int balanceId, CancellationToken ct = default);
 
     // Vacation overview (admin calendar)
-    Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(string? userId = null, int? vacationTypeId = null, CancellationToken ct = default);
+    Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(string? userId = null, int? vacationTypeId = null, int? year = null, int? month = null, CancellationToken ct = default);
 }
