@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type Employee } from "../../services/adminService";
 import DataTable from "primevue/datatable";
@@ -8,6 +9,7 @@ import { useToast } from "primevue/usetoast";
 import Toast from "primevue/toast";
 
 const toast = useToast();
+const router = useRouter();
 const employees = ref<Employee[]>([]);
 const loading = ref(false);
 
@@ -41,6 +43,9 @@ onMounted(async () => {
 						:loading="loading"
 						stripedRows
 						class="text-sm"
+						rowHover
+						@row-click="(e) => router.push({ name: 'admin-employee-detail', params: { id: e.data.id } })"
+						:pt="{ bodyRow: { class: 'cursor-pointer' } }"
 					>
 						<template #empty>
 							<div class="text-center py-16">

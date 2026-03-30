@@ -28,4 +28,81 @@ public class AdminController(IAdminService adminService) : ControllerBase
         var employees = await _adminService.GetEmployeesAsync(ct);
         return Ok(employees);
     }
+
+    // ─── Vacation types ───────────────────────────────────────────────────────
+
+    [HttpGet("vacation-types")]
+    public async Task<ActionResult<IEnumerable<VacationTypeDto>>> GetVacationTypes(CancellationToken ct)
+    {
+        var types = await _adminService.GetVacationTypesAsync(ct);
+        return Ok(types);
+    }
+
+    [HttpPost("vacation-types")]
+    public async Task<ActionResult<VacationTypeDto>> CreateVacationType(
+        [FromBody] VacationTypeCreateDto dto,
+        CancellationToken ct)
+    {
+        var created = await _adminService.CreateVacationTypeAsync(dto, ct);
+        return CreatedAtAction(nameof(GetVacationTypes), created);
+    }
+
+    [HttpPut("vacation-types/{id:int}")]
+    public async Task<ActionResult<VacationTypeDto>> UpdateVacationType(
+        int id,
+        [FromBody] VacationTypeUpdateDto dto,
+        CancellationToken ct)
+    {
+        var updated = await _adminService.UpdateVacationTypeAsync(id, dto, ct);
+        return Ok(updated);
+    }
+
+    [HttpDelete("vacation-types/{id:int}")]
+    public async Task<IActionResult> DeleteVacationType(int id, CancellationToken ct)
+    {
+        await _adminService.DeleteVacationTypeAsync(id, ct);
+        return NoContent();
+    }
+
+    // ─── Employee vacation balances ───────────────────────────────────────────
+
+    [HttpGet("employees/{userId}/vacation-balances")]
+    public async Task<ActionResult<IEnumerable<EmployeeVacationBalanceDto>>> GetEmployeeBalances(
+        string userId,
+        CancellationToken ct)
+    {
+        var balances = await _adminService.GetEmployeeBalancesAsync(userId, ct);
+        return Ok(balances);
+    }
+
+    [HttpPost("employees/{userId}/vacation-balances")]
+    public async Task<ActionResult<EmployeeVacationBalanceDto>> AssignVacationType(
+        string userId,
+        [FromBody] AssignVacationTypeDto dto,
+        CancellationToken ct)
+    {
+        var balance = await _adminService.AssignVacationTypeAsync(userId, dto, ct);
+        return CreatedAtAction(nameof(GetEmployeeBalances), new { userId }, balance);
+    }
+
+    [HttpPut("employees/{userId}/vacation-balances/{balanceId:int}")]
+    public async Task<ActionResult<EmployeeVacationBalanceDto>> UpdateEmployeeBalance(
+        string userId,
+        int balanceId,
+        [FromBody] UpdateVacationBalanceDto dto,
+        CancellationToken ct)
+    {
+        var balance = await _adminService.UpdateEmployeeBalanceAsync(balanceId, dto, ct);
+        return Ok(balance);
+    }
+
+    [HttpDelete("employees/{userId}/vacation-balances/{balanceId:int}")]
+    public async Task<IActionResult> RemoveEmployeeVacationType(
+        string userId,
+        int balanceId,
+        CancellationToken ct)
+    {
+        await _adminService.RemoveEmployeeVacationTypeAsync(balanceId, ct);
+        return NoContent();
+    }
 }

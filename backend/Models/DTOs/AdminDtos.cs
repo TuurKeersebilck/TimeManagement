@@ -31,3 +31,46 @@ public class EmployeeDto
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
 }
+
+public class VacationTypeDto
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Color { get; set; }
+    public int AssignedEmployeeCount { get; set; }
+}
+
+public class VacationTypeCreateDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Color { get; set; }
+}
+
+public class VacationTypeUpdateDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Color { get; set; }
+}
+
+public class EmployeeVacationBalanceDto
+{
+    public int Id { get; set; }
+    public int VacationTypeId { get; set; }
+    public string VacationTypeName { get; set; } = string.Empty;
+    public string? VacationTypeColor { get; set; }
+    public decimal YearlyBalance { get; set; }
+}
+
+public class AssignVacationTypeDto
+{
+    public int VacationTypeId { get; set; }
+    public decimal YearlyBalance { get; set; }
+}
+
+public class UpdateVacationBalanceDto
+{
+    public decimal YearlyBalance { get; set; }
+}
