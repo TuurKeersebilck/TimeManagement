@@ -58,7 +58,7 @@ public class TimeLogsController(
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TimeLogDto>> GetTimeLog(int id, CancellationToken ct)
     {
-        if (id <= 0) return BadRequest("Invalid id");
+        if (id <= 0) return BadRequest(new ErrorResponseDto { Message = "Invalid id" });
 
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
@@ -75,10 +75,10 @@ public class TimeLogsController(
         if (user == null) return Unauthorized();
 
         var validationError = ValidateTimes(dto.StartTime, dto.EndTime, dto.BreakStart, dto.BreakEnd);
-        if (validationError != null) return BadRequest(validationError);
+        if (validationError != null) return BadRequest(new ErrorResponseDto { Message = validationError });
 
         if (await _service.ExistsForDateAsync(user.Id, dto.Date, cancellationToken: ct))
-            return Conflict("A time log already exists for this date");
+            return Conflict(new ErrorResponseDto { Message = "A time log already exists for this date", Code = "DUPLICATE_DATE" });
 
         var created = await _service.CreateAsync(dto, user.Id, ct);
         return CreatedAtAction(nameof(GetTimeLog), new { id = created.Id }, created);
@@ -87,16 +87,16 @@ public class TimeLogsController(
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateTimeLog(int id, [FromBody] TimeLogUpdateDto dto, CancellationToken ct)
     {
-        if (id <= 0) return BadRequest("Invalid id");
+        if (id <= 0) return BadRequest(new ErrorResponseDto { Message = "Invalid id" });
 
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
         var validationError = ValidateTimes(dto.StartTime, dto.EndTime, dto.BreakStart, dto.BreakEnd);
-        if (validationError != null) return BadRequest(validationError);
+        if (validationError != null) return BadRequest(new ErrorResponseDto { Message = validationError });
 
         if (await _service.ExistsForDateAsync(user.Id, dto.Date, excludeId: id, cancellationToken: ct))
-            return Conflict("A time log already exists for this date");
+            return Conflict(new ErrorResponseDto { Message = "A time log already exists for this date", Code = "DUPLICATE_DATE" });
 
         var updated = await _service.UpdateAsync(id, dto, user.Id, ct);
         if (!updated) return NotFound();
@@ -107,7 +107,7 @@ public class TimeLogsController(
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteTimeLog(int id, CancellationToken ct)
     {
-        if (id <= 0) return BadRequest("Invalid id");
+        if (id <= 0) return BadRequest(new ErrorResponseDto { Message = "Invalid id" });
 
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
