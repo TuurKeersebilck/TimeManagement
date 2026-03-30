@@ -46,19 +46,11 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        try
-        {
-            var created = await _service.CreateVacationDayAsync(user.Id, dto, ct);
-            return CreatedAtAction(nameof(GetVacationDays), created);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        if (await _service.ExistsForDateAndTypeAsync(user.Id, dto.Date, dto.VacationTypeId, ct))
+            return Conflict("A vacation day of this type already exists for this date");
+
+        var created = await _service.CreateVacationDayAsync(user.Id, dto, ct);
+        return CreatedAtAction(nameof(GetVacationDays), created);
     }
 
     [HttpPut("{id:int}")]
@@ -67,23 +59,8 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        try
-        {
-            var updated = await _service.UpdateVacationDayAsync(user.Id, id, dto, ct);
-            return Ok(updated);
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
+        var updated = await _service.UpdateVacationDayAsync(user.Id, id, dto, ct);
+        return Ok(updated);
     }
 
     [HttpDelete("{id:int}")]
@@ -92,14 +69,7 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        try
-        {
-            await _service.DeleteVacationDayAsync(user.Id, id, ct);
-            return NoContent();
-        }
-        catch (KeyNotFoundException)
-        {
-            return NotFound();
-        }
+        await _service.DeleteVacationDayAsync(user.Id, id, ct);
+        return NoContent();
     }
 }

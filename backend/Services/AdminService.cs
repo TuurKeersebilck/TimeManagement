@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
+using TimeManagementBackend.Exceptions;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -104,7 +105,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var entity = await _context.VacationTypes
             .Include(v => v.EmployeeBalances)
             .FirstOrDefaultAsync(v => v.Id == id, ct)
-            ?? throw new KeyNotFoundException($"Vacation type {id} not found.");
+            ?? throw new ResourceNotFoundException($"Vacation type {id} not found.");
 
         entity.Name = dto.Name;
         entity.Description = dto.Description;
@@ -125,7 +126,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task DeleteVacationTypeAsync(int id, CancellationToken ct = default)
     {
         var entity = await _context.VacationTypes.FindAsync([id], ct)
-            ?? throw new KeyNotFoundException($"Vacation type {id} not found.");
+            ?? throw new ResourceNotFoundException($"Vacation type {id} not found.");
 
         _context.VacationTypes.Remove(entity);
         await _context.SaveChangesAsync(ct);
@@ -180,7 +181,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var entity = await _context.EmployeeVacationBalances
             .Include(b => b.VacationType)
             .FirstOrDefaultAsync(b => b.Id == balanceId, ct)
-            ?? throw new KeyNotFoundException($"Balance {balanceId} not found.");
+            ?? throw new ResourceNotFoundException($"Balance {balanceId} not found.");
 
         entity.YearlyBalance = dto.YearlyBalance;
         await _context.SaveChangesAsync(ct);
@@ -198,7 +199,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task RemoveEmployeeVacationTypeAsync(int balanceId, CancellationToken ct = default)
     {
         var entity = await _context.EmployeeVacationBalances.FindAsync([balanceId], ct)
-            ?? throw new KeyNotFoundException($"Balance {balanceId} not found.");
+            ?? throw new ResourceNotFoundException($"Balance {balanceId} not found.");
 
         _context.EmployeeVacationBalances.Remove(entity);
         await _context.SaveChangesAsync(ct);

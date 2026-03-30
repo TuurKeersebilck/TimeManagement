@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using TimeManagementBackend.Exceptions;
 
 namespace TimeManagementBackend.Middleware;
 
@@ -22,17 +23,45 @@ public class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception processing request {Method} {Path}", context.Request.Method, context.Request.Path);
             await HandleExceptionAsync(context, ex);
         }
     }
 
-    private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var response = new { message = "An unexpected error occurred." };
-        var payload = JsonSerializer.Serialize(response);
+        HttpStatusCode statusCode;
+        string message;
 
-        context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+        switch (exception)
+        {
+            case ResourceNotFoundException ex:
+                _logger.LogWarning("Resource not found: {Message}", ex.Message);
+                statusCode = HttpStatusCode.NotFound;
+                message = ex.Message;
+                break;
+            case InsufficientVacationBalanceException ex:
+                _logger.LogWarning("Insufficient vacation balance: {Message}", ex.Message);
+                statusCode = HttpStatusCode.UnprocessableEntity;
+                message = ex.Message;
+                break;
+            case InvalidVacationAmountException ex:
+                _logger.LogWarning("Invalid vacation amount: {Message}", ex.Message);
+                statusCode = HttpStatusCode.BadRequest;
+                message = ex.Message;
+                break;
+            default:
+                _logger.LogError(exception, "Unhandled exception processing request {Method} {Path}",
+                    context.Request.Method, context.Request.Path);
+                statusCode = HttpStatusCode.InternalServerError;
+                message = "An unexpected error occurred.";
+                break;
+        }
+
+        var payload = JsonSerializer.Serialize(
+            new { message },
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+        context.Response.StatusCode = (int)statusCode;
         context.Response.ContentType = "application/json";
 
         return context.Response.WriteAsync(payload);
