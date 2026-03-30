@@ -46,6 +46,9 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
+        if (await _service.ExistsForDateAndTypeAsync(user.Id, dto.Date, dto.VacationTypeId, ct))
+            return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
+
         try
         {
             var created = await _service.CreateVacationDayAsync(user.Id, dto, ct);
@@ -53,11 +56,11 @@ public class VacationsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new ErrorResponseDto { Message = ex.Message });
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new ErrorResponseDto { Message = ex.Message });
         }
     }
 
@@ -78,11 +81,11 @@ public class VacationsController(
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new ErrorResponseDto { Message = ex.Message });
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new ErrorResponseDto { Message = ex.Message });
         }
     }
 

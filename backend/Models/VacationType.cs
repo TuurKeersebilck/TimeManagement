@@ -15,6 +15,7 @@ public class VacationType
     public string? Description { get; set; }
 
     [MaxLength(7)]
+    [RegularExpression(@"^#[0-9A-Fa-f]{6}$", ErrorMessage = "Color must be a valid hex code")]
     public string? Color { get; set; }
 
     public ICollection<EmployeeVacationBalance> EmployeeBalances { get; set; } = new List<EmployeeVacationBalance>();

@@ -37,42 +37,18 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponseDto>> Register(RegisterDto registerDto)
     {
         if (!ModelState.IsValid)
-        {
-            return BadRequest(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "Invalid registration data"
-            });
-        }
+            return BadRequest(new ErrorResponseDto { Message = "Invalid registration data" });
 
         if (string.IsNullOrEmpty(registerDto.Email) || string.IsNullOrEmpty(registerDto.FullName))
-        {
-            return BadRequest(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "Full name and email are required"
-            });
-        }
+            return BadRequest(new ErrorResponseDto { Message = "Full name and email are required" });
 
         if (registerDto.Password != registerDto.ConfirmPassword)
-        {
-            return BadRequest(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "Passwords do not match"
-            });
-        }
+            return BadRequest(new ErrorResponseDto { Message = "Passwords do not match" });
 
         // Check if email already exists
         var existingUserByEmail = await _userManager.FindByEmailAsync(registerDto.Email);
         if (existingUserByEmail != null)
-        {
-            return Conflict(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "Email is already registered"
-            });
-        }
+            return Conflict(new ErrorResponseDto { Message = "Email is already registered", Code = "DUPLICATE_EMAIL" });
 
         var user = new User
         {
@@ -89,11 +65,7 @@ public class AuthController : ControllerBase
                 registerDto.Email,
                 string.Join(", ", result.Errors.Select(e => e.Description)));
 
-            return BadRequest(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = string.Join(", ", result.Errors.Select(e => e.Description))
-            });
+            return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
         }
 
         try
@@ -127,11 +99,7 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during user registration for {Email}", registerDto.Email);
-            return StatusCode(500, new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "An error occurred during registration"
-            });
+            return StatusCode(500, new ErrorResponseDto { Message = "An error occurred during registration" });
         }
     }
 
@@ -139,13 +107,7 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto loginDto)
     {
         if (!ModelState.IsValid || string.IsNullOrEmpty(loginDto.Email) || string.IsNullOrEmpty(loginDto.Password))
-        {
-            return BadRequest(new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "Email and password are required"
-            });
-        }
+            return BadRequest(new ErrorResponseDto { Message = "Email and password are required" });
 
         try
         {
@@ -154,11 +116,7 @@ public class AuthController : ControllerBase
             if (user == null)
             {
                 _logger.LogWarning("Login attempt with invalid email: {Email}", loginDto.Email);
-                return Unauthorized(new AuthResponseDto
-                {
-                    IsSuccess = false,
-                    Message = "Invalid email or password"
-                });
+                return Unauthorized(new ErrorResponseDto { Message = "Invalid email or password" });
             }
 
             var result = await _signInManager.CheckPasswordSignInAsync(user, loginDto.Password, false);
@@ -166,11 +124,7 @@ public class AuthController : ControllerBase
             if (!result.Succeeded)
             {
                 _logger.LogWarning("Failed login attempt for user: {Email}", loginDto.Email);
-                return Unauthorized(new AuthResponseDto
-                {
-                    IsSuccess = false,
-                    Message = "Invalid email or password"
-                });
+                return Unauthorized(new ErrorResponseDto { Message = "Invalid email or password" });
             }
 
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
@@ -193,11 +147,7 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during login for {Email}", loginDto.Email);
-            return StatusCode(500, new AuthResponseDto
-            {
-                IsSuccess = false,
-                Message = "An error occurred during login"
-            });
+            return StatusCode(500, new ErrorResponseDto { Message = "An error occurred during login" });
         }
     }
 
@@ -208,18 +158,14 @@ public class AuthController : ControllerBase
         try
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            
+
             if (string.IsNullOrEmpty(userId))
-            {
-                return Unauthorized(new { message = "User not authenticated" });
-            }
+                return Unauthorized(new ErrorResponseDto { Message = "User not authenticated" });
 
             var user = await _userManager.FindByIdAsync(userId);
-            
+
             if (user == null)
-            {
-                return NotFound(new { message = "User not found" });
-            }
+                return NotFound(new ErrorResponseDto { Message = "User not found" });
 
             var roles = await _userManager.GetRolesAsync(user);
 
@@ -235,7 +181,7 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching current user");
-            return StatusCode(500, new { message = "An error occurred while fetching user information" });
+            return StatusCode(500, new ErrorResponseDto { Message = "An error occurred while fetching user information" });
         }
     }
 }

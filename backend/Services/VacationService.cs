@@ -49,6 +49,9 @@ public class VacationService(AppDbContext db) : IVacationService
             .ToListAsync(ct);
     }
 
+    public Task<bool> ExistsForDateAndTypeAsync(string userId, DateOnly date, int vacationTypeId, CancellationToken ct = default)
+        => _db.VacationDays.AnyAsync(d => d.UserId == userId && d.Date == date && d.VacationTypeId == vacationTypeId, ct);
+
     public async Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, CancellationToken ct = default)
     {
         ValidateAmount(dto.Amount);

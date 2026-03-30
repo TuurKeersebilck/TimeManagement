@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Middleware;
 
@@ -29,8 +30,8 @@ public class ExceptionHandlingMiddleware
 
     private static Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
-        var response = new { message = "An unexpected error occurred." };
-        var payload = JsonSerializer.Serialize(response);
+        var response = new ErrorResponseDto { Message = "An unexpected error occurred." };
+        var payload = JsonSerializer.Serialize(response, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
 
         context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
         context.Response.ContentType = "application/json";
