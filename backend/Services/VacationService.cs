@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
+using TimeManagementBackend.Exceptions;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -76,7 +77,7 @@ public class VacationService(AppDbContext db) : IVacationService
 
         var balance = await _db.EmployeeVacationBalances
             .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
-            ?? throw new InvalidOperationException("This vacation type is not assigned to you.");
+            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
 
         var currentYear = DateTime.UtcNow.Year;
         var used = await _db.VacationDays
@@ -84,7 +85,7 @@ public class VacationService(AppDbContext db) : IVacationService
             .SumAsync(d => d.Amount, ct);
 
         if (used + dto.Amount > balance.YearlyBalance)
-            throw new InvalidOperationException(
+            throw new InsufficientVacationBalanceException(
                 $"Insufficient balance. Remaining: {balance.YearlyBalance - used} day(s).");
 
         var day = new VacationDay
@@ -111,11 +112,11 @@ public class VacationService(AppDbContext db) : IVacationService
         var day = await _db.VacationDays
             .Include(d => d.VacationType)
             .FirstOrDefaultAsync(d => d.Id == id && d.UserId == userId, ct)
-            ?? throw new KeyNotFoundException("Vacation day not found.");
+            ?? throw new ResourceNotFoundException("Vacation day not found.");
 
         var balance = await _db.EmployeeVacationBalances
             .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
-            ?? throw new InvalidOperationException("This vacation type is not assigned to you.");
+            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
 
         var currentYear = DateTime.UtcNow.Year;
         var used = await _db.VacationDays
@@ -123,7 +124,7 @@ public class VacationService(AppDbContext db) : IVacationService
             .SumAsync(d => d.Amount, ct);
 
         if (used + dto.Amount > balance.YearlyBalance)
-            throw new InvalidOperationException(
+            throw new InsufficientVacationBalanceException(
                 $"Insufficient balance. Remaining: {balance.YearlyBalance - used} day(s).");
 
         day.VacationTypeId = dto.VacationTypeId;
@@ -143,7 +144,7 @@ public class VacationService(AppDbContext db) : IVacationService
     {
         var day = await _db.VacationDays
             .FirstOrDefaultAsync(d => d.Id == id && d.UserId == userId, ct)
-            ?? throw new KeyNotFoundException("Vacation day not found.");
+            ?? throw new ResourceNotFoundException("Vacation day not found.");
 
         _db.VacationDays.Remove(day);
         await _db.SaveChangesAsync(ct);
@@ -152,7 +153,7 @@ public class VacationService(AppDbContext db) : IVacationService
     private static void ValidateAmount(decimal amount)
     {
         if (amount != 0.5m && amount != 1.0m)
-            throw new ArgumentException("Amount must be 0.5 (half day) or 1.0 (full day).");
+            throw new InvalidVacationAmountException("Amount must be 0.5 (half day) or 1.0 (full day).");
     }
 
     private static VacationDayDto ToDto(VacationDay d) => new()

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
 using System.Text;
 using TimeManagementBackend.Config;
 using TimeManagementBackend.Data;
@@ -9,77 +10,97 @@ using TimeManagementBackend.Middleware;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// Bootstrap logger for startup (before host is built)
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// Load environment variables
-LoadEnvironmentVariables();
-
-// Add services to the container
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// Register AutoMapper
-builder.Services.AddAutoMapper(cfg => cfg.AddProfile<AutoMapperProfile>());
-
-// Configure DbContext
-ConfigureDatabaseContext(builder);
-
-// Configure Identity
-ConfigureIdentity(builder);
-
-// Configure JWT Authentication
-ConfigureAuthentication(builder);
-
-// Configure CORS
-builder.Services.AddCors(options =>
+try
 {
-    var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
-        ?? (builder.Environment.IsDevelopment() ? "http://localhost:5173" : null))
-        ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-        ?? throw new InvalidOperationException("CORS_ORIGINS environment variable must be set in production.");
+    // Load environment variables
+    LoadEnvironmentVariables();
 
-    options.AddPolicy("AllowFrontend", policy =>
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseSerilog((ctx, lc) => lc
+        .ReadFrom.Configuration(ctx.Configuration)
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}"));
+
+    // Add services to the container
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    // Register AutoMapper
+    builder.Services.AddAutoMapper(cfg => cfg.AddProfile<AutoMapperProfile>());
+
+    // Configure DbContext
+    ConfigureDatabaseContext(builder);
+
+    // Configure Identity
+    ConfigureIdentity(builder);
+
+    // Configure JWT Authentication
+    ConfigureAuthentication(builder);
+
+    // Configure CORS
+    builder.Services.AddCors(options =>
     {
-        policy.WithOrigins(allowedOrigins)
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Required for HttpOnly cookie auth
+        var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
+            ?? (builder.Environment.IsDevelopment() ? "http://localhost:5173" : null))
+            ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            ?? throw new InvalidOperationException("CORS_ORIGINS environment variable must be set in production.");
+
+        options.AddPolicy("AllowFrontend", policy =>
+        {
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod()
+                  .AllowCredentials(); // Required for HttpOnly cookie auth
+        });
     });
-});
 
-// Register application services
-builder.Services.AddMemoryCache();
-builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
-builder.Services.AddScoped<ITimeLogService, TimeLogService>();
-builder.Services.AddScoped<IAdminService, AdminService>();
-builder.Services.AddScoped<IVacationService, VacationService>();
+    // Register application services
+    builder.Services.AddMemoryCache();
+    builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
+    builder.Services.AddScoped<ITimeLogService, TimeLogService>();
+    builder.Services.AddScoped<IAdminService, AdminService>();
+    builder.Services.AddScoped<IVacationService, VacationService>();
 
-var app = builder.Build();
+    var app = builder.Build();
 
-// Use global exception handling middleware
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+    // Use global exception handling middleware
+    app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    // Configure the HTTP request pipeline
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseCors("AllowFrontend");
+
+    // Add authentication and authorization middleware
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.MapControllers();
+
+    // Create default roles
+    await CreateDefaultRoles(app);
+
+    app.Run();
 }
-
-app.UseHttpsRedirection();
-app.UseCors("AllowFrontend");
-
-// Add authentication and authorization middleware
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapControllers();
-
-// Create default roles
-await CreateDefaultRoles(app);
-
-app.Run();
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
 
 // Configure Database Context
 void ConfigureDatabaseContext(WebApplicationBuilder builder)
@@ -92,12 +113,10 @@ void ConfigureDatabaseContext(WebApplicationBuilder builder)
 
     builder.Services.AddDbContext<AppDbContext>(options =>
     {
-        
             // Use MySQL/MariaDB
             options.UseMySql(connectionString,
                 new MySqlServerVersion(new Version(11, 0, 0))
             );
-        
     });
 }
 
@@ -130,32 +149,32 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
     // Get JWT settings from environment variables
     var jwtConfig = new JwtConfig
     {
-        Issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ?? 
-                 builder.Configuration["JWT:Issuer"] ?? 
+        Issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") ??
+                 builder.Configuration["JWT:Issuer"] ??
                  "TimeManagementAPI",
-        
-        Audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? 
-                   builder.Configuration["JWT:Audience"] ?? 
+
+        Audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") ??
+                   builder.Configuration["JWT:Audience"] ??
                    "TimeManagementAPI",
-        
+
         Secret = Environment.GetEnvironmentVariable("JWT_SECRET")
                  ?? builder.Configuration["JWT:Secret"]
                  ?? (builder.Environment.IsDevelopment()
                      ? "YourSuperSecretKeyWithAtLeast32Characters!"
                      : throw new InvalidOperationException("JWT_SECRET environment variable must be set in production.")),
-        
+
         ExpiryInMinutes = int.TryParse(
-            Environment.GetEnvironmentVariable("JWT_EXPIRY_MINUTES") ?? 
-            builder.Configuration["JWT:ExpiryInMinutes"] ?? 
+            Environment.GetEnvironmentVariable("JWT_EXPIRY_MINUTES") ??
+            builder.Configuration["JWT:ExpiryInMinutes"] ??
             "60", out var minutes) ? minutes : 60
     };
 
     // Register the JWT config for dependency injection
     builder.Services.AddSingleton(jwtConfig);
-                
+
     if (jwtConfig.Secret == "YourSuperSecretKeyWithAtLeast32Characters!")
     {
-        Console.WriteLine("Warning: Using default JWT secret key. This should be changed in production.");
+        Log.Warning("Using default JWT secret key. This should be changed in production.");
     }
 
     builder.Services.AddAuthentication(options =>
@@ -205,18 +224,17 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
 // Create default roles
 async Task CreateDefaultRoles(WebApplication app)
 {
-    using (var scope = app.Services.CreateScope())
+    using var scope = app.Services.CreateScope();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var roles = new[] { "Admin", "User" };
+
+    foreach (var role in roles)
     {
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-        var roles = new[] { "Admin", "User" };
-        
-        foreach (var role in roles)
+        if (!await roleManager.RoleExistsAsync(role))
         {
-            if (!await roleManager.RoleExistsAsync(role))
-            {
-                await roleManager.CreateAsync(new IdentityRole(role));
-                Console.WriteLine($"Created role: {role}");
-            }
+            await roleManager.CreateAsync(new IdentityRole(role));
+            logger.LogInformation("Created role: {Role}", role);
         }
     }
 }
@@ -227,7 +245,7 @@ void LoadEnvironmentVariables()
     var envFile = Path.Combine(Directory.GetCurrentDirectory(), ".env");
     if (!File.Exists(envFile))
     {
-        Console.WriteLine("No .env file found. Using configuration values or defaults.");
+        Log.Information("No .env file found. Using configuration values or defaults.");
         return;
     }
 
@@ -238,34 +256,34 @@ void LoadEnvironmentVariables()
             // Skip empty lines and comments
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
                 continue;
-                
+
             var parts = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 2)
             {
-                Console.WriteLine($"Warning: Invalid line in .env file: {line}");
+                Log.Warning("Invalid line in .env file: {Line}", line);
                 continue;
             }
-                
+
             var key = parts[0].Trim();
             var value = parts[1].Trim();
-            
+
             // Remove quotes if they exist
-            if ((value.StartsWith("\"") && value.EndsWith("\"")) || 
+            if ((value.StartsWith("\"") && value.EndsWith("\"")) ||
                 (value.StartsWith("'") && value.EndsWith("'")))
             {
                 value = value.Substring(1, value.Length - 2);
             }
-            
+
             // Don't override existing environment variables
             if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(key)))
             {
                 Environment.SetEnvironmentVariable(key, value);
             }
         }
-        Console.WriteLine(".env file loaded successfully.");
+        Log.Information(".env file loaded successfully.");
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error loading .env file: {ex.Message}");
+        Log.Error(ex, "Error loading .env file");
     }
 }
