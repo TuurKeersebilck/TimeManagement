@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using TimeManagementBackend.Config;
@@ -38,6 +39,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("register")]
+    [EnableRateLimiting("register-limit")]
     public async Task<ActionResult<AuthResponseDto>> Register(RegisterDto registerDto)
     {
         if (!ModelState.IsValid)
@@ -108,6 +110,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpPost("login")]
+    [EnableRateLimiting("login-limit")]
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto loginDto)
     {
         if (!ModelState.IsValid || string.IsNullOrEmpty(loginDto.Email) || string.IsNullOrEmpty(loginDto.Password))

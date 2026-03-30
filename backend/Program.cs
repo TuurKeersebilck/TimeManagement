@@ -1,13 +1,17 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System.Text;
+using System.Text.Json;
+using System.Threading.RateLimiting;
 using TimeManagementBackend.Config;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Middleware;
 using TimeManagementBackend.Models;
+using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
 
 // Bootstrap logger for startup (before host is built)
@@ -60,6 +64,9 @@ try
         });
     });
 
+    // Configure Rate Limiting
+    ConfigureRateLimiting(builder);
+
     // Register application services
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
@@ -81,6 +88,7 @@ try
 
     app.UseHttpsRedirection();
     app.UseCors("AllowFrontend");
+    app.UseRateLimiter();
 
     // Add authentication and authorization middleware
     app.UseAuthentication();
@@ -237,6 +245,46 @@ async Task CreateDefaultRoles(WebApplication app)
             logger.LogInformation("Created role: {Role}", role);
         }
     }
+}
+
+// Configure Rate Limiting
+void ConfigureRateLimiting(WebApplicationBuilder builder)
+{
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        options.OnRejected = async (context, token) =>
+        {
+            context.HttpContext.Response.ContentType = "application/json";
+            var payload = JsonSerializer.Serialize(
+                new ErrorResponseDto { Message = "Too many requests. Please try again later.", Code = "RATE_LIMIT_EXCEEDED" },
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            await context.HttpContext.Response.WriteAsync(payload, token);
+        };
+
+        // Login: 10 attempts per 5 minutes per IP
+        options.AddPolicy<string>("login-limit", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(5),
+                    QueueLimit = 0
+                }));
+
+        // Register: 5 attempts per hour per IP
+        options.AddPolicy<string>("register-limit", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0
+                }));
+    });
 }
 
 // Helper method to load .env file if present
