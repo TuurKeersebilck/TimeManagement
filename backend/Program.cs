@@ -84,9 +84,11 @@ app.Run();
 // Configure Database Context
 void ConfigureDatabaseContext(WebApplicationBuilder builder)
 {
-    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING") ??
-                           builder.Configuration.GetConnectionString("DefaultConnection") ??
-                           "Data Source=timemanagement.db";
+    var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
+        ?? builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? (builder.Environment.IsDevelopment()
+            ? "Data Source=timemanagement.db"
+            : throw new InvalidOperationException("CONNECTION_STRING environment variable must be set in production."));
 
     builder.Services.AddDbContext<AppDbContext>(options =>
     {
@@ -136,9 +138,11 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
                    builder.Configuration["JWT:Audience"] ?? 
                    "TimeManagementAPI",
         
-        Secret = Environment.GetEnvironmentVariable("JWT_SECRET") ?? 
-                 builder.Configuration["JWT:Secret"] ?? 
-                 "YourSuperSecretKeyWithAtLeast32Characters!",
+        Secret = Environment.GetEnvironmentVariable("JWT_SECRET")
+                 ?? builder.Configuration["JWT:Secret"]
+                 ?? (builder.Environment.IsDevelopment()
+                     ? "YourSuperSecretKeyWithAtLeast32Characters!"
+                     : throw new InvalidOperationException("JWT_SECRET environment variable must be set in production.")),
         
         ExpiryInMinutes = int.TryParse(
             Environment.GetEnvironmentVariable("JWT_EXPIRY_MINUTES") ?? 
@@ -163,7 +167,7 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
     .AddJwtBearer(options =>
     {
         options.SaveToken = true;
-        options.RequireHttpsMetadata = false;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
