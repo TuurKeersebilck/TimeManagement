@@ -66,6 +66,18 @@ const routes: Array<RouteRecordRaw> = [
 		component: () => import("../views/admin/EmployeesView.vue"),
 		meta: { requiresAuth: true, requiresAdmin: true },
 	},
+	{
+		path: "/admin/employees/:id",
+		name: "admin-employee-detail",
+		component: () => import("../views/admin/EmployeeDetailView.vue"),
+		meta: { requiresAuth: true, requiresAdmin: true },
+	},
+	{
+		path: "/admin/vacation-types",
+		name: "admin-vacation-types",
+		component: () => import("../views/admin/VacationTypesView.vue"),
+		meta: { requiresAuth: true, requiresAdmin: true },
+	},
 
 	{ path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
 ];

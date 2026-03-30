@@ -58,4 +58,149 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Email = u.Email!,
             });
     }
+
+    // ─── Vacation types ───────────────────────────────────────────────────────
+
+    public async Task<IEnumerable<VacationTypeDto>> GetVacationTypesAsync(CancellationToken ct = default)
+    {
+        return await _context.VacationTypes
+            .AsNoTracking()
+            .OrderBy(v => v.Name)
+            .Select(v => new VacationTypeDto
+            {
+                Id = v.Id,
+                Name = v.Name,
+                Description = v.Description,
+                Color = v.Color,
+                AssignedEmployeeCount = v.EmployeeBalances.Count,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<VacationTypeDto> CreateVacationTypeAsync(VacationTypeCreateDto dto, CancellationToken ct = default)
+    {
+        var entity = new VacationType
+        {
+            Name = dto.Name,
+            Description = dto.Description,
+            Color = dto.Color,
+        };
+
+        _context.VacationTypes.Add(entity);
+        await _context.SaveChangesAsync(ct);
+
+        return new VacationTypeDto
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = entity.Description,
+            Color = entity.Color,
+            AssignedEmployeeCount = 0,
+        };
+    }
+
+    public async Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeUpdateDto dto, CancellationToken ct = default)
+    {
+        var entity = await _context.VacationTypes
+            .Include(v => v.EmployeeBalances)
+            .FirstOrDefaultAsync(v => v.Id == id, ct)
+            ?? throw new KeyNotFoundException($"Vacation type {id} not found.");
+
+        entity.Name = dto.Name;
+        entity.Description = dto.Description;
+        entity.Color = dto.Color;
+
+        await _context.SaveChangesAsync(ct);
+
+        return new VacationTypeDto
+        {
+            Id = entity.Id,
+            Name = entity.Name,
+            Description = entity.Description,
+            Color = entity.Color,
+            AssignedEmployeeCount = entity.EmployeeBalances.Count,
+        };
+    }
+
+    public async Task DeleteVacationTypeAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _context.VacationTypes.FindAsync([id], ct)
+            ?? throw new KeyNotFoundException($"Vacation type {id} not found.");
+
+        _context.VacationTypes.Remove(entity);
+        await _context.SaveChangesAsync(ct);
+    }
+
+    // ─── Employee vacation balances ───────────────────────────────────────────
+
+    public async Task<IEnumerable<EmployeeVacationBalanceDto>> GetEmployeeBalancesAsync(string userId, CancellationToken ct = default)
+    {
+        return await _context.EmployeeVacationBalances
+            .AsNoTracking()
+            .Where(b => b.UserId == userId)
+            .Include(b => b.VacationType)
+            .OrderBy(b => b.VacationType.Name)
+            .Select(b => new EmployeeVacationBalanceDto
+            {
+                Id = b.Id,
+                VacationTypeId = b.VacationTypeId,
+                VacationTypeName = b.VacationType.Name,
+                VacationTypeColor = b.VacationType.Color,
+                YearlyBalance = b.YearlyBalance,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<EmployeeVacationBalanceDto> AssignVacationTypeAsync(string userId, AssignVacationTypeDto dto, CancellationToken ct = default)
+    {
+        var entity = new EmployeeVacationBalance
+        {
+            UserId = userId,
+            VacationTypeId = dto.VacationTypeId,
+            YearlyBalance = dto.YearlyBalance,
+        };
+
+        _context.EmployeeVacationBalances.Add(entity);
+        await _context.SaveChangesAsync(ct);
+
+        await _context.Entry(entity).Reference(e => e.VacationType).LoadAsync(ct);
+
+        return new EmployeeVacationBalanceDto
+        {
+            Id = entity.Id,
+            VacationTypeId = entity.VacationTypeId,
+            VacationTypeName = entity.VacationType.Name,
+            VacationTypeColor = entity.VacationType.Color,
+            YearlyBalance = entity.YearlyBalance,
+        };
+    }
+
+    public async Task<EmployeeVacationBalanceDto> UpdateEmployeeBalanceAsync(int balanceId, UpdateVacationBalanceDto dto, CancellationToken ct = default)
+    {
+        var entity = await _context.EmployeeVacationBalances
+            .Include(b => b.VacationType)
+            .FirstOrDefaultAsync(b => b.Id == balanceId, ct)
+            ?? throw new KeyNotFoundException($"Balance {balanceId} not found.");
+
+        entity.YearlyBalance = dto.YearlyBalance;
+        await _context.SaveChangesAsync(ct);
+
+        return new EmployeeVacationBalanceDto
+        {
+            Id = entity.Id,
+            VacationTypeId = entity.VacationTypeId,
+            VacationTypeName = entity.VacationType.Name,
+            VacationTypeColor = entity.VacationType.Color,
+            YearlyBalance = entity.YearlyBalance,
+        };
+    }
+
+    public async Task RemoveEmployeeVacationTypeAsync(int balanceId, CancellationToken ct = default)
+    {
+        var entity = await _context.EmployeeVacationBalances.FindAsync([balanceId], ct)
+            ?? throw new KeyNotFoundException($"Balance {balanceId} not found.");
+
+        _context.EmployeeVacationBalances.Remove(entity);
+        await _context.SaveChangesAsync(ct);
+    }
 }

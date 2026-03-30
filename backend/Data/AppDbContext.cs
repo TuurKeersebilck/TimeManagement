@@ -13,6 +13,8 @@ public class AppDbContext : IdentityDbContext<User>
     }
 
     public DbSet<TimeLog> TimeLogs => Set<TimeLog>();
+    public DbSet<VacationType> VacationTypes => Set<VacationType>();
+    public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -80,6 +82,12 @@ public class AppDbContext : IdentityDbContext<User>
                     v => v.HasValue ? v.Value.ToString(@"hh\:mm\:ss") : null,
                     v => v != null ? (TimeSpan?)TimeSpan.Parse(v) : null)
                 .HasColumnType("varchar(8)");
+        });
+
+        builder.Entity<EmployeeVacationBalance>(entity =>
+        {
+            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
+            entity.HasIndex(e => new { e.UserId, e.VacationTypeId }).IsUnique();
         });
     }
 }
