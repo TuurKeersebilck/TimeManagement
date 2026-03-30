@@ -43,6 +43,8 @@ builder.Services.AddCors(options =>
 });
 
 // Register application services
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddScoped<ITimeLogService, TimeLogService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IVacationService, VacationService>();
@@ -165,7 +167,20 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
             ValidIssuer = jwtConfig.Issuer,
             ValidAudience = jwtConfig.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfig.Secret)),
-            ClockSkew = TimeSpan.Zero // Removes the default 5 minute tolerance for token expiration
+            ClockSkew = TimeSpan.Zero
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var blacklist = context.HttpContext.RequestServices
+                    .GetRequiredService<ITokenBlacklistService>();
+                var jti = context.Principal?.FindFirst(
+                    System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
+                if (jti != null && blacklist.IsRevoked(jti))
+                    context.Fail("Token has been revoked.");
+                return Task.CompletedTask;
+            }
         };
     });
 }

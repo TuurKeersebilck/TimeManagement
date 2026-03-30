@@ -7,9 +7,20 @@ export interface LoginCredentials {
 }
 
 export interface RegisterCredentials {
-	fullname: string;
+	fullName: string;
 	email: string;
 	password: string;
+	confirmPassword: string;
+}
+
+export interface UpdateProfilePayload {
+	fullName: string;
+	email: string;
+}
+
+export interface ChangePasswordPayload {
+	currentPassword: string;
+	newPassword: string;
 	confirmPassword: string;
 }
 
@@ -51,7 +62,25 @@ export const authService = {
 		return response.data;
 	},
 
-	logout(): void {
+	async updateProfile(payload: UpdateProfilePayload): Promise<User> {
+		const response = await apiClient.put<User>("/auth/profile", payload);
+		return response.data;
+	},
+
+	async changePassword(payload: ChangePasswordPayload): Promise<void> {
+		await apiClient.put("/auth/change-password", payload);
+	},
+
+	async logout(): Promise<void> {
+		try {
+			await apiClient.post("/auth/logout");
+		} catch {
+			// Ignore errors — session is cleared regardless
+		}
+		this.clearSession();
+	},
+
+	clearSession(): void {
 		localStorage.removeItem("token");
 		localStorage.removeItem("roles");
 	},

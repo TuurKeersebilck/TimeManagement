@@ -9,9 +9,9 @@ const router = useRouter();
 const sidebarOpen = ref<boolean>(true);
 const { clearUser } = useAuth();
 
-const handleLogout = (): void => {
+const handleLogout = async (): Promise<void> => {
 	clearUser();
-	authService.logout();
+	await authService.logout();
 	router.push("/login");
 };
 
