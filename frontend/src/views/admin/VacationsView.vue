@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import Select from "primevue/select";
-import { useToast } from "primevue/usetoast";
-import Toast from "primevue/toast";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { useAppToast } from "@/composables/useAppToast";
 import { adminService, type AdminVacationDay, type Employee } from "../../services/adminService";
 import { vacationTypeService, type VacationType } from "../../services/vacationTypeService";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-vue-next";
 
-const toast = useToast();
+const toast = useAppToast();
 
 const vacationDays = ref<AdminVacationDay[]>([]);
 const employees = ref<Employee[]>([]);
@@ -16,15 +23,21 @@ const loading = ref(false);
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
 
-const filterEmployee = ref<string | null>(null);
-const filterType = ref<number | null>(null);
+const filterEmployee = ref<string>("");
+const filterType = ref<string>("");
 
 const filteredDays = computed(() => {
 	let days = vacationDays.value;
 	if (filterEmployee.value) days = days.filter((d) => d.userId === filterEmployee.value);
-	if (filterType.value) days = days.filter((d) => d.vacationTypeId === filterType.value);
+	if (filterType.value) days = days.filter((d) => d.vacationTypeId === parseInt(filterType.value));
 	return days;
 });
+
+const clearFilters = () => {
+	filterEmployee.value = "";
+	filterType.value = "";
+	selectedIso.value = null;
+};
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +143,7 @@ const fetchVacationDays = async () => {
 			month: currentMonth.value.getMonth() + 1,
 		});
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load vacation data", life: 3000 });
+		toast.error("Failed to load vacation data");
 	} finally {
 		loading.value = false;
 	}
@@ -155,7 +168,7 @@ onMounted(async () => {
 		employees.value = emps;
 		vacationTypes.value = types;
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load vacation data", life: 3000 });
+		toast.error("Failed to load vacation data");
 	} finally {
 		loading.value = false;
 	}
@@ -167,8 +180,6 @@ const MAX_VISIBLE = 3;
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-5xl mx-auto">
 
@@ -180,43 +191,50 @@ const MAX_VISIBLE = 3;
 
 				<!-- Filters -->
 				<div class="flex flex-wrap items-center gap-3 mb-6">
-					<Select
-						v-model="filterEmployee"
-						:options="[{ id: null, fullName: 'All employees' }, ...employees]"
-						optionLabel="fullName"
-						optionValue="id"
-						class="w-48"
-					/>
-					<Select
-						v-model="filterType"
-						:options="[{ id: null, name: 'All types' }, ...vacationTypes]"
-						optionLabel="name"
-						optionValue="id"
-						class="w-44"
-					/>
-					<button
-						v-if="filterEmployee || filterType"
-						@click="filterEmployee = null; filterType = null; selectedIso = null"
-						class="btn-ghost text-sm"
-					>
-						<i class="pi pi-times mr-1.5 text-xs"></i>Clear
-					</button>
+					<Select v-model="filterEmployee">
+						<SelectTrigger class="w-48">
+							<SelectValue placeholder="All employees" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="">All employees</SelectItem>
+							<SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
+								{{ emp.fullName }}
+							</SelectItem>
+						</SelectContent>
+					</Select>
+
+					<Select v-model="filterType">
+						<SelectTrigger class="w-44">
+							<SelectValue placeholder="All types" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="">All types</SelectItem>
+							<SelectItem v-for="type in vacationTypes" :key="type.id" :value="String(type.id)">
+								{{ type.name }}
+							</SelectItem>
+						</SelectContent>
+					</Select>
+
+					<Button v-if="filterEmployee || filterType" variant="ghost" size="sm" @click="clearFilters">
+						<XIcon class="size-3.5" />
+						Clear
+					</Button>
 				</div>
 
 				<!-- Month navigation -->
 				<div class="flex items-center justify-between mb-3">
 					<div class="flex items-center gap-1">
-						<button @click="prevMonth" class="btn-ghost !px-2 !py-2">
-							<i class="pi pi-angle-left text-base"></i>
-						</button>
-						<button @click="nextMonth" class="btn-ghost !px-2 !py-2">
-							<i class="pi pi-angle-right text-base"></i>
-						</button>
+						<Button variant="ghost" size="icon" class="size-8" @click="prevMonth">
+							<ChevronLeftIcon class="size-4" />
+						</Button>
+						<Button variant="ghost" size="icon" class="size-8" @click="nextMonth">
+							<ChevronRightIcon class="size-4" />
+						</Button>
 						<span class="text-base font-semibold text-slate-900 dark:text-slate-100 ml-2 capitalize">
 							{{ monthLabel }}
 						</span>
 					</div>
-					<button @click="goToday" class="btn-secondary text-xs !py-1.5">Today</button>
+					<Button variant="outline" size="sm" @click="goToday">Today</Button>
 				</div>
 
 				<!-- Calendar -->
@@ -290,9 +308,9 @@ const MAX_VISIBLE = 3;
 					<div v-if="selectedIso && selectedEntries.length" class="mt-4 card p-4">
 						<div class="flex items-center justify-between mb-3">
 							<h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 capitalize">{{ selectedLabel }}</h3>
-							<button @click="selectedIso = null" class="btn-ghost !px-2 !py-1">
-								<i class="pi pi-times text-xs"></i>
-							</button>
+							<Button variant="ghost" size="icon" class="size-7" @click="selectedIso = null">
+								<XIcon class="size-3.5" />
+							</Button>
 						</div>
 						<div class="divide-y divide-slate-100 dark:divide-slate-800">
 							<div v-for="entry in selectedEntries" :key="entry.id" class="flex items-center gap-3 py-2.5">

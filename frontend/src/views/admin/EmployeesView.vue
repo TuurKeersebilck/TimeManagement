@@ -3,12 +3,19 @@ import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type Employee } from "../../services/adminService";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import { useToast } from "primevue/usetoast";
-import Toast from "primevue/toast";
+import { useAppToast } from "@/composables/useAppToast";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { UsersIcon } from "lucide-vue-next";
 
-const toast = useToast();
+const toast = useAppToast();
 const router = useRouter();
 const employees = ref<Employee[]>([]);
 const loading = ref(false);
@@ -18,7 +25,7 @@ onMounted(async () => {
 	try {
 		employees.value = await adminService.getEmployees();
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load employees", life: 3000 });
+		toast.error("Failed to load employees");
 	} finally {
 		loading.value = false;
 	}
@@ -27,8 +34,6 @@ onMounted(async () => {
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-4xl mx-auto">
 
@@ -38,34 +43,41 @@ onMounted(async () => {
 				</div>
 
 				<div class="card overflow-hidden">
-					<DataTable
-						:value="employees"
-						:loading="loading"
-						stripedRows
-						class="text-sm"
-						rowHover
-						@row-click="(e) => router.push({ name: 'admin-employee-detail', params: { id: e.data.id } })"
-						:pt="{ bodyRow: { class: 'cursor-pointer' } }"
-					>
-						<template #empty>
-							<div class="text-center py-16">
-								<i class="pi pi-users text-4xl text-slate-300 dark:text-slate-600 mb-3 block"></i>
+					<!-- Loading skeleton -->
+					<div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+						<div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+							<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-36 animate-pulse" />
+							<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse" />
+						</div>
+					</div>
+
+					<Table v-else>
+						<TableHeader>
+							<TableRow>
+								<TableHead>Name</TableHead>
+								<TableHead>Email</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							<TableEmpty v-if="employees.length === 0" :colspan="2">
+								<UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 								<p class="text-slate-500 dark:text-slate-400">No employees found.</p>
-							</div>
-						</template>
-
-						<Column field="fullName" header="Name" sortable>
-							<template #body="{ data }">
-								<span class="font-medium text-slate-900 dark:text-slate-100">{{ data.fullName }}</span>
-							</template>
-						</Column>
-
-						<Column field="email" header="Email" sortable>
-							<template #body="{ data }">
-								<span class="text-slate-600 dark:text-slate-400">{{ data.email }}</span>
-							</template>
-						</Column>
-					</DataTable>
+							</TableEmpty>
+							<TableRow
+								v-for="employee in employees"
+								:key="employee.id"
+								class="cursor-pointer"
+								@click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+							>
+								<TableCell class="font-medium text-slate-900 dark:text-slate-100">
+									{{ employee.fullName }}
+								</TableCell>
+								<TableCell class="text-slate-600 dark:text-slate-400">
+									{{ employee.email }}
+								</TableCell>
+							</TableRow>
+						</TableBody>
+					</Table>
 				</div>
 
 			</div>
