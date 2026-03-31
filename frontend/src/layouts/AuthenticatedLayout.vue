@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import Sidebar from "@/components/Sidebar.vue";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
+import { MenuIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const sidebarOpen = ref<boolean>(true);
@@ -42,7 +43,7 @@ const toggleSidebar = (): void => {
 					class="btn-ghost !px-2 !py-2"
 					aria-label="Open menu"
 				>
-					<i class="pi pi-bars text-lg"></i>
+					<MenuIcon class="size-5" />
 				</button>
 				<span class="ml-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
 					Time Management
