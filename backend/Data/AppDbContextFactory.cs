@@ -12,16 +12,16 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 
         var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
 
+        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+
         if (string.IsNullOrEmpty(connectionString))
         {
-            throw new InvalidOperationException("CONNECTION_STRING environment variable is required but not set. Please set it in your .env file.");
+            optionsBuilder.UseSqlite("Data Source=timemanagement.db");
         }
-
-        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseMySql(
-            connectionString,
-            new MySqlServerVersion(new Version(11, 0, 0))
-        );
+        else
+        {
+            optionsBuilder.UseMySql(connectionString, new MySqlServerVersion(new Version(11, 0, 0)));
+        }
 
         return new AppDbContext(optionsBuilder.Options);
     }
