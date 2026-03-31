@@ -10,7 +10,7 @@ public class AdminService(AppDbContext context) : IAdminService
 {
     private readonly AppDbContext _context = context;
 
-    public async Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken ct = default)
+    public async Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
         var query = _context.TimeLogs
             .AsNoTracking()
@@ -24,9 +24,9 @@ public class AdminService(AppDbContext context) : IAdminService
         if (!string.IsNullOrEmpty(userId))
             query = query.Where(x => x.log.UserId == userId);
         if (dateFrom.HasValue)
-            query = query.Where(x => x.log.Date.Date >= dateFrom.Value.Date);
+            query = query.Where(x => x.log.Date >= dateFrom.Value);
         if (dateTo.HasValue)
-            query = query.Where(x => x.log.Date.Date <= dateTo.Value.Date);
+            query = query.Where(x => x.log.Date <= dateTo.Value);
 
         return await query
             .OrderByDescending(x => x.log.Date)

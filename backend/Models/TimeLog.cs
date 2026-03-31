@@ -7,7 +7,7 @@ public class TimeLog
     public int Id { get; set; }
 
     [Required(ErrorMessage = "Date is required")]
-    public DateTime Date { get; set; }
+    public DateOnly Date { get; set; }
 
     [Required(ErrorMessage = "Start time is required")]
     public TimeSpan StartTime { get; set; }

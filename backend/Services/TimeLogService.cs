@@ -22,12 +22,11 @@ public class TimeLogService(AppDbContext db, IMapper mapper) : ITimeLogService
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> ExistsForDateAsync(string userId, DateTime date, int? excludeId = null, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsForDateAsync(string userId, DateOnly date, int? excludeId = null, CancellationToken cancellationToken = default)
     {
-        var dateOnly = date.Date;
         return await _db.TimeLogs
             .AnyAsync(t => t.UserId == userId
-                && t.Date.Date == dateOnly
+                && t.Date == date
                 && (excludeId == null || t.Id != excludeId.Value),
                 cancellationToken);
     }

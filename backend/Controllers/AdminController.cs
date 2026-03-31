@@ -16,8 +16,8 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpGet("timelogs")]
     public async Task<ActionResult<IEnumerable<AdminTimeLogDto>>> GetAllTimeLogs(
         [FromQuery] string? userId,
-        [FromQuery] DateTime? dateFrom,
-        [FromQuery] DateTime? dateTo,
+        [FromQuery] DateOnly? dateFrom,
+        [FromQuery] DateOnly? dateTo,
         CancellationToken ct)
     {
         var logs = await _adminService.GetAllTimeLogsAsync(userId, dateFrom, dateTo, ct);
