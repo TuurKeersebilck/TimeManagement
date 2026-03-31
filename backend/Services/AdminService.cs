@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
@@ -7,10 +6,9 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class AdminService(AppDbContext context, UserManager<User> userManager) : IAdminService
+public class AdminService(AppDbContext context) : IAdminService
 {
     private readonly AppDbContext _context = context;
-    private readonly UserManager<User> _userManager = userManager;
 
     public async Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, DateTime? dateFrom = null, DateTime? dateTo = null, CancellationToken ct = default)
     {
