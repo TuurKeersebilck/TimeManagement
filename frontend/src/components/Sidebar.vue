@@ -1,8 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, type Component } from "vue";
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useTheme } from "../composables/useTheme";
+import {
+	LayoutDashboardIcon,
+	ClockIcon,
+	CalendarIcon,
+	TagIcon,
+	UsersIcon,
+	SunIcon,
+	MoonIcon,
+	ChevronLeftIcon,
+	ChevronRightIcon,
+	LogOutIcon,
+} from "lucide-vue-next";
 
 interface Props {
 	isOpen?: boolean;
@@ -28,21 +40,21 @@ const isActive = (path: string) =>
 interface NavItem {
 	name: string;
 	to: string;
-	icon: string;
+	icon: Component;
 }
 
 const employeeNav: NavItem[] = [
-	{ name: "Dashboard", to: "/", icon: "pi-th-large" },
-	{ name: "My Time Logs", to: "/time-tracking", icon: "pi-clock" },
-	{ name: "My Vacations", to: "/vacations", icon: "pi-calendar" },
+	{ name: "Dashboard", to: "/", icon: LayoutDashboardIcon },
+	{ name: "My Time Logs", to: "/time-tracking", icon: ClockIcon },
+	{ name: "My Vacations", to: "/vacations", icon: CalendarIcon },
 ];
 
 const adminNav: NavItem[] = [
-	{ name: "Dashboard", to: "/admin/dashboard", icon: "pi-th-large" },
-	{ name: "All Time Logs", to: "/admin/time-logs", icon: "pi-clock" },
-	{ name: "Vacation Overview", to: "/admin/vacations", icon: "pi-calendar" },
-	{ name: "Vacation Types", to: "/admin/vacation-types", icon: "pi-tag" },
-	{ name: "Manage Employees", to: "/admin/employees", icon: "pi-users" },
+	{ name: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboardIcon },
+	{ name: "All Time Logs", to: "/admin/time-logs", icon: ClockIcon },
+	{ name: "Vacation Overview", to: "/admin/vacations", icon: CalendarIcon },
+	{ name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
+	{ name: "Manage Employees", to: "/admin/employees", icon: UsersIcon },
 ];
 
 const navigationItems = computed(() =>
@@ -90,7 +102,8 @@ onMounted(() => fetchUser());
 				class="btn-ghost !px-2 !py-2 shrink-0"
 				:title="isOpen ? 'Collapse sidebar' : 'Expand sidebar'"
 			>
-				<i :class="['pi text-base', isOpen ? 'pi-angle-left' : 'pi-angle-right']"></i>
+				<ChevronLeftIcon v-if="isOpen" class="size-5" />
+				<ChevronRightIcon v-else class="size-5" />
 			</button>
 		</div>
 
@@ -112,7 +125,7 @@ onMounted(() => fetchUser());
 					:class="['nav-link', !isOpen && 'lg:justify-center lg:!px-0', isActive(item.to) && 'nav-link-active']"
 					:title="!isOpen ? item.name : undefined"
 				>
-					<i :class="['pi text-base shrink-0', item.icon]"></i>
+					<component :is="item.icon" class="size-[18px] shrink-0" />
 					<span v-if="isOpen" class="truncate">{{ item.name }}</span>
 				</router-link>
 			</div>
@@ -127,7 +140,8 @@ onMounted(() => fetchUser());
 					:class="['nav-link w-full', !isOpen && 'lg:justify-center lg:!px-0']"
 					:title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
 				>
-					<i :class="['pi text-base shrink-0', isDark ? 'pi-sun' : 'pi-moon']"></i>
+					<SunIcon v-if="isDark" class="size-[18px] shrink-0" />
+					<MoonIcon v-else class="size-[18px] shrink-0" />
 					<span v-if="isOpen">{{ isDark ? "Light mode" : "Dark mode" }}</span>
 				</button>
 			</div>
@@ -163,7 +177,7 @@ onMounted(() => fetchUser());
 							class="btn-ghost !px-2 !py-1.5 shrink-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
 							title="Sign out"
 						>
-							<i class="pi pi-sign-out text-sm"></i>
+							<LogOutIcon class="size-4" />
 						</button>
 					</div>
 					<!-- Logout when collapsed -->
@@ -173,7 +187,7 @@ onMounted(() => fetchUser());
 						class="nav-link w-full lg:justify-center lg:!px-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
 						title="Sign out"
 					>
-						<i class="pi pi-sign-out text-base"></i>
+						<LogOutIcon class="size-[18px]" />
 					</button>
 				</div>
 			</div>
