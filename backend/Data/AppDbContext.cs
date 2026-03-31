@@ -5,7 +5,7 @@ using TimeManagementBackend.Models;
 
 namespace TimeManagementBackend.Data;
 
-public class AppDbContext : IdentityDbContext<User>
+public class AppDbContext : IdentityUserContext<User>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -22,18 +22,17 @@ public class AppDbContext : IdentityDbContext<User>
         base.OnModelCreating(builder);
 
         // Ensure Identity key columns are VARCHAR(255) for MySQL/MariaDB compatibility
-        builder.Entity<IdentityRole>(entity =>
-        {
-            entity.Property(e => e.Id).HasColumnType("varchar(255)");
-        });
         builder.Entity<User>(entity =>
         {
             entity.Property(e => e.Id).HasColumnType("varchar(255)");
-        });
-        builder.Entity<IdentityUserRole<string>>(entity =>
-        {
-            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
-            entity.Property(e => e.RoleId).HasColumnType("varchar(255)");
+
+            // Remove unused Identity columns
+            entity.Ignore(e => e.PhoneNumber);
+            entity.Ignore(e => e.PhoneNumberConfirmed);
+            entity.Ignore(e => e.TwoFactorEnabled);
+            entity.Ignore(e => e.LockoutEnd);
+            entity.Ignore(e => e.LockoutEnabled);
+            entity.Ignore(e => e.AccessFailedCount);
         });
         builder.Entity<IdentityUserLogin<string>>(entity =>
         {
@@ -50,10 +49,6 @@ public class AppDbContext : IdentityDbContext<User>
         builder.Entity<IdentityUserClaim<string>>(entity =>
         {
             entity.Property(e => e.UserId).HasColumnType("varchar(255)");
-        });
-        builder.Entity<IdentityRoleClaim<string>>(entity =>
-        {
-            entity.Property(e => e.RoleId).HasColumnType("varchar(255)");
         });
 
         // Configure TimeLog properties

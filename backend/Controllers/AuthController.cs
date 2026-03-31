@@ -76,20 +76,9 @@ public class AuthController : ControllerBase
 
         try
         {
-            // Add to default role (User)
-            var roleResult = await _userManager.AddToRoleAsync(user, "User");
-            if (!roleResult.Succeeded)
-            {
-                _logger.LogWarning("Failed to add user {Email} to role: {Errors}",
-                    user.Email,
-                    string.Join(", ", roleResult.Errors.Select(e => e.Description)));
-            }
-
             _logger.LogInformation("User {Email} created successfully", user.Email);
 
-            // Generate JWT token
-            var roles = await _userManager.GetRolesAsync(user);
-            var token = _jwtService.GenerateToken(user, roles);
+            var token = _jwtService.GenerateToken(user);
             SetAuthCookie(token);
 
             return Ok(new AuthResponseDto
@@ -98,7 +87,7 @@ public class AuthController : ControllerBase
                 Message = "User registered successfully",
                 Email = user.Email,
                 FullName = user.FullName,
-                Roles = [.. roles],
+                Roles = [user.Role.ToString()],
                 Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
             });
         }
@@ -136,9 +125,7 @@ public class AuthController : ControllerBase
 
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-            // Generate JWT token and set as HttpOnly cookie
-            var roles = await _userManager.GetRolesAsync(user);
-            var token = _jwtService.GenerateToken(user, roles);
+            var token = _jwtService.GenerateToken(user);
             SetAuthCookie(token);
 
             return Ok(new AuthResponseDto
@@ -147,7 +134,7 @@ public class AuthController : ControllerBase
                 Message = "Login successful",
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
-                Roles = [.. roles],
+                Roles = [user.Role.ToString()],
                 Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
             });
         }
@@ -174,15 +161,13 @@ public class AuthController : ControllerBase
             if (user == null)
                 return NotFound(new ErrorResponseDto { Message = "User not found" });
 
-            var roles = await _userManager.GetRolesAsync(user);
-
             return Ok(new UserDto
             {
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 UserName = user.UserName ?? string.Empty,
-                Roles = [.. roles]
+                Roles = [user.Role.ToString()]
             });
         }
         catch (Exception ex)
@@ -258,14 +243,13 @@ public class AuthController : ControllerBase
             return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
         }
 
-        var roles = await _userManager.GetRolesAsync(user);
         return Ok(new UserDto
         {
             Id = user.Id,
             Email = user.Email ?? string.Empty,
             FullName = user.FullName,
             UserName = user.UserName ?? string.Empty,
-            Roles = [.. roles]
+            Roles = [user.Role.ToString()]
         });
     }
 

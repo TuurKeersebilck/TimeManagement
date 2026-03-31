@@ -52,15 +52,13 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     {
         return await _context.Users
             .AsNoTracking()
-            .Join(_context.UserRoles, u => u.Id, ur => ur.UserId, (u, ur) => new { u, ur })
-            .Join(_context.Roles, x => x.ur.RoleId, r => r.Id, (x, r) => new { x.u, r })
-            .Where(x => x.r.Name == "User")
-            .OrderBy(x => x.u.FullName)
-            .Select(x => new EmployeeDto
+            .Where(u => u.Role == UserRole.Employee)
+            .OrderBy(u => u.FullName)
+            .Select(u => new EmployeeDto
             {
-                Id = x.u.Id,
-                FullName = x.u.FullName,
-                Email = x.u.Email!,
+                Id = u.Id,
+                FullName = u.FullName,
+                Email = u.Email!,
             })
             .ToListAsync(ct);
     }

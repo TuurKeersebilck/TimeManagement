@@ -96,9 +96,6 @@ try
 
     app.MapControllers();
 
-    // Create default roles
-    await CreateDefaultRoles(app);
-
     app.Run();
 }
 catch (Exception ex)
@@ -132,7 +129,7 @@ void ConfigureDatabaseContext(WebApplicationBuilder builder)
 // Configure Identity Services
 void ConfigureIdentity(WebApplicationBuilder builder)
 {
-    builder.Services.AddIdentity<User, IdentityRole>(options =>
+    builder.Services.AddIdentityCore<User>(options =>
     {
         // Password settings
         options.Password.RequireDigit = true;
@@ -145,6 +142,7 @@ void ConfigureIdentity(WebApplicationBuilder builder)
         options.User.RequireUniqueEmail = true;
     })
     .AddEntityFrameworkStores<AppDbContext>()
+    .AddSignInManager()
     .AddDefaultTokenProviders();
 
     // Register JwtService
@@ -227,24 +225,6 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
             }
         };
     });
-}
-
-// Create default roles
-async Task CreateDefaultRoles(WebApplication app)
-{
-    using var scope = app.Services.CreateScope();
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var roles = new[] { "Admin", "User" };
-
-    foreach (var role in roles)
-    {
-        if (!await roleManager.RoleExistsAsync(role))
-        {
-            await roleManager.CreateAsync(new IdentityRole(role));
-            logger.LogInformation("Created role: {Role}", role);
-        }
-    }
 }
 
 // Configure Rate Limiting
