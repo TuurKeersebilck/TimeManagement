@@ -112,17 +112,10 @@ void ConfigureDatabaseContext(WebApplicationBuilder builder)
 {
     var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
         ?? builder.Configuration.GetConnectionString("DefaultConnection")
-        ?? (builder.Environment.IsDevelopment()
-            ? "Data Source=timemanagement.db"
-            : throw new InvalidOperationException("CONNECTION_STRING environment variable must be set in production."));
+        ?? throw new InvalidOperationException("CONNECTION_STRING environment variable must be set. Please set it in your .env file.");
 
     builder.Services.AddDbContext<AppDbContext>(options =>
-    {
-            // Use MySQL/MariaDB
-            options.UseMySql(connectionString,
-                new MySqlServerVersion(new Version(11, 0, 0))
-            );
-    });
+        options.UseNpgsql(connectionString));
 }
 
 

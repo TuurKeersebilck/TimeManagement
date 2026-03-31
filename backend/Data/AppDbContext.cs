@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Models;
@@ -21,12 +21,9 @@ public class AppDbContext : IdentityUserContext<User>
     {
         base.OnModelCreating(builder);
 
-        // Ensure Identity key columns are VARCHAR(255) for MySQL/MariaDB compatibility
+        // Remove unused Identity columns
         builder.Entity<User>(entity =>
         {
-            entity.Property(e => e.Id).HasColumnType("varchar(255)");
-
-            // Remove unused Identity columns
             entity.Ignore(e => e.PhoneNumber);
             entity.Ignore(e => e.PhoneNumberConfirmed);
             entity.Ignore(e => e.TwoFactorEnabled);
@@ -34,51 +31,9 @@ public class AppDbContext : IdentityUserContext<User>
             entity.Ignore(e => e.LockoutEnabled);
             entity.Ignore(e => e.AccessFailedCount);
         });
-        builder.Entity<IdentityUserLogin<string>>(entity =>
-        {
-            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
-            entity.Property(e => e.LoginProvider).HasColumnType("varchar(255)");
-            entity.Property(e => e.ProviderKey).HasColumnType("varchar(255)");
-        });
-        builder.Entity<IdentityUserToken<string>>(entity =>
-        {
-            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
-            entity.Property(e => e.LoginProvider).HasColumnType("varchar(255)");
-            entity.Property(e => e.Name).HasColumnType("varchar(255)");
-        });
-        builder.Entity<IdentityUserClaim<string>>(entity =>
-        {
-            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
-        });
 
-        // Configure TimeLog properties
         builder.Entity<TimeLog>(entity =>
         {
-            // Store TimeSpan as varchar to avoid MySQL casting issues
-            entity.Property(e => e.StartTime)
-                .HasConversion(
-                    v => v.ToString(@"hh\:mm\:ss"),
-                    v => TimeSpan.Parse(v))
-                .HasColumnType("varchar(8)");
-
-            entity.Property(e => e.EndTime)
-                .HasConversion(
-                    v => v.ToString(@"hh\:mm\:ss"),
-                    v => TimeSpan.Parse(v))
-                .HasColumnType("varchar(8)");
-
-            entity.Property(e => e.BreakStart)
-                .HasConversion(
-                    v => v.HasValue ? v.Value.ToString(@"hh\:mm\:ss") : null,
-                    v => v != null ? (TimeSpan?)TimeSpan.Parse(v) : null)
-                .HasColumnType("varchar(8)");
-
-            entity.Property(e => e.BreakEnd)
-                .HasConversion(
-                    v => v.HasValue ? v.Value.ToString(@"hh\:mm\:ss") : null,
-                    v => v != null ? (TimeSpan?)TimeSpan.Parse(v) : null)
-                .HasColumnType("varchar(8)");
-
             entity.HasIndex(e => e.Date);
             entity.HasIndex(e => new { e.UserId, e.Date });
         });
@@ -88,13 +43,13 @@ public class AppDbContext : IdentityUserContext<User>
 
         builder.Entity<EmployeeVacationBalance>(entity =>
         {
-            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
+            entity.Property(e => e.YearlyBalance).HasColumnType("numeric(5,1)");
             entity.HasIndex(e => new { e.UserId, e.VacationTypeId }).IsUnique();
         });
 
         builder.Entity<VacationDay>(entity =>
         {
-            entity.Property(e => e.UserId).HasColumnType("varchar(255)");
+            entity.Property(e => e.Amount).HasColumnType("numeric(3,1)");
             entity.HasIndex(d => new { d.UserId, d.Date });
             entity.HasIndex(d => d.VacationTypeId);
         });

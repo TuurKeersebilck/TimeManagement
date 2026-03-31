@@ -1,6 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using System;
 
 namespace TimeManagementBackend.Data;
 
@@ -10,18 +9,13 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     {
         LoadDotEnv();
 
-        var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING");
+        // Fall back to a local dev connection for design-time tooling (migrations).
+        // A real Supabase connection string is required to run `dotnet ef database update`.
+        var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
+            ?? "Host=localhost;Database=timemanagement_dev;Username=postgres;Password=postgres";
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-
-        if (string.IsNullOrEmpty(connectionString))
-        {
-            optionsBuilder.UseSqlite("Data Source=timemanagement.db");
-        }
-        else
-        {
-            optionsBuilder.UseMySql(connectionString, new MySqlServerVersion(new Version(11, 0, 0)));
-        }
+        optionsBuilder.UseNpgsql(connectionString);
 
         return new AppDbContext(optionsBuilder.Options);
     }
