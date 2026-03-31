@@ -2,14 +2,22 @@
 import { ref, computed, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { vacationTypeService, type VacationType } from "../../services/vacationTypeService";
-import Dialog from "primevue/dialog";
-import { useToast } from "primevue/usetoast";
-import Toast from "primevue/toast";
-import ConfirmDialog from "primevue/confirmdialog";
-import { useConfirm } from "primevue/useconfirm";
+import { useAppToast } from "@/composables/useAppToast";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { PlusIcon, PencilIcon, Trash2Icon, TagIcon, Loader2Icon } from "lucide-vue-next";
 
-const toast = useToast();
-const confirm = useConfirm();
+const toast = useAppToast();
+const { confirm } = useConfirmDialog();
 
 const types = ref<VacationType[]>([]);
 const loading = ref(false);
@@ -49,16 +57,16 @@ const saveType = async () => {
 			const updated = await vacationTypeService.update(editingId.value, payload);
 			const idx = types.value.findIndex((t) => t.id === editingId.value);
 			if (idx !== -1) types.value[idx] = updated;
-			toast.add({ severity: "success", summary: "Saved", detail: "Vacation type updated", life: 3000 });
+			toast.success("Vacation type updated");
 		} else {
 			const created = await vacationTypeService.create(payload);
 			types.value.push(created);
 			types.value.sort((a, b) => a.name.localeCompare(b.name));
-			toast.add({ severity: "success", summary: "Created", detail: "Vacation type added", life: 3000 });
+			toast.success("Vacation type added");
 		}
 		dialogVisible.value = false;
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to save vacation type", life: 3000 });
+		toast.error("Failed to save vacation type");
 	} finally {
 		saving.value = false;
 	}
@@ -68,22 +76,20 @@ const saveType = async () => {
 
 const deleteType = (type: VacationType) => {
 	const hasAssigned = type.assignedEmployeeCount > 0;
-	confirm.require({
-		header: "Delete vacation type",
+	confirm({
+		title: "Delete vacation type",
 		message: hasAssigned
 			? `"${type.name}" is assigned to ${type.assignedEmployeeCount} employee${type.assignedEmployeeCount > 1 ? "s" : ""}. Deleting it will remove their balance. Continue?`
 			: `Delete "${type.name}"? This cannot be undone.`,
-		icon: "pi pi-exclamation-triangle",
-		acceptClass: "btn-danger",
-		acceptLabel: "Delete",
-		rejectLabel: "Cancel",
-		accept: async () => {
+		confirmLabel: "Delete",
+		variant: "destructive",
+		onConfirm: async () => {
 			try {
 				await vacationTypeService.delete(type.id);
 				types.value = types.value.filter((t) => t.id !== type.id);
-				toast.add({ severity: "success", summary: "Deleted", detail: "Vacation type removed", life: 3000 });
+				toast.success("Vacation type removed");
 			} catch {
-				toast.add({ severity: "error", summary: "Error", detail: "Failed to delete vacation type", life: 3000 });
+				toast.error("Failed to delete vacation type");
 			}
 		},
 	});
@@ -96,7 +102,7 @@ onMounted(async () => {
 	try {
 		types.value = await vacationTypeService.getAll();
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load vacation types", life: 3000 });
+		toast.error("Failed to load vacation types");
 	} finally {
 		loading.value = false;
 	}
@@ -105,9 +111,6 @@ onMounted(async () => {
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-		<ConfirmDialog />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-3xl mx-auto">
 
@@ -117,9 +120,10 @@ onMounted(async () => {
 						<h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Vacation Types</h1>
 						<p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage global vacation day types</p>
 					</div>
-					<button @click="openCreate" class="btn-primary">
-						<i class="pi pi-plus mr-2 text-sm"></i>New type
-					</button>
+					<Button @click="openCreate">
+						<PlusIcon class="size-4" />
+						New type
+					</Button>
 				</div>
 
 				<!-- Loading skeleton -->
@@ -135,9 +139,9 @@ onMounted(async () => {
 
 				<!-- Empty state -->
 				<div v-else-if="types.length === 0" class="card text-center py-16">
-					<i class="pi pi-tag text-4xl text-slate-300 dark:text-slate-600 mb-3 block"></i>
+					<TagIcon class="size-10 text-slate-300 dark:text-slate-600 mb-3 mx-auto" />
 					<p class="text-slate-500 dark:text-slate-400 mb-4">No vacation types yet.</p>
-					<button @click="openCreate" class="btn-primary">Create your first type</button>
+					<Button @click="openCreate">Create your first type</Button>
 				</div>
 
 				<!-- Types list -->
@@ -168,20 +172,24 @@ onMounted(async () => {
 
 						<!-- Actions -->
 						<div class="flex items-center gap-1 shrink-0">
-							<button
+							<Button
+								variant="ghost"
+								size="icon"
 								@click="openEdit(type)"
-								class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+								class="size-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
 								title="Edit"
 							>
-								<i class="pi pi-pencil text-sm"></i>
-							</button>
-							<button
+								<PencilIcon class="size-3.5" />
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
 								@click="deleteType(type)"
-								class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+								class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
 								title="Delete"
 							>
-								<i class="pi pi-trash text-sm"></i>
-							</button>
+								<Trash2Icon class="size-3.5" />
+							</Button>
 						</div>
 					</div>
 				</div>
@@ -190,55 +198,52 @@ onMounted(async () => {
 		</div>
 
 		<!-- Create / Edit dialog -->
-		<Dialog
-			v-model:visible="dialogVisible"
-			:header="dialogTitle"
-			modal
-			:style="{ width: '420px' }"
-			:draggable="false"
-		>
-			<div class="flex flex-col gap-4 pt-1">
-				<div>
-					<label class="form-label">Name <span class="text-red-500">*</span></label>
-					<input
-						v-model="form.name"
-						type="text"
-						class="input-field"
-						placeholder="e.g. ADV, European, Student"
-						maxlength="100"
-					/>
-				</div>
-				<div>
-					<label class="form-label">Description</label>
-					<input
-						v-model="form.description"
-						type="text"
-						class="input-field"
-						placeholder="Optional description"
-						maxlength="255"
-					/>
-				</div>
-				<div>
-					<label class="form-label">Color</label>
-					<div class="flex items-center gap-3">
-						<input
-							v-model="form.color"
-							type="color"
-							class="w-10 h-10 rounded-lg cursor-pointer border border-slate-200 dark:border-slate-700 p-0.5 bg-white dark:bg-slate-800"
+		<Dialog v-model:open="dialogVisible">
+			<DialogContent class="sm:max-w-[420px]">
+				<DialogHeader>
+					<DialogTitle>{{ dialogTitle }}</DialogTitle>
+				</DialogHeader>
+
+				<div class="flex flex-col gap-4 py-2">
+					<div class="space-y-1.5">
+						<Label>Name <span class="text-destructive">*</span></Label>
+						<Input
+							v-model="form.name"
+							type="text"
+							placeholder="e.g. ADV, European, Student"
+							maxlength="100"
 						/>
-						<span class="text-sm text-slate-500 dark:text-slate-400 font-mono">{{ form.color }}</span>
+					</div>
+					<div class="space-y-1.5">
+						<Label>Description</Label>
+						<Input
+							v-model="form.description"
+							type="text"
+							placeholder="Optional description"
+							maxlength="255"
+						/>
+					</div>
+					<div class="space-y-1.5">
+						<Label>Color</Label>
+						<div class="flex items-center gap-3">
+							<input
+								v-model="form.color"
+								type="color"
+								class="w-10 h-10 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
+							/>
+							<span class="text-sm text-muted-foreground font-mono">{{ form.color }}</span>
+						</div>
 					</div>
 				</div>
-			</div>
-			<template #footer>
-				<div class="flex justify-end gap-2">
-					<button @click="dialogVisible = false" class="btn-secondary">Cancel</button>
-					<button @click="saveType" :disabled="saving || !form.name.trim()" class="btn-primary">
-						<span v-if="saving"><i class="pi pi-spin pi-spinner mr-2"></i>Saving…</span>
-						<span v-else>{{ editingId ? "Save changes" : "Create" }}</span>
-					</button>
-				</div>
-			</template>
+
+				<DialogFooter>
+					<Button variant="outline" @click="dialogVisible = false">Cancel</Button>
+					<Button @click="saveType" :disabled="saving || !form.name.trim()">
+						<Loader2Icon v-if="saving" class="size-4 animate-spin" />
+						{{ editingId ? "Save changes" : "Create" }}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
 		</Dialog>
 	</AuthenticatedLayout>
 </template>
