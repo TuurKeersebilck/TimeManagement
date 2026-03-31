@@ -15,105 +15,100 @@ const loading = ref<boolean>(false);
 const error = ref<string>("");
 
 const handleLogin = async (): Promise<void> => {
-	error.value = "";
-	loading.value = true;
+  error.value = "";
+  loading.value = true;
 
-	try {
-		const response = await authService.login({
-			email: email.value,
-			password: password.value,
-			rememberMe: rememberMe.value,
-		});
+  try {
+    const response = await authService.login({
+      email: email.value,
+      password: password.value,
+      rememberMe: rememberMe.value,
+    });
 
-		authService.setUserInfo(response.email, response.fullName, response.roles);
-		router.push("/");
-	} catch (err) {
-		error.value = (err as Error).message || "Invalid email or password";
-	} finally {
-		loading.value = false;
-	}
+    authService.setUserInfo(response.email, response.fullName, response.roles);
+    router.push("/");
+  } catch (err) {
+    error.value = (err as Error).message || "Invalid email or password";
+  } finally {
+    loading.value = false;
+  }
 };
 </script>
 
 <template>
-	<div class="min-h-screen flex items-center justify-center py-12 px-4 bg-background">
-		<div class="max-w-md w-full">
-			<!-- Header -->
-			<div class="text-center mb-8">
-				<h2 class="text-3xl font-bold text-foreground">Welcome back</h2>
-				<p class="mt-2 text-sm text-muted-foreground">
-					Sign in to continue tracking your time
-				</p>
-			</div>
+  <div class="min-h-screen flex items-center justify-center py-12 px-4 bg-background">
+    <div class="max-w-md w-full">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h2 class="text-3xl font-bold text-foreground">Welcome back</h2>
+        <p class="mt-2 text-sm text-muted-foreground">Sign in to continue tracking your time</p>
+      </div>
 
-			<!-- Login Form -->
-			<div class="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-8">
-				<form @submit.prevent="handleLogin" class="space-y-5">
-					<!-- Error Message -->
-					<div
-						v-if="error"
-						class="bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3 rounded-lg"
-					>
-						{{ error }}
-					</div>
+      <!-- Login Form -->
+      <div class="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-8">
+        <form @submit.prevent="handleLogin" class="space-y-5">
+          <!-- Error Message -->
+          <div
+            v-if="error"
+            class="bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3 rounded-lg"
+          >
+            {{ error }}
+          </div>
 
-					<!-- Email Field -->
-					<div class="space-y-2">
-						<Label for="email">Email address</Label>
-						<Input
-							id="email"
-							v-model="email"
-							type="email"
-							required
-							autocomplete="email"
-							placeholder="you@example.com"
-						/>
-					</div>
+          <!-- Email Field -->
+          <div class="space-y-2">
+            <Label for="email">Email address</Label>
+            <Input
+              id="email"
+              v-model="email"
+              type="email"
+              required
+              autocomplete="email"
+              placeholder="you@example.com"
+            />
+          </div>
 
-					<!-- Password Field -->
-					<div class="space-y-2">
-						<Label for="password">Password</Label>
-						<Input
-							id="password"
-							v-model="password"
-							type="password"
-							required
-							autocomplete="current-password"
-							placeholder="••••••••"
-						/>
-					</div>
+          <!-- Password Field -->
+          <div class="space-y-2">
+            <Label for="password">Password</Label>
+            <Input
+              id="password"
+              v-model="password"
+              type="password"
+              required
+              autocomplete="current-password"
+              placeholder="••••••••"
+            />
+          </div>
 
-					<!-- Remember Me -->
-					<div class="flex items-center gap-2">
-						<input
-							id="remember-me"
-							v-model="rememberMe"
-							type="checkbox"
-							class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-						/>
-						<Label for="remember-me" class="font-normal cursor-pointer">Remember me</Label>
-					</div>
+          <!-- Remember Me -->
+          <div class="flex items-center gap-2">
+            <input
+              id="remember-me"
+              v-model="rememberMe"
+              type="checkbox"
+              class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <Label for="remember-me" class="font-normal cursor-pointer">Remember me</Label>
+          </div>
 
-					<!-- Submit Button -->
-					<Button type="submit" :disabled="loading" class="w-full">
-						<Loader2Icon v-if="loading" class="size-4 animate-spin" />
-						{{ loading ? "Signing in…" : "Sign in" }}
-					</Button>
-				</form>
+          <!-- Submit Button -->
+          <Button type="submit" :disabled="loading" class="w-full">
+            <Loader2Icon v-if="loading" class="size-4 animate-spin" />
+            {{ loading ? "Signing in…" : "Sign in" }}
+          </Button>
+        </form>
 
-				<!-- Register Link -->
-				<div class="mt-6 text-center">
-					<p class="text-sm text-muted-foreground">
-						Don't have an account?
-						<RouterLink
-							to="/register"
-							class="font-medium text-primary hover:underline"
-						>
-							Sign up
-						</RouterLink>
-					</p>
-				</div>
-			</div>
-		</div>
-	</div>
+        <!-- Register Link -->
+        <div class="mt-6 text-center">
+          <p class="text-sm text-muted-foreground">
+            Don't have an account?
+            <RouterLink to="/register" class="font-medium text-primary hover:underline">
+              Sign up
+            </RouterLink>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>

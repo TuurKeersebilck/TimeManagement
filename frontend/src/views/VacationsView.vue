@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { vacationService, type VacationBalance, type VacationDay, type CreateVacationDayDto } from "../services/vacationService";
+import {
+  vacationService,
+  type VacationBalance,
+  type VacationDay,
+  type CreateVacationDayDto,
+} from "../services/vacationService";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
@@ -61,7 +66,9 @@ const nextMonth = () => {
   currentMonth.value = d;
 };
 
-const goToday = () => { currentMonth.value = new Date(); };
+const goToday = () => {
+  currentMonth.value = new Date();
+};
 
 interface CalDay {
   iso: string;
@@ -124,14 +131,20 @@ const selectedEntries = computed(() =>
 );
 
 const selectDay = (iso: string) => {
-  if (!vacationsByDate.value.has(iso)) { selectedIso.value = null; return; }
+  if (!vacationsByDate.value.has(iso)) {
+    selectedIso.value = null;
+    return;
+  }
   selectedIso.value = selectedIso.value === iso ? null : iso;
 };
 
 const selectedLabel = computed(() => {
   if (!selectedIso.value) return "";
   return new Date(selectedIso.value).toLocaleDateString(undefined, {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 });
 
@@ -273,7 +286,10 @@ const balanceBarColor = (balance: VacationBalance) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const [b, d] = await Promise.all([vacationService.getBalances(), vacationService.getVacationDays()]);
+    const [b, d] = await Promise.all([
+      vacationService.getBalances(),
+      vacationService.getVacationDays(),
+    ]);
     balances.value = b;
     vacationDays.value = d;
   } catch {
@@ -288,12 +304,13 @@ onMounted(async () => {
   <AuthenticatedLayout>
     <div class="p-6 lg:p-8">
       <div class="max-w-4xl mx-auto">
-
         <!-- Header -->
         <div class="flex items-center justify-between mb-8">
           <div>
             <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Plan and track your vacation days</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Plan and track your vacation days
+            </p>
           </div>
           <Button
             @click="openCreate"
@@ -307,7 +324,9 @@ onMounted(async () => {
 
         <!-- Balance cards -->
         <section class="mb-8">
-          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          <h2
+            class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3"
+          >
             Balances ({{ new Date().getFullYear() }})
           </h2>
 
@@ -321,7 +340,9 @@ onMounted(async () => {
 
           <div v-else-if="balances.length === 0" class="card text-center py-10">
             <CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-            <p class="text-sm text-slate-500 dark:text-slate-400">No vacation types have been assigned to you yet.</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+              No vacation types have been assigned to you yet.
+            </p>
           </div>
 
           <div v-else class="grid gap-3 sm:grid-cols-2">
@@ -331,21 +352,29 @@ onMounted(async () => {
                   class="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/10"
                   :style="{ backgroundColor: balance.vacationTypeColor ?? '#6366f1' }"
                 />
-                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ balance.vacationTypeName }}</span>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">{{
+                  balance.vacationTypeName
+                }}</span>
               </div>
               <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
                 <div
-                  :class="['h-1.5 rounded-full transition-all duration-300', balanceBarColor(balance)]"
+                  :class="[
+                    'h-1.5 rounded-full transition-all duration-300',
+                    balanceBarColor(balance),
+                  ]"
                   :style="{ width: balanceBarWidth(balance) }"
                 />
               </div>
               <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>{{ balance.usedDays }} / {{ balance.yearlyBalance }} days used</span>
                 <span
-                  :class="balance.remainingDays <= 0
-                    ? 'text-red-600 dark:text-red-400 font-semibold'
-                    : 'text-emerald-600 dark:text-emerald-400 font-semibold'"
-                >{{ balance.remainingDays }} remaining</span>
+                  :class="
+                    balance.remainingDays <= 0
+                      ? 'text-red-600 dark:text-red-400 font-semibold'
+                      : 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                  "
+                  >{{ balance.remainingDays }} remaining</span
+                >
               </div>
             </div>
           </div>
@@ -362,7 +391,9 @@ onMounted(async () => {
               <Button variant="ghost" size="icon" class="size-8" @click="nextMonth">
                 <ChevronRightIcon class="size-4" />
               </Button>
-              <span class="text-base font-semibold text-slate-900 dark:text-slate-100 ml-2 capitalize">
+              <span
+                class="text-base font-semibold text-slate-900 dark:text-slate-100 ml-2 capitalize"
+              >
                 {{ monthLabel }}
               </span>
             </div>
@@ -378,7 +409,9 @@ onMounted(async () => {
                 v-for="wd in WEEK_DAYS"
                 :key="wd"
                 class="text-center text-xs font-semibold text-slate-400 dark:text-slate-500 py-2"
-              >{{ wd }}</div>
+              >
+                {{ wd }}
+              </div>
             </div>
 
             <!-- Day cells -->
@@ -390,8 +423,12 @@ onMounted(async () => {
                   'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors',
                   !cell.isCurrentMonth && 'bg-slate-50/60 dark:bg-slate-900/40',
                   cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
-                  selectedIso === cell.iso ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500' : '',
-                  vacationsByDate.has(cell.iso) ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40' : 'cursor-default',
+                  selectedIso === cell.iso
+                    ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500'
+                    : '',
+                  vacationsByDate.has(cell.iso)
+                    ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                    : 'cursor-default',
                 ]"
                 @click="selectDay(cell.iso)"
               >
@@ -405,7 +442,9 @@ onMounted(async () => {
                         ? 'text-slate-700 dark:text-slate-200'
                         : 'text-slate-300 dark:text-slate-600',
                   ]"
-                >{{ cell.day }}</div>
+                >
+                  {{ cell.day }}
+                </div>
 
                 <!-- Vacation chips -->
                 <template v-if="vacationsByDate.has(cell.iso)">
@@ -418,12 +457,15 @@ onMounted(async () => {
                     }"
                     class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
                   >
-                    {{ entry.vacationTypeName }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
+                    {{ entry.vacationTypeName
+                    }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
                   </div>
                   <div
                     v-if="vacationsByDate.get(cell.iso)!.length > MAX_VISIBLE"
                     class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
-                  >+{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more</div>
+                  >
+                    +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
+                  </div>
                 </template>
               </div>
             </div>
@@ -454,14 +496,20 @@ onMounted(async () => {
                 </div>
               </div>
               <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                <div v-for="entry in selectedEntries" :key="entry.id" class="flex items-center gap-3 py-2.5">
+                <div
+                  v-for="entry in selectedEntries"
+                  :key="entry.id"
+                  class="flex items-center gap-3 py-2.5"
+                >
                   <div
                     class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
                     :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
                   />
                   <span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">
                     {{ entry.vacationTypeName }}
-                    <span v-if="entry.note" class="font-normal text-slate-400 dark:text-slate-500"> · {{ entry.note }}</span>
+                    <span v-if="entry.note" class="font-normal text-slate-400 dark:text-slate-500">
+                      · {{ entry.note }}</span
+                    >
                   </span>
                   <span
                     :class="[
@@ -470,16 +518,21 @@ onMounted(async () => {
                         ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
                         : 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
                     ]"
-                  >{{ entry.amount === 1 ? "Full day" : "Half day" }}</span>
+                    >{{ entry.amount === 1 ? "Full day" : "Half day" }}</span
+                  >
                   <div class="flex items-center gap-1 shrink-0">
                     <Button
-                      variant="ghost" size="icon" class="size-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                      variant="ghost"
+                      size="icon"
+                      class="size-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                       @click="openEdit(entry)"
                     >
                       <PencilIcon class="size-3.5" />
                     </Button>
                     <Button
-                      variant="ghost" size="icon" class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                      variant="ghost"
+                      size="icon"
+                      class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
                       @click="deleteDay(entry)"
                     >
                       <Trash2Icon class="size-3.5" />
@@ -493,7 +546,11 @@ onMounted(async () => {
 
         <!-- Planned days list -->
         <section>
-          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">All planned days</h2>
+          <h2
+            class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3"
+          >
+            All planned days
+          </h2>
 
           <div v-if="loading" class="card divide-y divide-slate-100 dark:divide-slate-800">
             <div v-for="i in 3" :key="i" class="flex items-center gap-4 px-5 py-4">
@@ -524,7 +581,9 @@ onMounted(async () => {
                 />
                 <span class="text-sm text-slate-600 dark:text-slate-400 truncate">
                   {{ day.vacationTypeName }}
-                  <span v-if="day.note" class="text-slate-400 dark:text-slate-500"> · {{ day.note }}</span>
+                  <span v-if="day.note" class="text-slate-400 dark:text-slate-500">
+                    · {{ day.note }}</span
+                  >
                 </span>
               </div>
               <span
@@ -539,14 +598,20 @@ onMounted(async () => {
               </span>
               <div class="flex items-center gap-1 shrink-0">
                 <Button
-                  variant="ghost" size="icon" class="size-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                  title="Edit" @click="openEdit(day)"
+                  variant="ghost"
+                  size="icon"
+                  class="size-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                  title="Edit"
+                  @click="openEdit(day)"
                 >
                   <PencilIcon class="size-3.5" />
                 </Button>
                 <Button
-                  variant="ghost" size="icon" class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-                  title="Delete" @click="deleteDay(day)"
+                  variant="ghost"
+                  size="icon"
+                  class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                  title="Delete"
+                  @click="deleteDay(day)"
                 >
                   <Trash2Icon class="size-3.5" />
                 </Button>
@@ -554,7 +619,6 @@ onMounted(async () => {
             </div>
           </div>
         </section>
-
       </div>
     </div>
 
@@ -618,7 +682,9 @@ onMounted(async () => {
           >
             <XCircleIcon v-if="liveRemaining < 0" class="size-3.5 shrink-0" />
             <CheckCircleIcon v-else class="size-3.5 shrink-0" />
-            <span v-if="liveRemaining < 0">Exceeds balance — {{ Math.abs(liveRemaining) }} day(s) short</span>
+            <span v-if="liveRemaining < 0"
+              >Exceeds balance — {{ Math.abs(liveRemaining) }} day(s) short</span
+            >
             <span v-else>{{ liveRemaining }} day(s) remaining after this entry</span>
           </div>
         </div>

@@ -1,20 +1,33 @@
 <script lang="ts" setup>
-import { CircleCheckIcon, InfoIcon, Loader2Icon, OctagonXIcon, TriangleAlertIcon, XIcon } from "lucide-vue-next"
-import { Toaster as Sonner } from "vue-sonner"
-import { cn } from "@/lib/utils"
+import {
+  CircleCheckIcon,
+  InfoIcon,
+  Loader2Icon,
+  OctagonXIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-vue-next";
+import { Toaster as Sonner } from "vue-sonner";
+import { cn } from "@/lib/utils";
 
 interface Props {
-  class?: string
-  theme?: 'light' | 'dark' | 'system'
-  position?: 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
-  richColors?: boolean
-  expand?: boolean
-  duration?: number
-  visibleToasts?: number
-  closeButton?: boolean
+  class?: string;
+  theme?: "light" | "dark" | "system";
+  position?:
+    | "top-left"
+    | "top-center"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-center"
+    | "bottom-right";
+  richColors?: boolean;
+  expand?: boolean;
+  duration?: number;
+  visibleToasts?: number;
+  closeButton?: boolean;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 </script>
 
 <template>

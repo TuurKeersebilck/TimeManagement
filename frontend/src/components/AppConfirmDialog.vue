@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useConfirmDialog } from '@/composables/useConfirmDialog'
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -7,10 +7,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 
-const { isOpen, options, handleConfirm, handleCancel } = useConfirmDialog()
+const { isOpen, options, handleConfirm, handleCancel } = useConfirmDialog();
 </script>
 
 <template>
@@ -22,13 +22,13 @@ const { isOpen, options, handleConfirm, handleCancel } = useConfirmDialog()
       </AlertDialogHeader>
       <AlertDialogFooter>
         <Button variant="outline" @click="handleCancel">
-          {{ options?.cancelLabel ?? 'Cancel' }}
+          {{ options?.cancelLabel ?? "Cancel" }}
         </Button>
         <Button
           :variant="options?.variant === 'destructive' ? 'destructive' : 'default'"
           @click="handleConfirm"
         >
-          {{ options?.confirmLabel ?? 'Confirm' }}
+          {{ options?.confirmLabel ?? "Confirm" }}
         </Button>
       </AlertDialogFooter>
     </AlertDialogContent>

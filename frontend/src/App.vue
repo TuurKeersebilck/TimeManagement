@@ -10,9 +10,9 @@ const { isDark } = useTheme();
 </script>
 
 <template>
-	<div class="min-h-screen bg-slate-50 dark:bg-slate-950">
-		<RouterView />
-		<Sonner :theme="isDark ? 'dark' : 'light'" position="top-right" rich-colors />
-		<AppConfirmDialog />
-	</div>
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <RouterView />
+    <Sonner :theme="isDark ? 'dark' : 'light'" position="top-right" rich-colors />
+    <AppConfirmDialog />
+  </div>
 </template>

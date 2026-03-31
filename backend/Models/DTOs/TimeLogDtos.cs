@@ -5,7 +5,7 @@ namespace TimeManagementBackend.Models.DTOs;
 public class TimeLogDto
 {
     public int Id { get; set; }
-    public DateTime Date { get; set; }
+    public DateOnly Date { get; set; }
     public TimeSpan StartTime { get; set; }
     public TimeSpan EndTime { get; set; }
     public TimeSpan? BreakStart { get; set; }
@@ -27,7 +27,7 @@ public class TimeLogDto
 public class TimeLogCreateDto
 {
     [Required]
-    public DateTime Date { get; set; }
+    public DateOnly Date { get; set; }
 
     [Required]
     public TimeSpan StartTime { get; set; }
@@ -45,7 +45,7 @@ public class TimeLogCreateDto
 public class TimeLogUpdateDto
 {
     [Required]
-    public DateTime Date { get; set; }
+    public DateOnly Date { get; set; }
 
     [Required]
     public TimeSpan StartTime { get; set; }
