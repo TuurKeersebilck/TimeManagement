@@ -2,6 +2,11 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { authService } from "../services/authService";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Loader2Icon } from "lucide-vue-next";
+
 const router = useRouter();
 const email = ref<string>("");
 const password = ref<string>("");
@@ -31,135 +36,78 @@ const handleLogin = async (): Promise<void> => {
 </script>
 
 <template>
-	<div class="min-h-screen flex items-center justify-center py-12 px-4">
+	<div class="min-h-screen flex items-center justify-center py-12 px-4 bg-background">
 		<div class="max-w-md w-full">
 			<!-- Header -->
 			<div class="text-center mb-8">
-				<h2 class="text-3xl font-bold text-slate-900">Welcome back</h2>
-				<p class="mt-2 text-sm text-slate-600">
+				<h2 class="text-3xl font-bold text-foreground">Welcome back</h2>
+				<p class="mt-2 text-sm text-muted-foreground">
 					Sign in to continue tracking your time
 				</p>
 			</div>
 
 			<!-- Login Form -->
-			<div class="bg-white rounded-lg shadow-lg p-8">
-				<form @submit.prevent="handleLogin" class="space-y-6">
+			<div class="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-8">
+				<form @submit.prevent="handleLogin" class="space-y-5">
 					<!-- Error Message -->
 					<div
 						v-if="error"
-						class="bg-red-50 border-l-4 border-red-500 p-4 rounded"
+						class="bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3 rounded-lg"
 					>
-						<div class="flex">
-							<div class="shrink-0">
-								<svg
-									class="h-5 w-5 text-red-400"
-									viewBox="0 0 20 20"
-									fill="currentColor"
-								>
-									<path
-										fill-rule="evenodd"
-										d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-										clip-rule="evenodd"
-									/>
-								</svg>
-							</div>
-							<div class="ml-3">
-								<p class="text-sm text-red-700">{{ error }}</p>
-							</div>
-						</div>
+						{{ error }}
 					</div>
 
 					<!-- Email Field -->
-					<div>
-						<label
-							for="email"
-							class="block text-sm font-medium text-slate-700 mb-2"
-						>
-							Email address
-						</label>
-						<input
+					<div class="space-y-2">
+						<Label for="email">Email address</Label>
+						<Input
 							id="email"
 							v-model="email"
 							type="email"
 							required
 							autocomplete="email"
-							class="input-field"
 							placeholder="you@example.com"
 						/>
 					</div>
 
 					<!-- Password Field -->
-					<div>
-						<label
-							for="password"
-							class="block text-sm font-medium text-slate-700 mb-2"
-						>
-							Password
-						</label>
-						<input
+					<div class="space-y-2">
+						<Label for="password">Password</Label>
+						<Input
 							id="password"
 							v-model="password"
 							type="password"
 							required
 							autocomplete="current-password"
-							class="input-field"
 							placeholder="••••••••"
 						/>
 					</div>
 
 					<!-- Remember Me -->
-					<div class="flex items-center">
+					<div class="flex items-center gap-2">
 						<input
 							id="remember-me"
 							v-model="rememberMe"
 							type="checkbox"
-							class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-slate-300 rounded"
+							class="h-4 w-4 rounded border-border text-primary focus:ring-primary"
 						/>
-						<label for="remember-me" class="ml-2 block text-sm text-slate-700">
-							Remember me
-						</label>
+						<Label for="remember-me" class="font-normal cursor-pointer">Remember me</Label>
 					</div>
 
 					<!-- Submit Button -->
-					<button
-						type="submit"
-						:disabled="loading"
-						class="w-full btn-primary justify-center"
-					>
-						<span v-if="!loading">Sign in</span>
-						<span v-else class="flex items-center justify-center">
-							<svg
-								class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-								xmlns="http://www.w3.org/2000/svg"
-								fill="none"
-								viewBox="0 0 24 24"
-							>
-								<circle
-									class="opacity-25"
-									cx="12"
-									cy="12"
-									r="10"
-									stroke="currentColor"
-									stroke-width="4"
-								></circle>
-								<path
-									class="opacity-75"
-									fill="currentColor"
-									d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-								></path>
-							</svg>
-							Signing in...
-						</span>
-					</button>
+					<Button type="submit" :disabled="loading" class="w-full">
+						<Loader2Icon v-if="loading" class="size-4 animate-spin" />
+						{{ loading ? "Signing in…" : "Sign in" }}
+					</Button>
 				</form>
 
 				<!-- Register Link -->
 				<div class="mt-6 text-center">
-					<p class="text-sm text-slate-600">
+					<p class="text-sm text-muted-foreground">
 						Don't have an account?
 						<RouterLink
 							to="/register"
-							class="font-medium text-indigo-600 hover:text-indigo-700"
+							class="font-medium text-primary hover:underline"
 						>
 							Sign up
 						</RouterLink>

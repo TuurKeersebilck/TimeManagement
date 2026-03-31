@@ -4,17 +4,31 @@ import { useRoute, useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type Employee, type AdminVacationDay } from "../../services/adminService";
 import { vacationTypeService, type VacationType, type EmployeeVacationBalance } from "../../services/vacationTypeService";
-import Dialog from "primevue/dialog";
-import Select from "primevue/select";
-import { useToast } from "primevue/usetoast";
-import Toast from "primevue/toast";
-import ConfirmDialog from "primevue/confirmdialog";
-import { useConfirm } from "primevue/useconfirm";
+import { useAppToast } from "@/composables/useAppToast";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ArrowLeftIcon, PlusIcon, PencilIcon, Trash2Icon, CalendarIcon, Loader2Icon } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
-const toast = useToast();
-const confirm = useConfirm();
+const toast = useAppToast();
+const { confirm } = useConfirmDialog();
 
 const userId = route.params.id as string;
 
@@ -30,8 +44,8 @@ const dialogVisible = ref(false);
 const saving = ref(false);
 const editingBalance = ref<EmployeeVacationBalance | null>(null);
 
-const form = ref<{ vacationTypeId: number | null; yearlyBalance: string }>({
-	vacationTypeId: null,
+const form = ref<{ vacationTypeId: string; yearlyBalance: string }>({
+	vacationTypeId: "",
 	yearlyBalance: "",
 });
 
@@ -47,13 +61,13 @@ const dialogTitle = computed(() =>
 
 const openAssign = () => {
 	editingBalance.value = null;
-	form.value = { vacationTypeId: null, yearlyBalance: "" };
+	form.value = { vacationTypeId: "", yearlyBalance: "" };
 	dialogVisible.value = true;
 };
 
 const openEdit = (balance: EmployeeVacationBalance) => {
 	editingBalance.value = balance;
-	form.value = { vacationTypeId: balance.vacationTypeId, yearlyBalance: String(balance.yearlyBalance) };
+	form.value = { vacationTypeId: String(balance.vacationTypeId), yearlyBalance: String(balance.yearlyBalance) };
 	dialogVisible.value = true;
 };
 
@@ -66,20 +80,21 @@ const saveBalance = async () => {
 			const updated = await vacationTypeService.updateBalance(userId, editingBalance.value.id, days);
 			const idx = balances.value.findIndex((b) => b.id === editingBalance.value!.id);
 			if (idx !== -1) balances.value[idx] = updated;
-			toast.add({ severity: "success", summary: "Saved", detail: "Balance updated", life: 3000 });
+			toast.success("Balance updated");
 		} else {
-			if (!form.value.vacationTypeId) return;
+			const typeId = parseInt(form.value.vacationTypeId);
+			if (!typeId) return;
 			const created = await vacationTypeService.assignType(userId, {
-				vacationTypeId: form.value.vacationTypeId,
+				vacationTypeId: typeId,
 				yearlyBalance: days,
 			});
 			balances.value.push(created);
 			balances.value.sort((a, b) => a.vacationTypeName.localeCompare(b.vacationTypeName));
-			toast.add({ severity: "success", summary: "Assigned", detail: "Vacation type assigned", life: 3000 });
+			toast.success("Vacation type assigned");
 		}
 		dialogVisible.value = false;
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to save", life: 3000 });
+		toast.error("Failed to save");
 	} finally {
 		saving.value = false;
 	}
@@ -88,19 +103,18 @@ const saveBalance = async () => {
 // ─── Remove ───────────────────────────────────────────────────────────────────
 
 const removeBalance = (balance: EmployeeVacationBalance) => {
-	confirm.require({
-		header: "Remove vacation type",
+	confirm({
+		title: "Remove vacation type",
 		message: `Remove "${balance.vacationTypeName}" from ${employee.value?.fullName ?? "this employee"}?`,
-		icon: "pi pi-exclamation-triangle",
-		acceptLabel: "Remove",
-		rejectLabel: "Cancel",
-		accept: async () => {
+		confirmLabel: "Remove",
+		variant: "destructive",
+		onConfirm: async () => {
 			try {
 				await vacationTypeService.removeBalance(userId, balance.id);
 				balances.value = balances.value.filter((b) => b.id !== balance.id);
-				toast.add({ severity: "success", summary: "Removed", detail: "Vacation type removed", life: 3000 });
+				toast.success("Vacation type removed");
 			} catch {
-				toast.add({ severity: "error", summary: "Error", detail: "Failed to remove", life: 3000 });
+				toast.error("Failed to remove");
 			}
 		},
 	});
@@ -114,7 +128,6 @@ const initials = computed(() =>
 
 const currentYear = new Date().getUTCFullYear();
 
-// Calculate used days per vacation type from planned vacation days (current year)
 const usedByType = computed(() => {
 	const map = new Map<number, number>();
 	for (const d of vacationDays.value) {
@@ -146,7 +159,7 @@ onMounted(async () => {
 		allTypes.value = fetchedTypes;
 		vacationDays.value = fetchedDays;
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load employee", life: 3000 });
+		toast.error("Failed to load employee");
 	} finally {
 		loading.value = false;
 	}
@@ -155,9 +168,6 @@ onMounted(async () => {
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-		<ConfirmDialog />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-3xl mx-auto">
 
@@ -166,7 +176,7 @@ onMounted(async () => {
 					@click="router.push({ name: 'admin-employees' })"
 					class="flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 mb-6 transition-colors"
 				>
-					<i class="pi pi-arrow-left text-xs"></i>
+					<ArrowLeftIcon class="size-3.5" />
 					All employees
 				</button>
 
@@ -194,14 +204,16 @@ onMounted(async () => {
 				<div>
 					<div class="flex items-center justify-between mb-3">
 						<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Vacation balances</h2>
-						<button
+						<Button
+							variant="outline"
+							size="sm"
 							@click="openAssign"
 							:disabled="availableTypes.length === 0"
-							class="btn-secondary text-xs !py-1.5"
 							:title="availableTypes.length === 0 ? 'All vacation types are already assigned' : undefined"
 						>
-							<i class="pi pi-plus mr-1.5 text-xs"></i>Assign type
-						</button>
+							<PlusIcon class="size-3.5" />
+							Assign type
+						</Button>
 					</div>
 
 					<!-- Loading skeleton -->
@@ -215,18 +227,14 @@ onMounted(async () => {
 
 					<!-- Empty state -->
 					<div v-else-if="balances.length === 0" class="card text-center py-10">
-						<i class="pi pi-calendar-times text-3xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+						<CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 						<p class="text-sm text-slate-500 dark:text-slate-400 mb-3">No vacation types assigned yet.</p>
-						<button
-							v-if="allTypes.length > 0"
-							@click="openAssign"
-							class="btn-secondary text-xs"
-						>
+						<Button v-if="allTypes.length > 0" variant="outline" size="sm" @click="openAssign">
 							Assign a type
-						</button>
+						</Button>
 						<p v-else class="text-xs text-slate-400 dark:text-slate-500">
 							Create vacation types first in
-							<router-link :to="{ name: 'admin-vacation-types' }" class="text-indigo-600 dark:text-indigo-400 hover:underline">
+							<router-link :to="{ name: 'admin-vacation-types' }" class="text-primary hover:underline">
 								Vacation Types
 							</router-link>.
 						</p>
@@ -248,20 +256,24 @@ onMounted(async () => {
 									{{ balance.vacationTypeName }}
 								</span>
 								<div class="flex items-center gap-1 shrink-0">
-									<button
+									<Button
+										variant="ghost"
+										size="icon"
 										@click="openEdit(balance)"
-										class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+										class="size-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
 										title="Edit balance"
 									>
-										<i class="pi pi-pencil text-sm"></i>
-									</button>
-									<button
+										<PencilIcon class="size-3.5" />
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon"
 										@click="removeBalance(balance)"
-										class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+										class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
 										title="Remove"
 									>
-										<i class="pi pi-trash text-sm"></i>
-									</button>
+										<Trash2Icon class="size-3.5" />
+									</Button>
 								</div>
 							</div>
 							<!-- Usage bar -->
@@ -299,7 +311,7 @@ onMounted(async () => {
 					<h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Planned vacation days</h2>
 
 					<div v-if="vacationDays.length === 0" class="card text-center py-8">
-						<i class="pi pi-calendar text-2xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+						<CalendarIcon class="size-6 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 						<p class="text-sm text-slate-500 dark:text-slate-400">No vacation days planned.</p>
 					</div>
 
@@ -338,50 +350,53 @@ onMounted(async () => {
 		</div>
 
 		<!-- Assign / Edit dialog -->
-		<Dialog
-			v-model:visible="dialogVisible"
-			:header="dialogTitle"
-			modal
-			:style="{ width: '380px' }"
-			:draggable="false"
-		>
-			<div class="flex flex-col gap-4 pt-1">
-				<div v-if="!editingBalance">
-					<label class="form-label">Vacation type <span class="text-red-500">*</span></label>
-					<Select
-						v-model="form.vacationTypeId"
-						:options="availableTypes"
-						optionLabel="name"
-						optionValue="id"
-						placeholder="Select a type"
-						class="w-full"
-					/>
+		<Dialog v-model:open="dialogVisible">
+			<DialogContent class="sm:max-w-[380px]">
+				<DialogHeader>
+					<DialogTitle>{{ dialogTitle }}</DialogTitle>
+				</DialogHeader>
+
+				<div class="flex flex-col gap-4 py-2">
+					<div v-if="!editingBalance" class="space-y-1.5">
+						<Label>Vacation type <span class="text-destructive">*</span></Label>
+						<Select v-model="form.vacationTypeId">
+							<SelectTrigger class="w-full">
+								<SelectValue placeholder="Select a type" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem
+									v-for="type in availableTypes"
+									:key="type.id"
+									:value="String(type.id)"
+								>
+									{{ type.name }}
+								</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+					<div class="space-y-1.5">
+						<Label>Yearly balance (days) <span class="text-destructive">*</span></Label>
+						<Input
+							v-model="form.yearlyBalance"
+							type="number"
+							min="0"
+							step="0.5"
+							placeholder="e.g. 12"
+						/>
+					</div>
 				</div>
-				<div>
-					<label class="form-label">Yearly balance (days) <span class="text-red-500">*</span></label>
-					<input
-						v-model="form.yearlyBalance"
-						type="number"
-						min="0"
-						step="0.5"
-						class="input-field"
-						placeholder="e.g. 12"
-					/>
-				</div>
-			</div>
-			<template #footer>
-				<div class="flex justify-end gap-2">
-					<button @click="dialogVisible = false" class="btn-secondary">Cancel</button>
-					<button
+
+				<DialogFooter>
+					<Button variant="outline" @click="dialogVisible = false">Cancel</Button>
+					<Button
 						@click="saveBalance"
 						:disabled="saving || (!editingBalance && !form.vacationTypeId) || form.yearlyBalance === ''"
-						class="btn-primary"
 					>
-						<span v-if="saving"><i class="pi pi-spin pi-spinner mr-2"></i>Saving…</span>
-						<span v-else>{{ editingBalance ? "Save changes" : "Assign" }}</span>
-					</button>
-				</div>
-			</template>
+						<Loader2Icon v-if="saving" class="size-4 animate-spin" />
+						{{ editingBalance ? "Save changes" : "Assign" }}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
 		</Dialog>
 	</AuthenticatedLayout>
 </template>

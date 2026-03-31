@@ -3,10 +3,10 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type AdminTimeLog, type Employee, type AdminVacationDay } from "../../services/adminService";
-import { useToast } from "primevue/usetoast";
-import Toast from "primevue/toast";
+import { useAppToast } from "@/composables/useAppToast";
+import { ClockIcon, CheckCircleIcon, CalendarIcon } from "lucide-vue-next";
 
-const toast = useToast();
+const toast = useAppToast();
 const router = useRouter();
 
 const allLogs = ref<AdminTimeLog[]>([]);
@@ -91,7 +91,7 @@ onMounted(async () => {
 		employees.value = emps;
 		upcomingVacations.value = vacations;
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load dashboard data", life: 3000 });
+		toast.error("Failed to load dashboard data");
 	} finally {
 		loading.value = false;
 	}
@@ -100,8 +100,6 @@ onMounted(async () => {
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-6xl mx-auto">
 
@@ -164,7 +162,7 @@ onMounted(async () => {
 
 							<!-- Empty state -->
 							<div v-else-if="todayLogs.length === 0" class="text-center py-12">
-								<i class="pi pi-clock text-3xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+								<ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 								<p class="text-sm text-slate-500 dark:text-slate-400">No entries logged yet today.</p>
 							</div>
 
@@ -208,7 +206,7 @@ onMounted(async () => {
 									</div>
 								</div>
 								<div v-else-if="employeesNotLoggedToday.length === 0" class="text-center py-8">
-									<i class="pi pi-check-circle text-2xl text-emerald-400 mb-1 block"></i>
+									<CheckCircleIcon class="size-6 text-emerald-400 mb-1 mx-auto" />
 									<p class="text-xs text-slate-500 dark:text-slate-400">Everyone has logged today.</p>
 								</div>
 								<ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -248,7 +246,7 @@ onMounted(async () => {
 									</div>
 								</div>
 								<div v-else-if="upcomingDates.length === 0" class="text-center py-8">
-									<i class="pi pi-calendar text-2xl text-slate-300 dark:text-slate-600 mb-1 block"></i>
+									<CalendarIcon class="size-6 text-slate-300 dark:text-slate-600 mb-1 mx-auto" />
 									<p class="text-xs text-slate-500 dark:text-slate-400">No vacations in the next 7 days.</p>
 								</div>
 								<ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
