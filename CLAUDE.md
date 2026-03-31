@@ -48,7 +48,7 @@ Copy `.env.template` to `.env` and populate:
 - **src/router/** — Vue Router; protected routes require auth
 - **src/views/** — page-level components: `LoginView`, `RegisterView`, `DashboardView`, `TimeTrackingView`
 - **src/composables/** — shared Vue composition logic
-- UI built with **PrimeVue** components and **Tailwind CSS** v4
+- UI built with **shadcn-vue** components and **Tailwind CSS** v4
 
 ### Auth Flow
 1. Login/Register → backend returns JWT
@@ -85,6 +85,11 @@ Copy `.env.template` to `.env` and populate:
 
 ### Documentation (Context7)
 - Always use Context7 when writing or modifying code that involves any third-party library or framework
-- Before generating code for external dependencies (PrimeVue, Tailwind v4, Pomelo EF Core, ASP.NET Core, Vue Router, Axios, etc.), use `resolve-library-id` then `get-library-docs` to fetch current documentation
+- Before generating code for external dependencies (shadcn-vue, Tailwind v4, Pomelo EF Core, ASP.NET Core, Vue Router, Axios, etc.), use `resolve-library-id` then `get-library-docs` to fetch current documentation
 - Never rely on training data alone for API signatures, component APIs, or configuration — these change across versions and hallucinated APIs are a hard blocker
 - This project uses Tailwind CSS v4 which has significant breaking changes from v3 — always verify via Context7 before writing any Tailwind utilities or config
+
+### shadcn MCP
+- The **shadcn MCP** is available via the `mcp__shadcn__*` tools
+- Use it when adding, browsing, or auditing shadcn-vue components — it can list available components, fetch examples, get the exact `npx shadcn-vue add` command, and run an audit checklist
+- Prefer the shadcn MCP over guessing component names or install commands
