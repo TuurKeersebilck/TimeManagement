@@ -124,7 +124,7 @@ const handleLogin = async (): Promise<void> => {
 					<button
 						type="submit"
 						:disabled="loading"
-						class="w-full btn-primary justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+						class="w-full btn-primary justify-center"
 					>
 						<span v-if="!loading">Sign in</span>
 						<span v-else class="flex items-center justify-center">
