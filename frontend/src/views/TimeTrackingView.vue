@@ -8,23 +8,47 @@ import {
 } from "../services/timeLogService";
 import { useTimeCalculations } from "../composables/useTimeCalculations";
 import { useTimeLogsStore } from "../composables/useTimeLogsStore";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import Dialog from "primevue/dialog";
-import DatePicker from "primevue/datepicker";
-import { useToast } from "primevue/usetoast";
-import { useConfirm } from "primevue/useconfirm";
-import Toast from "primevue/toast";
-import ConfirmDialog from "primevue/confirmdialog";
+import { useAppToast } from "@/composables/useAppToast";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PlusIcon, PencilIcon, Trash2Icon, ClockIcon, CheckCircleIcon, Loader2Icon, ChevronLeftIcon, ChevronRightIcon } from "lucide-vue-next";
 
-const toast = useToast();
-const confirm = useConfirm();
+const toast = useAppToast();
+const { confirm } = useConfirmDialog();
 
 const { timeLogs, loading, fetchTimeLogs, refreshTimeLogs } =
 	useTimeLogsStore();
 
 const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } =
 	useTimeCalculations(timeLogs);
+
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+const pageSize = 10;
+const currentPage = ref(1);
+const totalPages = computed(() => Math.max(1, Math.ceil(timeLogs.value.length / pageSize)));
+const paginatedLogs = computed(() => {
+	const start = (currentPage.value - 1) * pageSize;
+	return timeLogs.value.slice(start, start + pageSize);
+});
 
 // ─── Dialog state ────────────────────────────────────────────────────────────
 
@@ -33,8 +57,16 @@ const editMode = ref(false);
 const currentLogId = ref<number | null>(null);
 const saving = ref(false);
 
+const todayStr = () => {
+	const d = new Date();
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, "0");
+	const day = String(d.getDate()).padStart(2, "0");
+	return `${y}-${m}-${day}`;
+};
+
 const emptyForm = () => ({
-	date: new Date(),
+	date: todayStr(),
 	startTime: "",
 	endTime: "",
 	breakStart: "",
@@ -72,13 +104,6 @@ const previewHours = computed(() => {
 
 // ─── Form helpers ────────────────────────────────────────────────────────────
 
-const localDateStr = (date: Date) => {
-	const y = date.getFullYear();
-	const m = String(date.getMonth() + 1).padStart(2, "0");
-	const d = String(date.getDate()).padStart(2, "0");
-	return `${y}-${m}-${d}`;
-};
-
 const toTimeStr = (t: string) => (t ? `${t}:00` : undefined);
 
 const validateForm = (): boolean => {
@@ -105,10 +130,9 @@ const validateForm = (): boolean => {
 	}
 
 	// Duplicate date check against cached logs (exclude current log when editing)
-	const dateStr = localDateStr(formData.value.date);
 	const duplicate = timeLogs.value.some(
 		(log) =>
-			log.date.split("T")[0] === dateStr &&
+			log.date.split("T")[0] === formData.value.date &&
 			(!editMode.value || log.id !== currentLogId.value)
 	);
 	if (duplicate) errors.date = "A time log already exists for this date";
@@ -131,7 +155,7 @@ const openEditDialog = (log: TimeLog) => {
 	editMode.value = true;
 	currentLogId.value = log.id;
 	formData.value = {
-		date: new Date(log.date),
+		date: log.date.split("T")[0],
 		startTime: log.startTime.substring(0, 5),
 		endTime: log.endTime.substring(0, 5),
 		breakStart: log.breakStart ? log.breakStart.substring(0, 5) : "",
@@ -151,7 +175,7 @@ const saveTimeLog = async () => {
 			formData.value;
 
 		const payload: TimeLogCreate = {
-			date: localDateStr(formData.value.date),
+			date: formData.value.date,
 			startTime: toTimeStr(startTime)!,
 			endTime: toTimeStr(endTime)!,
 			...(breakStart && breakEnd
@@ -168,33 +192,26 @@ const saveTimeLog = async () => {
 
 		showDialog.value = false;
 		await refreshTimeLogs();
-		toast.add({
-			severity: "success",
-			summary: editMode.value ? "Updated" : "Logged",
-			detail: `Time log ${editMode.value ? "updated" : "saved"} successfully`,
-			life: 3000,
-		});
+		toast.success(editMode.value ? "Time log updated" : "Time log saved");
 	} catch (error: any) {
 		const message =
 			error.response?.data?.message ||
 			error.response?.data ||
 			error.message ||
 			"Failed to save time log";
-		toast.add({ severity: "error", summary: "Error", detail: message, life: 5000 });
+		toast.error(message);
 	} finally {
 		saving.value = false;
 	}
 };
 
 const confirmDelete = (log: TimeLog) => {
-	confirm.require({
+	confirm({
+		title: "Delete time log",
 		message: `Delete the time log for ${formatDate(log.date)}?`,
-		header: "Delete time log",
-		icon: "pi pi-trash",
-		rejectLabel: "Cancel",
-		acceptLabel: "Delete",
-		acceptClass: "p-button-danger",
-		accept: () => deleteTimeLog(log.id),
+		confirmLabel: "Delete",
+		variant: "destructive",
+		onConfirm: () => deleteTimeLog(log.id),
 	});
 };
 
@@ -203,9 +220,9 @@ const deleteTimeLog = async (id: number) => {
 		loading.value = true;
 		await timeLogService.delete(id);
 		await refreshTimeLogs();
-		toast.add({ severity: "success", summary: "Deleted", detail: "Time log deleted", life: 3000 });
+		toast.success("Time log deleted");
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to delete time log", life: 3000 });
+		toast.error("Failed to delete time log");
 	} finally {
 		loading.value = false;
 	}
@@ -233,16 +250,13 @@ onMounted(async () => {
 	try {
 		await fetchTimeLogs();
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load time logs", life: 3000 });
+		toast.error("Failed to load time logs");
 	}
 });
 </script>
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-		<ConfirmDialog />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-6xl mx-auto">
 
@@ -252,10 +266,10 @@ onMounted(async () => {
 						<h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Time Logs</h1>
 						<p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Track your daily working hours</p>
 					</div>
-					<button @click="openNewDialog" class="btn-primary">
-						<i class="pi pi-plus text-sm"></i>
+					<Button @click="openNewDialog">
+						<PlusIcon class="size-4" />
 						Log hours
-					</button>
+					</Button>
 				</div>
 
 				<!-- Stats -->
@@ -285,170 +299,165 @@ onMounted(async () => {
 
 				<!-- Table -->
 				<div class="card overflow-hidden">
-					<DataTable
-						:value="timeLogs"
-						:loading="loading"
-						paginator
-						:rows="10"
-						:rowsPerPageOptions="[10, 25, 50]"
-						stripedRows
-						class="text-sm"
-					>
-						<template #empty>
-							<div class="text-center py-16">
-								<i class="pi pi-clock text-4xl text-slate-300 dark:text-slate-600 mb-3 block"></i>
+					<!-- Loading skeleton -->
+					<div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+						<div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+							<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
+							<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
+							<div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+							<div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+						</div>
+					</div>
+
+					<Table v-else>
+						<TableHeader>
+							<TableRow>
+								<TableHead>Date</TableHead>
+								<TableHead>Hours</TableHead>
+								<TableHead>Break</TableHead>
+								<TableHead>Total</TableHead>
+								<TableHead>Description</TableHead>
+								<TableHead class="w-20" />
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							<TableEmpty v-if="timeLogs.length === 0" :colspan="6">
+								<ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 								<p class="text-slate-500 dark:text-slate-400">No time logs yet. Log your first day above.</p>
-							</div>
-						</template>
+							</TableEmpty>
+							<TableRow v-for="log in paginatedLogs" :key="log.id">
+								<TableCell class="font-medium text-slate-900 dark:text-slate-100">
+									{{ formatDate(log.date) }}
+								</TableCell>
+								<TableCell class="text-slate-600 dark:text-slate-400">
+									{{ formatTime(log.startTime) }} – {{ formatTime(log.endTime) }}
+								</TableCell>
+								<TableCell class="text-slate-500 dark:text-slate-500 text-xs">
+									{{ formatBreak(log) }}
+								</TableCell>
+								<TableCell>
+									<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+										{{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+									</span>
+								</TableCell>
+								<TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[200px] truncate" :title="log.description">
+									{{ log.description ? (log.description.length > 60 ? log.description.substring(0, 60) + '…' : log.description) : '—' }}
+								</TableCell>
+								<TableCell>
+									<div class="flex gap-1 justify-end">
+										<Button
+											variant="ghost"
+											size="icon"
+											class="size-7 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
+											title="Edit"
+											@click="openEditDialog(log)"
+										>
+											<PencilIcon class="size-3.5" />
+										</Button>
+										<Button
+											variant="ghost"
+											size="icon"
+											class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+											title="Delete"
+											@click="confirmDelete(log)"
+										>
+											<Trash2Icon class="size-3.5" />
+										</Button>
+									</div>
+								</TableCell>
+							</TableRow>
+						</TableBody>
+					</Table>
 
-						<Column field="date" header="Date" sortable>
-							<template #body="{ data }">
-								<span class="font-medium text-slate-900 dark:text-slate-100">{{ formatDate(data.date) }}</span>
-							</template>
-						</Column>
-
-						<Column header="Hours">
-							<template #body="{ data }">
-								<span class="text-slate-600 dark:text-slate-400">
-									{{ formatTime(data.startTime) }} – {{ formatTime(data.endTime) }}
-								</span>
-							</template>
-						</Column>
-
-						<Column header="Break">
-							<template #body="{ data }">
-								<span class="text-slate-500 dark:text-slate-500 text-xs">{{ formatBreak(data) }}</span>
-							</template>
-						</Column>
-
-						<Column field="totalHours" header="Total" sortable>
-							<template #body="{ data }">
-								<span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-									{{ data.totalHours?.toFixed(2) ?? "0.00" }}h
-								</span>
-							</template>
-						</Column>
-
-						<Column header="Description">
-							<template #body="{ data }">
-								<span
-									class="text-slate-600 dark:text-slate-400 text-sm"
-									:title="data.description"
-								>
-									{{ data.description ? (data.description.length > 60 ? data.description.substring(0, 60) + '…' : data.description) : '—' }}
-								</span>
-							</template>
-						</Column>
-
-						<Column header="" :exportable="false" style="width: 80px">
-							<template #body="{ data }">
-								<div class="flex gap-1 justify-end">
-									<button
-										@click="openEditDialog(data)"
-										class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400"
-										title="Edit"
-									>
-										<i class="pi pi-pencil text-sm"></i>
-									</button>
-									<button
-										@click="confirmDelete(data)"
-										class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-										title="Delete"
-									>
-										<i class="pi pi-trash text-sm"></i>
-									</button>
-								</div>
-							</template>
-						</Column>
-					</DataTable>
+					<!-- Pagination -->
+					<div v-if="!loading && totalPages > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800">
+						<p class="text-xs text-slate-500 dark:text-slate-400">
+							Showing {{ (currentPage - 1) * pageSize + 1 }}–{{ Math.min(currentPage * pageSize, timeLogs.length) }} of {{ timeLogs.length }}
+						</p>
+						<div class="flex items-center gap-1">
+							<Button variant="ghost" size="icon" class="size-7" :disabled="currentPage === 1" @click="currentPage--">
+								<ChevronLeftIcon class="size-3.5" />
+							</Button>
+							<span class="text-xs text-slate-600 dark:text-slate-400 px-2">{{ currentPage }} / {{ totalPages }}</span>
+							<Button variant="ghost" size="icon" class="size-7" :disabled="currentPage === totalPages" @click="currentPage++">
+								<ChevronRightIcon class="size-3.5" />
+							</Button>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
 
 		<!-- Add / Edit Dialog -->
-		<Dialog
-			v-model:visible="showDialog"
-			:modal="true"
-			:closable="true"
-			:draggable="false"
-			:style="{ width: '480px' }"
-		>
-			<template #header>
-				<h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">
-					{{ editMode ? "Edit time log" : "Log hours" }}
-				</h2>
-			</template>
+		<Dialog v-model:open="showDialog">
+			<DialogContent class="sm:max-w-[480px]">
+				<DialogHeader>
+					<DialogTitle>{{ editMode ? "Edit time log" : "Log hours" }}</DialogTitle>
+				</DialogHeader>
 
-			<div class="space-y-4 py-1">
-				<!-- Date -->
-				<div>
-					<label class="form-label">Date</label>
-					<DatePicker
-						v-model="formData.date"
-						dateFormat="yy-mm-dd"
-						showIcon
-						inputClass="input-field-dialog"
-						class="w-full"
-					/>
-					<p v-if="formErrors.date" class="mt-1 text-xs text-red-500">{{ formErrors.date }}</p>
-				</div>
-
-				<!-- Start / End times -->
-				<div class="grid grid-cols-2 gap-3">
-					<div>
-						<label class="form-label">Start time</label>
-						<input v-model="formData.startTime" type="time" class="input-field-dialog" />
-						<p v-if="formErrors.startTime" class="mt-1 text-xs text-red-500">{{ formErrors.startTime }}</p>
+				<div class="space-y-4 py-1">
+					<!-- Date -->
+					<div class="space-y-1.5">
+						<Label>Date</Label>
+						<Input v-model="formData.date" type="date" />
+						<p v-if="formErrors.date" class="text-xs text-destructive">{{ formErrors.date }}</p>
 					</div>
-					<div>
-						<label class="form-label">End time</label>
-						<input v-model="formData.endTime" type="time" class="input-field-dialog" />
-						<p v-if="formErrors.endTime" class="mt-1 text-xs text-red-500">{{ formErrors.endTime }}</p>
-					</div>
-				</div>
 
-				<!-- Break times -->
-				<div>
-					<label class="form-label">Break <span class="font-normal text-slate-400">(optional)</span></label>
+					<!-- Start / End times -->
 					<div class="grid grid-cols-2 gap-3">
-						<div>
-							<input v-model="formData.breakStart" type="time" class="input-field-dialog" placeholder="Start" />
-							<p v-if="formErrors.breakStart" class="mt-1 text-xs text-red-500">{{ formErrors.breakStart }}</p>
+						<div class="space-y-1.5">
+							<Label>Start time</Label>
+							<Input v-model="formData.startTime" type="time" />
+							<p v-if="formErrors.startTime" class="text-xs text-destructive">{{ formErrors.startTime }}</p>
 						</div>
-						<div>
-							<input v-model="formData.breakEnd" type="time" class="input-field-dialog" placeholder="End" />
-							<p v-if="formErrors.breakEnd" class="mt-1 text-xs text-red-500">{{ formErrors.breakEnd }}</p>
+						<div class="space-y-1.5">
+							<Label>End time</Label>
+							<Input v-model="formData.endTime" type="time" />
+							<p v-if="formErrors.endTime" class="text-xs text-destructive">{{ formErrors.endTime }}</p>
 						</div>
+					</div>
+
+					<!-- Break times -->
+					<div class="space-y-1.5">
+						<Label>Break <span class="font-normal text-muted-foreground">(optional)</span></Label>
+						<div class="grid grid-cols-2 gap-3">
+							<div>
+								<Input v-model="formData.breakStart" type="time" placeholder="Start" />
+								<p v-if="formErrors.breakStart" class="mt-1 text-xs text-destructive">{{ formErrors.breakStart }}</p>
+							</div>
+							<div>
+								<Input v-model="formData.breakEnd" type="time" placeholder="End" />
+								<p v-if="formErrors.breakEnd" class="mt-1 text-xs text-destructive">{{ formErrors.breakEnd }}</p>
+							</div>
+						</div>
+					</div>
+
+					<!-- Description -->
+					<div class="space-y-1.5">
+						<Label>Description</Label>
+						<textarea
+							v-model="formData.description"
+							rows="3"
+							class="input-field resize-none"
+							placeholder="What did you work on today?"
+						/>
+					</div>
+
+					<!-- Preview -->
+					<div v-if="previewHours" class="flex items-center gap-2 text-sm text-primary">
+						<CheckCircleIcon class="size-3.5" />
+						<span>Total: <strong>{{ previewHours }}</strong></span>
 					</div>
 				</div>
 
-				<!-- Description -->
-				<div>
-					<label class="form-label">Description</label>
-					<textarea
-						v-model="formData.description"
-						rows="3"
-						class="input-field-dialog resize-none"
-						placeholder="What did you work on today?"
-					></textarea>
-				</div>
-
-				<!-- Preview -->
-				<div v-if="previewHours" class="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
-					<i class="pi pi-check-circle text-xs"></i>
-					<span>Total: <strong>{{ previewHours }}</strong></span>
-				</div>
-			</div>
-
-			<template #footer>
-				<div class="flex justify-end gap-2 pt-2">
-					<button @click="showDialog = false" class="btn-secondary">Cancel</button>
-					<button @click="saveTimeLog" :disabled="saving" class="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
-						<i v-if="saving" class="pi pi-spin pi-spinner text-sm"></i>
+				<DialogFooter>
+					<Button variant="outline" @click="showDialog = false">Cancel</Button>
+					<Button @click="saveTimeLog" :disabled="saving">
+						<Loader2Icon v-if="saving" class="size-4 animate-spin" />
 						{{ editMode ? "Update" : "Save" }}
-					</button>
-				</div>
-			</template>
+					</Button>
+				</DialogFooter>
+			</DialogContent>
 		</Dialog>
 	</AuthenticatedLayout>
 </template>

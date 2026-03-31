@@ -2,16 +2,29 @@
 import { ref, computed, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { vacationService, type VacationBalance, type VacationDay, type CreateVacationDayDto } from "../services/vacationService";
-import Dialog from "primevue/dialog";
-import DatePicker from "primevue/datepicker";
-import Select from "primevue/select";
-import { useToast } from "primevue/usetoast";
-import Toast from "primevue/toast";
-import ConfirmDialog from "primevue/confirmdialog";
-import { useConfirm } from "primevue/useconfirm";
+import { useAppToast } from "@/composables/useAppToast";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { PlusIcon, PencilIcon, Trash2Icon, CalendarIcon, CheckCircleIcon, XCircleIcon, Loader2Icon } from "lucide-vue-next";
 
-const toast = useToast();
-const confirm = useConfirm();
+const toast = useAppToast();
+const { confirm } = useConfirmDialog();
 
 const balances = ref<VacationBalance[]>([]);
 const vacationDays = ref<VacationDay[]>([]);
@@ -24,37 +37,32 @@ const saving = ref(false);
 const editingDay = ref<VacationDay | null>(null);
 
 const form = ref<{
-	vacationTypeId: number | null;
-	date: Date | null;
-	amount: number;
+	vacationTypeId: string;
+	date: string;
+	amount: string;
 	note: string;
 }>({
-	vacationTypeId: null,
-	date: null,
-	amount: 1,
+	vacationTypeId: "",
+	date: "",
+	amount: "1",
 	note: "",
 });
 
 const dialogTitle = computed(() => (editingDay.value ? "Edit vacation day" : "Plan vacation day"));
 
-const amountOptions = [
-	{ label: "Full day (1.0)", value: 1 },
-	{ label: "Half day (0.5)", value: 0.5 },
-];
-
 // Live remaining balance while filling in the dialog
 const liveRemaining = computed(() => {
 	if (!form.value.vacationTypeId) return null;
-	const balance = balances.value.find((b) => b.vacationTypeId === form.value.vacationTypeId);
+	const typeId = parseInt(form.value.vacationTypeId);
+	const balance = balances.value.find((b) => b.vacationTypeId === typeId);
 	if (!balance) return null;
 	// When editing, add back the original amount for the current year
 	let base = balance.remainingDays;
-	if (editingDay.value && editingDay.value.vacationTypeId === form.value.vacationTypeId) {
-		// Only add back if the original day is in the current year
+	if (editingDay.value && editingDay.value.vacationTypeId === typeId) {
 		const origYear = new Date(editingDay.value.date).getUTCFullYear();
 		if (origYear === new Date().getUTCFullYear()) base += editingDay.value.amount;
 	}
-	return base - form.value.amount;
+	return base - parseFloat(form.value.amount);
 });
 
 const canSubmit = computed(() => {
@@ -65,35 +73,28 @@ const canSubmit = computed(() => {
 
 const openCreate = () => {
 	editingDay.value = null;
-	form.value = { vacationTypeId: null, date: null, amount: 1, note: "" };
+	form.value = { vacationTypeId: "", date: "", amount: "1", note: "" };
 	dialogVisible.value = true;
 };
 
 const openEdit = (day: VacationDay) => {
 	editingDay.value = day;
 	form.value = {
-		vacationTypeId: day.vacationTypeId,
-		date: new Date(day.date),
-		amount: day.amount,
+		vacationTypeId: String(day.vacationTypeId),
+		date: day.date,
+		amount: String(day.amount),
 		note: day.note ?? "",
 	};
 	dialogVisible.value = true;
-};
-
-const formatDate = (d: Date): string => {
-	const y = d.getFullYear();
-	const m = String(d.getMonth() + 1).padStart(2, "0");
-	const day = String(d.getDate()).padStart(2, "0");
-	return `${y}-${m}-${day}`;
 };
 
 const save = async () => {
 	if (!canSubmit.value || !form.value.date || !form.value.vacationTypeId) return;
 	saving.value = true;
 	const payload: CreateVacationDayDto = {
-		vacationTypeId: form.value.vacationTypeId,
-		date: formatDate(form.value.date),
-		amount: form.value.amount,
+		vacationTypeId: parseInt(form.value.vacationTypeId),
+		date: form.value.date,
+		amount: parseFloat(form.value.amount),
 		note: form.value.note.trim() || undefined,
 	};
 	try {
@@ -101,11 +102,11 @@ const save = async () => {
 			const updated = await vacationService.update(editingDay.value.id, payload);
 			const idx = vacationDays.value.findIndex((d) => d.id === editingDay.value!.id);
 			if (idx !== -1) vacationDays.value[idx] = updated;
-			toast.add({ severity: "success", summary: "Updated", detail: "Vacation day updated", life: 3000 });
+			toast.success("Vacation day updated");
 		} else {
 			const created = await vacationService.create(payload);
 			vacationDays.value.unshift(created);
-			toast.add({ severity: "success", summary: "Planned", detail: "Vacation day added", life: 3000 });
+			toast.success("Vacation day added");
 		}
 		// Refresh balances so the cards update
 		balances.value = await vacationService.getBalances();
@@ -114,7 +115,7 @@ const save = async () => {
 		const msg =
 			(err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
 			"Failed to save vacation day";
-		toast.add({ severity: "error", summary: "Error", detail: msg, life: 5000 });
+		toast.error(msg);
 	} finally {
 		saving.value = false;
 	}
@@ -123,20 +124,19 @@ const save = async () => {
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 const deleteDay = (day: VacationDay) => {
-	confirm.require({
-		header: "Delete vacation day",
+	confirm({
+		title: "Delete vacation day",
 		message: `Remove the ${day.amount === 0.5 ? "half" : "full"} day on ${displayDate(day.date)} (${day.vacationTypeName})?`,
-		icon: "pi pi-exclamation-triangle",
-		acceptLabel: "Delete",
-		rejectLabel: "Cancel",
-		accept: async () => {
+		confirmLabel: "Delete",
+		variant: "destructive",
+		onConfirm: async () => {
 			try {
 				await vacationService.delete(day.id);
 				vacationDays.value = vacationDays.value.filter((d) => d.id !== day.id);
 				balances.value = await vacationService.getBalances();
-				toast.add({ severity: "success", summary: "Deleted", detail: "Vacation day removed", life: 3000 });
+				toast.success("Vacation day removed");
 			} catch {
-				toast.add({ severity: "error", summary: "Error", detail: "Failed to delete", life: 3000 });
+				toast.error("Failed to delete");
 			}
 		},
 	});
@@ -169,7 +169,7 @@ onMounted(async () => {
 		balances.value = b;
 		vacationDays.value = d;
 	} catch {
-		toast.add({ severity: "error", summary: "Error", detail: "Failed to load vacation data", life: 3000 });
+		toast.error("Failed to load vacation data");
 	} finally {
 		loading.value = false;
 	}
@@ -178,9 +178,6 @@ onMounted(async () => {
 
 <template>
 	<AuthenticatedLayout>
-		<Toast />
-		<ConfirmDialog />
-
 		<div class="p-6 lg:p-8">
 			<div class="max-w-3xl mx-auto">
 
@@ -190,14 +187,14 @@ onMounted(async () => {
 						<h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
 						<p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Plan and track your vacation days</p>
 					</div>
-					<button
+					<Button
 						@click="openCreate"
 						:disabled="balances.length === 0"
-						class="btn-primary"
 						:title="balances.length === 0 ? 'No vacation types assigned yet' : undefined"
 					>
-						<i class="pi pi-plus mr-2 text-sm"></i>Plan a day
-					</button>
+						<PlusIcon class="size-4" />
+						Plan a day
+					</Button>
 				</div>
 
 				<!-- Balance cards -->
@@ -215,7 +212,7 @@ onMounted(async () => {
 
 					<!-- Empty -->
 					<div v-else-if="balances.length === 0" class="card text-center py-10">
-						<i class="pi pi-calendar-times text-3xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+						<CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 						<p class="text-sm text-slate-500 dark:text-slate-400">No vacation types have been assigned to you yet.</p>
 					</div>
 
@@ -267,7 +264,7 @@ onMounted(async () => {
 
 					<!-- Empty -->
 					<div v-else-if="vacationDays.length === 0" class="card text-center py-10">
-						<i class="pi pi-calendar text-3xl text-slate-300 dark:text-slate-600 mb-2 block"></i>
+						<CalendarIcon class="size-6 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
 						<p class="text-sm text-slate-500 dark:text-slate-400">No vacation days planned yet.</p>
 					</div>
 
@@ -309,20 +306,24 @@ onMounted(async () => {
 
 							<!-- Actions -->
 							<div class="flex items-center gap-1 shrink-0">
-								<button
-									@click="openEdit(day)"
-									class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+								<Button
+									variant="ghost"
+									size="icon"
+									class="size-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
 									title="Edit"
+									@click="openEdit(day)"
 								>
-									<i class="pi pi-pencil text-sm"></i>
-								</button>
-								<button
-									@click="deleteDay(day)"
-									class="btn-ghost !px-2 !py-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+									<PencilIcon class="size-3.5" />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
 									title="Delete"
+									@click="deleteDay(day)"
 								>
-									<i class="pi pi-trash text-sm"></i>
-								</button>
+									<Trash2Icon class="size-3.5" />
+								</Button>
 							</div>
 						</div>
 					</div>
@@ -332,90 +333,90 @@ onMounted(async () => {
 		</div>
 
 		<!-- Plan / Edit dialog -->
-		<Dialog
-			v-model:visible="dialogVisible"
-			:header="dialogTitle"
-			modal
-			:style="{ width: '400px' }"
-			:draggable="false"
-		>
-			<div class="flex flex-col gap-4 pt-1">
+		<Dialog v-model:open="dialogVisible">
+			<DialogContent class="sm:max-w-[400px]">
+				<DialogHeader>
+					<DialogTitle>{{ dialogTitle }}</DialogTitle>
+				</DialogHeader>
 
-				<!-- Vacation type -->
-				<div>
-					<label class="form-label">Vacation type <span class="text-red-500">*</span></label>
-					<Select
-						v-model="form.vacationTypeId"
-						:options="balances"
-						optionLabel="vacationTypeName"
-						optionValue="vacationTypeId"
-						placeholder="Select a type"
-						class="w-full"
-					/>
+				<div class="flex flex-col gap-4 py-2">
+
+					<!-- Vacation type -->
+					<div class="space-y-1.5">
+						<Label>Vacation type <span class="text-destructive">*</span></Label>
+						<Select v-model="form.vacationTypeId">
+							<SelectTrigger class="w-full">
+								<SelectValue placeholder="Select a type" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem
+									v-for="balance in balances"
+									:key="balance.vacationTypeId"
+									:value="String(balance.vacationTypeId)"
+								>
+									{{ balance.vacationTypeName }}
+								</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+
+					<!-- Date -->
+					<div class="space-y-1.5">
+						<Label>Date <span class="text-destructive">*</span></Label>
+						<Input v-model="form.date" type="date" />
+					</div>
+
+					<!-- Full / Half day -->
+					<div class="space-y-1.5">
+						<Label>Duration <span class="text-destructive">*</span></Label>
+						<Select v-model="form.amount">
+							<SelectTrigger class="w-full">
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="1">Full day (1.0)</SelectItem>
+								<SelectItem value="0.5">Half day (0.5)</SelectItem>
+							</SelectContent>
+						</Select>
+					</div>
+
+					<!-- Note -->
+					<div class="space-y-1.5">
+						<Label>Note</Label>
+						<Input
+							v-model="form.note"
+							type="text"
+							placeholder="Optional note"
+							maxlength="500"
+						/>
+					</div>
+
+					<!-- Live balance feedback -->
+					<div
+						v-if="form.vacationTypeId && liveRemaining !== null"
+						:class="[
+							'rounded-lg px-3 py-2 text-sm flex items-center gap-2',
+							liveRemaining < 0
+								? 'bg-destructive/10 text-destructive'
+								: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+						]"
+					>
+						<XCircleIcon v-if="liveRemaining < 0" class="size-3.5 shrink-0" />
+						<CheckCircleIcon v-else class="size-3.5 shrink-0" />
+						<span v-if="liveRemaining < 0">Exceeds balance — {{ Math.abs(liveRemaining) }} day(s) short</span>
+						<span v-else>{{ liveRemaining }} day(s) remaining after this entry</span>
+					</div>
+
 				</div>
 
-				<!-- Date -->
-				<div>
-					<label class="form-label">Date <span class="text-red-500">*</span></label>
-					<DatePicker
-						v-model="form.date"
-						dateFormat="dd/mm/yy"
-						placeholder="Pick a date"
-						class="w-full"
-						showIcon
-					/>
-				</div>
-
-				<!-- Full / Half day -->
-				<div>
-					<label class="form-label">Duration <span class="text-red-500">*</span></label>
-					<Select
-						v-model="form.amount"
-						:options="amountOptions"
-						optionLabel="label"
-						optionValue="value"
-						class="w-full"
-					/>
-				</div>
-
-				<!-- Note -->
-				<div>
-					<label class="form-label">Note</label>
-					<input
-						v-model="form.note"
-						type="text"
-						class="input-field"
-						placeholder="Optional note"
-						maxlength="500"
-					/>
-				</div>
-
-				<!-- Live balance feedback -->
-				<div
-					v-if="form.vacationTypeId && liveRemaining !== null"
-					:class="[
-						'rounded-lg px-3 py-2 text-sm flex items-center gap-2',
-						liveRemaining < 0
-							? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300'
-							: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
-					]"
-				>
-					<i :class="['pi text-sm', liveRemaining < 0 ? 'pi-times-circle' : 'pi-check-circle']"></i>
-					<span v-if="liveRemaining < 0">Exceeds balance — {{ Math.abs(liveRemaining) }} day(s) short</span>
-					<span v-else>{{ liveRemaining }} day(s) remaining after this entry</span>
-				</div>
-
-			</div>
-
-			<template #footer>
-				<div class="flex justify-end gap-2">
-					<button @click="dialogVisible = false" class="btn-secondary">Cancel</button>
-					<button @click="save" :disabled="saving || !canSubmit" class="btn-primary">
-						<span v-if="saving"><i class="pi pi-spin pi-spinner mr-2"></i>Saving…</span>
-						<span v-else>{{ editingDay ? "Save changes" : "Plan day" }}</span>
-					</button>
-				</div>
-			</template>
+				<DialogFooter>
+					<Button variant="outline" @click="dialogVisible = false">Cancel</Button>
+					<Button @click="save" :disabled="saving || !canSubmit">
+						<Loader2Icon v-if="saving" class="size-4 animate-spin" />
+						{{ editingDay ? "Save changes" : "Plan day" }}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
 		</Dialog>
 	</AuthenticatedLayout>
 </template>
