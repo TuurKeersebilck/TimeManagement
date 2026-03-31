@@ -19,12 +19,12 @@ body {
 }
 
 .card-hover {
-	@apply card hover:shadow-md transition-shadow duration-200;
+	@apply bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow duration-200;
 }
 
 /* Stat cards */
 .stat-card {
-	@apply card p-6;
+	@apply bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-6;
 }
 
 /* Buttons */
@@ -106,5 +106,5 @@ body {
 }
 
 .card-glass {
-	@apply card;
+	@apply bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm;
 }
