@@ -97,71 +97,65 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <!-- Left: stats -->
-          <div class="lg:col-span-2 space-y-6">
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <!-- Today -->
-              <div class="stat-card">
-                <div class="flex items-center gap-2 mb-1">
-                  <ClockIcon class="size-3.5 text-slate-400" />
-                  <p
-                    class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                  >
-                    Today
-                  </p>
-                </div>
-                <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-                  <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">
-                    --
-                  </span>
-                  <span v-else>{{ totalHoursToday }}h</span>
-                </p>
-              </div>
-
-              <!-- This week -->
-              <div class="stat-card">
-                <div class="flex items-center gap-2 mb-1">
-                  <ClockIcon class="size-3.5 text-slate-400" />
-                  <p
-                    class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                  >
-                    This week
-                  </p>
-                </div>
-                <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-                  <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">
-                    --
-                  </span>
-                  <span v-else>{{ totalHoursThisWeek }}h</span>
-                </p>
-              </div>
-
-              <!-- This month -->
-              <div class="stat-card">
-                <div class="flex items-center gap-2 mb-1">
-                  <ClockIcon class="size-3.5 text-slate-400" />
-                  <p
-                    class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
-                  >
-                    This month
-                  </p>
-                </div>
-                <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-                  <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">
-                    --
-                  </span>
-                  <span v-else>{{ totalHoursThisMonth }}h</span>
-                </p>
-              </div>
+        <!-- Stats -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <!-- Today -->
+          <div class="stat-card">
+            <div class="flex items-center gap-2 mb-1">
+              <ClockIcon class="size-3.5 text-slate-400" />
+              <p
+                class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+              >
+                Today
+              </p>
             </div>
+            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">
+                --
+              </span>
+              <span v-else>{{ totalHoursToday }}h</span>
+            </p>
           </div>
 
-          <!-- Right: vacation widget -->
-          <div class="lg:col-span-1">
-            <UpcomingVacationsWidget />
+          <!-- This week -->
+          <div class="stat-card">
+            <div class="flex items-center gap-2 mb-1">
+              <ClockIcon class="size-3.5 text-slate-400" />
+              <p
+                class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+              >
+                This week
+              </p>
+            </div>
+            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">
+                --
+              </span>
+              <span v-else>{{ totalHoursThisWeek }}h</span>
+            </p>
+          </div>
+
+          <!-- This month -->
+          <div class="stat-card">
+            <div class="flex items-center gap-2 mb-1">
+              <ClockIcon class="size-3.5 text-slate-400" />
+              <p
+                class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+              >
+                This month
+              </p>
+            </div>
+            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">
+                --
+              </span>
+              <span v-else>{{ totalHoursThisMonth }}h</span>
+            </p>
           </div>
         </div>
+
+        <!-- Vacation widget -->
+        <UpcomingVacationsWidget />
       </div>
     </div>
   </AuthenticatedLayout>

@@ -56,9 +56,7 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: "/admin/vacations",
-    name: "admin-vacations",
-    component: () => import("../views/admin/VacationsView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    redirect: "/vacations",
   },
   {
     path: "/admin/employees",

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
+import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
 import {
   adminService,
   type AdminTimeLog,
@@ -167,7 +168,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
           <!-- Today's time log entries -->
           <div class="lg:col-span-2">
             <div class="flex items-center justify-between mb-3">
@@ -361,6 +362,9 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+
+        <!-- Personal vacation calendar -->
+        <UpcomingVacationsWidget />
       </div>
     </div>
   </AuthenticatedLayout>

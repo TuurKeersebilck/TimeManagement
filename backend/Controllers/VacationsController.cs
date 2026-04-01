@@ -13,9 +13,11 @@ namespace TimeManagementBackend.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class VacationsController(
     IVacationService service,
+    IAdminService adminService,
     UserManager<User> userManager) : ControllerBase
 {
     private readonly IVacationService _service = service;
+    private readonly IAdminService _adminService = adminService;
     private readonly UserManager<User> _userManager = userManager;
 
     private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
@@ -81,5 +83,25 @@ public class VacationsController(
 
         await _service.DeleteVacationDayAsync(user.Id, id, ct);
         return NoContent();
+    }
+
+    // ─── Team endpoints (all authenticated users) ─────────────────────────────
+
+    [HttpGet("team")]
+    public async Task<ActionResult<IEnumerable<AdminVacationDayDto>>> GetTeamVacationDays(
+        [FromQuery] int? vacationTypeId,
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        CancellationToken ct)
+    {
+        var days = await _adminService.GetAllVacationDaysAsync(null, vacationTypeId, year, month, ct);
+        return Ok(days);
+    }
+
+    [HttpGet("types")]
+    public async Task<ActionResult<IEnumerable<VacationTypeDto>>> GetVacationTypes(CancellationToken ct)
+    {
+        var types = await _adminService.GetVacationTypesAsync(ct);
+        return Ok(types);
     }
 }

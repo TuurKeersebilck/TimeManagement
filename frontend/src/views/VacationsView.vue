@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   vacationService,
   type VacationBalance,
   type VacationDay,
   type CreateVacationDayDto,
+  type TeamVacationDay,
 } from "../services/vacationService";
 import { holidayService, type PublicHoliday } from "../services/holidayService";
+import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
@@ -28,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import YearCalendarOverlay from "@/components/YearCalendarOverlay.vue";
 import {
   PencilIcon,
   Trash2Icon,
@@ -39,15 +42,16 @@ import {
   ChevronRightIcon,
   PlusIcon,
   Maximize2Icon,
-  XIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
+const { currentUser } = useAuth();
 
 const balances = ref<VacationBalance[]>([]);
 const vacationDays = ref<VacationDay[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
+const teamVacationDays = ref<TeamVacationDay[]>([]);
 const loading = ref(false);
 
 // ─── Holidays ─────────────────────────────────────────────────────────────────
@@ -61,74 +65,6 @@ const holidaysByDate = computed(() => {
 // ─── Year overlay ─────────────────────────────────────────────────────────────
 
 const yearOverlayOpen = ref(false);
-const overlayYear = ref(new Date().getFullYear());
-
-interface MiniCalMonth {
-  year: number;
-  month: number; // 0-based
-  label: string;
-  days: CalDay[];
-}
-
-const overlayMonths = computed<MiniCalMonth[]>(() => {
-  const months: MiniCalMonth[] = [];
-  for (let m = 0; m < 12; m++) {
-    const label = new Date(overlayYear.value, m, 1).toLocaleDateString(undefined, {
-      month: "long",
-    });
-    months.push({
-      year: overlayYear.value,
-      month: m,
-      label,
-      days: buildCalendarDays(overlayYear.value, m),
-    });
-  }
-  return months;
-});
-
-function buildCalendarDays(year: number, month: number): CalDay[] {
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const startDow = (firstDay.getDay() + 6) % 7;
-  const days: CalDay[] = [];
-
-  for (let i = startDow - 1; i >= 0; i--) {
-    const d = new Date(year, month, -i);
-    const dow = d.getDay();
-    days.push({
-      iso: toIso(d),
-      day: d.getDate(),
-      isCurrentMonth: false,
-      isToday: false,
-      isWeekend: dow === 0 || dow === 6,
-    });
-  }
-  for (let n = 1; n <= lastDay.getDate(); n++) {
-    const d = new Date(year, month, n);
-    const iso = toIso(d);
-    const dow = d.getDay();
-    days.push({
-      iso,
-      day: n,
-      isCurrentMonth: true,
-      isToday: iso === todayIso,
-      isWeekend: dow === 0 || dow === 6,
-    });
-  }
-  const remaining = 42 - days.length;
-  for (let n = 1; n <= remaining; n++) {
-    const d = new Date(year, month + 1, n);
-    const dow = d.getDay();
-    days.push({
-      iso: toIso(d),
-      day: d.getDate(),
-      isCurrentMonth: false,
-      isToday: false,
-      isWeekend: dow === 0 || dow === 6,
-    });
-  }
-  return days;
-}
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -227,6 +163,29 @@ const vacationsByDate = computed(() => {
   }
   return map;
 });
+
+const teamVacationsByDate = computed(() => {
+  const map = new Map<string, TeamVacationDay[]>();
+  for (const d of teamVacationDays.value) {
+    if (d.userId === currentUser.value?.id) continue;
+    if (!map.has(d.date)) map.set(d.date, []);
+    map.get(d.date)!.push(d);
+  }
+  return map;
+});
+
+const fetchTeamVacationDays = async () => {
+  try {
+    teamVacationDays.value = await vacationService.getTeamVacationDays({
+      year: currentMonth.value.getFullYear(),
+      month: currentMonth.value.getMonth() + 1,
+    });
+  } catch {
+    // non-critical, fail silently
+  }
+};
+
+watch(currentMonth, fetchTeamVacationDays);
 
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_VISIBLE = 2;
@@ -484,14 +443,17 @@ onMounted(async () => {
   loading.value = true;
   try {
     const year = new Date().getFullYear();
-    const [b, d, h] = await Promise.all([
+    const month = new Date().getMonth() + 1;
+    const [b, d, h, t] = await Promise.all([
       vacationService.getBalances(),
       vacationService.getVacationDays(),
       holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
+      vacationService.getTeamVacationDays({ year, month }).catch(() => [] as TeamVacationDay[]),
     ]);
     balances.value = b;
     vacationDays.value = d;
     holidays.value = h;
+    teamVacationDays.value = t;
   } catch {
     toast.error("Failed to load vacation data");
   } finally {
@@ -503,20 +465,20 @@ onMounted(async () => {
 <template>
   <AuthenticatedLayout>
     <div class="p-6 lg:p-8">
-      <div class="max-w-4xl mx-auto">
+      <div class="max-w-5xl mx-auto">
         <!-- Header -->
-        <div class="flex items-start justify-between mb-8">
-          <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Click any day on the calendar to plan or view vacation entries
-            </p>
-          </div>
+        <div class="mb-6">
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Vacations</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Plan your vacation and see when your team is off</p>
+        </div>
+
+        <div class="flex justify-end mb-6">
           <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
             <Maximize2Icon class="size-3.5" />
             Year view
           </Button>
         </div>
+        <div class="max-w-4xl">
 
         <!-- Balance cards -->
         <section class="mb-8">
@@ -667,7 +629,7 @@ onMounted(async () => {
                       {{ holidaysByDate.get(cell.iso)!.name }}
                     </div>
 
-                    <!-- Vacation chips -->
+                    <!-- Own vacation chips -->
                     <template v-if="vacationsByDate.has(cell.iso)">
                       <div
                         v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
@@ -686,6 +648,18 @@ onMounted(async () => {
                         class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
                       >
                         +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
+                      </div>
+                    </template>
+
+                    <!-- Teammates' chips -->
+                    <template v-if="teamVacationsByDate.has(cell.iso)">
+                      <div
+                        v-for="entry in teamVacationsByDate.get(cell.iso)!.slice(0, 2)"
+                        :key="`team-${entry.id}`"
+                        :style="{ borderLeftColor: entry.vacationTypeColor ?? '#6366f1' }"
+                        class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50"
+                      >
+                        {{ entry.employeeName.split(" ")[0] }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
                       </div>
                     </template>
                   </div>
@@ -778,6 +752,39 @@ onMounted(async () => {
                           <Trash2Icon class="size-3.5" />
                         </button>
                       </div>
+                    </div>
+                  </div>
+
+                  <!-- Teammates' entries (read-only) -->
+                  <div
+                    v-if="teamVacationsByDate.has(cell.iso)"
+                    class="divide-y divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800"
+                  >
+                    <div
+                      v-for="entry in teamVacationsByDate.get(cell.iso)"
+                      :key="`team-${entry.id}`"
+                      class="flex items-center gap-2.5 px-4 py-2"
+                    >
+                      <div
+                        class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
+                        :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+                      />
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                          {{ entry.employeeName }}
+                        </p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 truncate">
+                          {{ entry.vacationTypeName }}
+                        </p>
+                      </div>
+                      <span
+                        :class="[
+                          'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
+                          entry.amount === 1
+                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+                        ]"
+                      >{{ entry.amount === 1 ? "Full" : "½" }}</span>
                     </div>
                   </div>
 
@@ -954,129 +961,12 @@ onMounted(async () => {
             </div>
           </div>
         </section>
+        </div>
       </div>
     </div>
 
     <!-- Year overview overlay -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-opacity duration-200 ease-out"
-        leave-active-class="transition-opacity duration-150 ease-in"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="yearOverlayOpen"
-          class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col"
-          @click.self="yearOverlayOpen = false"
-        >
-          <div
-            class="flex flex-col flex-1 overflow-hidden bg-white dark:bg-slate-900 m-4 lg:m-8 rounded-2xl shadow-2xl"
-          >
-            <!-- Overlay header -->
-            <div
-              class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0"
-            >
-              <div class="flex items-center gap-3">
-                <Button variant="ghost" size="icon" class="size-8" @click="overlayYear--">
-                  <ChevronLeftIcon class="size-4" />
-                </Button>
-                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {{ overlayYear }}
-                </h2>
-                <Button variant="ghost" size="icon" class="size-8" @click="overlayYear++">
-                  <ChevronRightIcon class="size-4" />
-                </Button>
-              </div>
-              <div class="flex items-center gap-4">
-                <!-- Legend -->
-                <div
-                  class="hidden sm:flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400"
-                >
-                  <span class="flex items-center gap-1.5">
-                    <span
-                      class="w-3 h-3 rounded-sm bg-indigo-100 dark:bg-indigo-950 border-l-2 border-indigo-400 inline-block"
-                    />
-                    Vacation
-                  </span>
-                  <span class="flex items-center gap-1.5">
-                    <span
-                      class="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-950/40 border-l-2 border-amber-400 inline-block"
-                    />
-                    Holiday
-                  </span>
-                  <span class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block" />
-                    Today
-                  </span>
-                </div>
-                <Button variant="ghost" size="icon" class="size-8" @click="yearOverlayOpen = false">
-                  <XIcon class="size-4" />
-                </Button>
-              </div>
-            </div>
-
-            <!-- 12-month grid -->
-            <div class="flex-1 overflow-y-auto p-4 lg:p-6">
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                <div v-for="miniMonth in overlayMonths" :key="miniMonth.month" class="card p-3">
-                  <p
-                    class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 capitalize"
-                  >
-                    {{ miniMonth.label }}
-                  </p>
-                  <!-- Weekday headers -->
-                  <div class="grid grid-cols-7 mb-1">
-                    <div
-                      v-for="wd in ['M', 'T', 'W', 'T', 'F', 'S', 'S']"
-                      :key="wd"
-                      class="text-center text-[10px] font-semibold text-slate-400 dark:text-slate-500"
-                    >
-                      {{ wd }}
-                    </div>
-                  </div>
-                  <!-- Day cells -->
-                  <div class="grid grid-cols-7 gap-y-0.5">
-                    <div
-                      v-for="cell in miniMonth.days"
-                      :key="cell.iso"
-                      :class="[
-                        'relative text-[11px] h-6 flex items-center justify-center rounded',
-                        !cell.isCurrentMonth && 'opacity-20',
-                        cell.isToday && 'bg-indigo-600 text-white font-bold',
-                        !cell.isToday &&
-                          vacationsByDate.has(cell.iso) &&
-                          'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium',
-                        !cell.isToday &&
-                          holidaysByDate.has(cell.iso) &&
-                          !vacationsByDate.has(cell.iso) &&
-                          'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
-                        !cell.isToday &&
-                          !vacationsByDate.has(cell.iso) &&
-                          !holidaysByDate.has(cell.iso) &&
-                          cell.isWeekend &&
-                          'text-slate-400 dark:text-slate-600',
-                        !cell.isToday &&
-                          !vacationsByDate.has(cell.iso) &&
-                          !holidaysByDate.has(cell.iso) &&
-                          !cell.isWeekend &&
-                          cell.isCurrentMonth &&
-                          'text-slate-700 dark:text-slate-300',
-                      ]"
-                      :title="holidaysByDate.get(cell.iso)?.name"
-                    >
-                      {{ cell.day }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <YearCalendarOverlay v-model:open="yearOverlayOpen" :vacations-by-date="vacationsByDate" :team-vacations-by-date="teamVacationsByDate" />
 
     <!-- Edit dialog -->
     <Dialog v-model:open="editDialogVisible">
