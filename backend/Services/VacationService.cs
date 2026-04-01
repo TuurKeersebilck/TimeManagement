@@ -237,10 +237,11 @@ public class VacationService(AppDbContext db) : IVacationService
         };
     }
 
-    public async Task<IEnumerable<TeamVacationDayDto>> GetTeamVacationDaysAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<TeamVacationDayDto>> GetTeamVacationDaysAsync(int year, CancellationToken ct = default)
     {
         return await _db.VacationDays
             .AsNoTracking()
+            .Where(d => d.Date.Year == year)
             .OrderBy(d => d.Date)
             .Select(d => new TeamVacationDayDto
             {

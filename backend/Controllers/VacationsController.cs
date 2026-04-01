@@ -74,9 +74,9 @@ public class VacationsController(
     }
 
     [HttpGet("team")]
-    public async Task<ActionResult<IEnumerable<TeamVacationDayDto>>> GetTeamVacationDays(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<TeamVacationDayDto>>> GetTeamVacationDays([FromQuery] int? year, CancellationToken ct)
     {
-        var days = await _service.GetTeamVacationDaysAsync(ct);
+        var days = await _service.GetTeamVacationDaysAsync(year ?? DateTime.UtcNow.Year, ct);
         return Ok(days);
     }
 

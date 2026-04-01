@@ -74,5 +74,5 @@ export function useCalendar() {
     currentMonth.value = new Date(year, month, 1);
   };
 
-  return { monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth };
+  return { currentMonth, monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth };
 }

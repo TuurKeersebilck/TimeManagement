@@ -19,11 +19,14 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:open": [value: boolean];
   "month-click": [year: number, month: number];
+  "year-change": [year: number];
 }>();
 
 const close = () => emit("update:open", false);
 
 const overlayYear = ref(props.initialYear ?? new Date().getFullYear());
+
+watch(overlayYear, (year) => emit("year-change", year));
 
 // Reset to current year (or initialYear) whenever the overlay opens
 watch(

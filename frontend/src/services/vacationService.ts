@@ -79,8 +79,8 @@ export const vacationService = {
     return res.data;
   },
 
-  async getTeamVacationDays(): Promise<TeamVacationDay[]> {
-    const res = await apiClient.get<TeamVacationDay[]>("/vacations/team");
+  async getTeamVacationDays(year: number): Promise<TeamVacationDay[]> {
+    const res = await apiClient.get<TeamVacationDay[]>("/vacations/team", { params: { year } });
     return res.data;
   },
 };

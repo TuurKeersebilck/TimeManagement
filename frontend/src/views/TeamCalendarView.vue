@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { vacationService, type TeamVacationDay } from "../services/vacationService";
 import { holidayService, type PublicHoliday } from "../services/holidayService";
@@ -17,7 +17,6 @@ import {
 
 const toast = useAppToast();
 
-const teamDays = ref<TeamVacationDay[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
 const loading = ref(false);
 
@@ -25,6 +24,41 @@ const loading = ref(false);
 
 const { currentMonth, monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth } =
   useCalendar();
+
+// ─── Year-keyed vacation cache ────────────────────────────────────────────────
+
+const cache = ref(new Map<number, TeamVacationDay[]>());
+
+// All days across all cached years, used by both monthly calendar and overlay
+const teamDays = computed(() => {
+  const all: TeamVacationDay[] = [];
+  for (const days of cache.value.values()) all.push(...days);
+  return all;
+});
+
+const fetchingYears = new Set<number>();
+
+const fetchYear = async (year: number) => {
+  if (cache.value.has(year) || fetchingYears.has(year)) return;
+  fetchingYears.add(year);
+  try {
+    const days = await vacationService.getTeamVacationDays(year);
+    // Replace the map to trigger reactivity
+    const next = new Map(cache.value);
+    next.set(year, days);
+    cache.value = next;
+  } catch {
+    toast.error(`Failed to load team data for ${year}`);
+  } finally {
+    fetchingYears.delete(year);
+  }
+};
+
+// Fetch when the monthly calendar's year changes
+watch(
+  () => currentMonth.value.getFullYear(),
+  (year) => fetchYear(year)
+);
 
 // ─── Employee colour palette ──────────────────────────────────────────────────
 
@@ -126,15 +160,16 @@ const popoverDateLabel = computed(() => {
 
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
+const onOverlayYearChange = (year: number) => fetchYear(year);
+
 onMounted(async () => {
   loading.value = true;
   try {
     const year = new Date().getFullYear();
-    const [days, h] = await Promise.all([
-      vacationService.getTeamVacationDays(),
+    const [h] = await Promise.all([
       holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
+      fetchYear(year),
     ]);
-    teamDays.value = days;
     holidays.value = h;
   } catch {
     toast.error("Failed to load team calendar");
@@ -376,6 +411,7 @@ onMounted(async () => {
       :vacations-by-date="overlayVacationsByDate"
       :holidays-by-date="holidayNamesByDate"
       @month-click="jumpToMonth"
+      @year-change="onOverlayYearChange"
     />
   </AuthenticatedLayout>
 </template>
