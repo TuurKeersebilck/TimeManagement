@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -27,7 +28,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  PlusIcon,
   PencilIcon,
   Trash2Icon,
   CalendarIcon,
@@ -36,7 +36,7 @@ import {
   Loader2Icon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  XIcon,
+  PlusIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -75,6 +75,7 @@ interface CalDay {
   day: number;
   isCurrentMonth: boolean;
   isToday: boolean;
+  isWeekend: boolean;
 }
 
 const toIso = (d: Date) => {
@@ -97,17 +98,38 @@ const calendarDays = computed<CalDay[]>(() => {
 
   for (let i = startDow - 1; i >= 0; i--) {
     const d = new Date(year, month, -i);
-    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false });
+    const dow = d.getDay();
+    days.push({
+      iso: toIso(d),
+      day: d.getDate(),
+      isCurrentMonth: false,
+      isToday: false,
+      isWeekend: dow === 0 || dow === 6,
+    });
   }
   for (let n = 1; n <= lastDay.getDate(); n++) {
     const d = new Date(year, month, n);
     const iso = toIso(d);
-    days.push({ iso, day: n, isCurrentMonth: true, isToday: iso === todayIso });
+    const dow = d.getDay();
+    days.push({
+      iso,
+      day: n,
+      isCurrentMonth: true,
+      isToday: iso === todayIso,
+      isWeekend: dow === 0 || dow === 6,
+    });
   }
   const remaining = 42 - days.length;
   for (let n = 1; n <= remaining; n++) {
     const d = new Date(year, month + 1, n);
-    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false });
+    const dow = d.getDay();
+    days.push({
+      iso: toIso(d),
+      day: d.getDate(),
+      isCurrentMonth: false,
+      isToday: false,
+      isWeekend: dow === 0 || dow === 6,
+    });
   }
 
   return days;
@@ -122,120 +144,205 @@ const vacationsByDate = computed(() => {
   return map;
 });
 
-// ─── Selected day panel ───────────────────────────────────────────────────────
-
-const selectedIso = ref<string | null>(null);
-
-const selectedEntries = computed(() =>
-  selectedIso.value ? (vacationsByDate.value.get(selectedIso.value) ?? []) : []
-);
-
-const selectDay = (iso: string) => {
-  if (!vacationsByDate.value.has(iso)) {
-    selectedIso.value = null;
-    return;
-  }
-  selectedIso.value = selectedIso.value === iso ? null : iso;
-};
-
-const selectedLabel = computed(() => {
-  if (!selectedIso.value) return "";
-  return new Date(selectedIso.value).toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-});
-
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_VISIBLE = 2;
 
-// ─── Dialog ───────────────────────────────────────────────────────────────────
+// ─── Popover (inline create / view entries) ───────────────────────────────────
 
-const dialogVisible = ref(false);
-const saving = ref(false);
+const openPopoverIso = ref<string | null>(null);
+const popoverSaving = ref(false);
+
+const popoverForm = ref({
+  vacationTypeId: "",
+  startDate: "",
+  endDate: "",
+  amount: "1",
+  note: "",
+});
+
+// Working days count between start and end (inclusive, excl. weekends)
+const workingDaysInRange = computed(() => {
+  const { startDate, endDate } = popoverForm.value;
+  if (!startDate || !endDate) return 0;
+  const start = new Date(startDate + "T00:00:00");
+  const end = new Date(endDate + "T00:00:00");
+  if (end < start) return 0;
+  let count = 0;
+  const d = new Date(start);
+  while (d <= end) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+});
+
+const isRangeMode = computed(
+  () => popoverForm.value.startDate !== popoverForm.value.endDate && !!popoverForm.value.endDate
+);
+
+// Live balance remaining after the planned entry/range
+const popoverLiveRemaining = computed(() => {
+  if (!popoverForm.value.vacationTypeId) return null;
+  const typeId = parseInt(popoverForm.value.vacationTypeId);
+  const balance = balances.value.find((b) => b.vacationTypeId === typeId);
+  if (!balance) return null;
+  const cost = workingDaysInRange.value * parseFloat(popoverForm.value.amount || "1");
+  return balance.remainingDays - cost;
+});
+
+const canPopoverSubmit = computed(() => {
+  if (!popoverForm.value.vacationTypeId || !popoverForm.value.startDate) return false;
+  if (popoverLiveRemaining.value === null || popoverLiveRemaining.value < 0) return false;
+  if (workingDaysInRange.value === 0) return false;
+  return true;
+});
+
+// Which ISOs are in the current popover range (for calendar highlight)
+const highlightedRange = computed(() => {
+  const { startDate, endDate } = popoverForm.value;
+  if (!startDate || !endDate || !openPopoverIso.value) return new Set<string>();
+  const s = startDate < endDate ? startDate : endDate;
+  const e = startDate < endDate ? endDate : startDate;
+  const set = new Set<string>();
+  const d = new Date(s + "T00:00:00");
+  const end = new Date(e + "T00:00:00");
+  while (d <= end) {
+    set.add(toIso(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return set;
+});
+
+const openPopover = (iso: string) => {
+  openPopoverIso.value = iso;
+  popoverForm.value = {
+    vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
+    startDate: iso,
+    endDate: iso,
+    amount: "1",
+    note: "",
+  };
+};
+
+const closePopover = () => {
+  openPopoverIso.value = null;
+};
+
+const savePopover = async () => {
+  if (!canPopoverSubmit.value) return;
+  popoverSaving.value = true;
+  try {
+    const { vacationTypeId, startDate, endDate, amount, note } = popoverForm.value;
+
+    if (startDate === endDate) {
+      // Single day
+      const payload: CreateVacationDayDto = {
+        vacationTypeId: parseInt(vacationTypeId),
+        date: startDate,
+        amount: parseFloat(amount),
+        note: note.trim() || undefined,
+      };
+      const created = await vacationService.create(payload);
+      vacationDays.value.unshift(created);
+      toast.success("Vacation day planned");
+    } else {
+      // Range
+      const result = await vacationService.createRange({
+        vacationTypeId: parseInt(vacationTypeId),
+        startDate,
+        endDate,
+        amount: parseFloat(amount),
+        note: note.trim() || undefined,
+      });
+      vacationDays.value.unshift(...result.created);
+      const skipped = result.skippedWeekends + result.skippedExisting;
+      const msg =
+        skipped > 0
+          ? `${result.created.length} day(s) planned (${skipped} skipped)`
+          : `${result.created.length} day(s) planned`;
+      toast.success(msg);
+    }
+
+    balances.value = await vacationService.getBalances();
+    closePopover();
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      "Failed to plan vacation";
+    toast.error(msg);
+  } finally {
+    popoverSaving.value = false;
+  }
+};
+
+// ─── Edit dialog ──────────────────────────────────────────────────────────────
+
+const editDialogVisible = ref(false);
+const editSaving = ref(false);
 const editingDay = ref<VacationDay | null>(null);
 
-const form = ref<{
-  vacationTypeId: string;
-  date: string;
-  amount: string;
-  note: string;
-}>({
+const editForm = ref({
   vacationTypeId: "",
   date: "",
   amount: "1",
   note: "",
 });
 
-const dialogTitle = computed(() => (editingDay.value ? "Edit vacation day" : "Plan vacation day"));
-
-const liveRemaining = computed(() => {
-  if (!form.value.vacationTypeId) return null;
-  const typeId = parseInt(form.value.vacationTypeId);
+const editLiveRemaining = computed(() => {
+  if (!editForm.value.vacationTypeId || !editingDay.value) return null;
+  const typeId = parseInt(editForm.value.vacationTypeId);
   const balance = balances.value.find((b) => b.vacationTypeId === typeId);
   if (!balance) return null;
   let base = balance.remainingDays;
-  if (editingDay.value && editingDay.value.vacationTypeId === typeId) {
+  if (editingDay.value.vacationTypeId === typeId) {
     const origYear = new Date(editingDay.value.date).getUTCFullYear();
     if (origYear === new Date().getUTCFullYear()) base += editingDay.value.amount;
   }
-  return base - parseFloat(form.value.amount);
+  return base - parseFloat(editForm.value.amount);
 });
 
-const canSubmit = computed(() => {
-  if (!form.value.vacationTypeId || !form.value.date) return false;
-  if (liveRemaining.value === null) return false;
-  return liveRemaining.value >= 0;
+const canEditSubmit = computed(() => {
+  if (!editForm.value.vacationTypeId || !editForm.value.date) return false;
+  if (editLiveRemaining.value === null || editLiveRemaining.value < 0) return false;
+  return true;
 });
-
-const openCreate = () => {
-  editingDay.value = null;
-  form.value = { vacationTypeId: "", date: selectedIso.value ?? "", amount: "1", note: "" };
-  dialogVisible.value = true;
-};
 
 const openEdit = (day: VacationDay) => {
   editingDay.value = day;
-  form.value = {
+  editForm.value = {
     vacationTypeId: String(day.vacationTypeId),
     date: day.date,
     amount: String(day.amount),
     note: day.note ?? "",
   };
-  dialogVisible.value = true;
+  closePopover();
+  editDialogVisible.value = true;
 };
 
-const save = async () => {
-  if (!canSubmit.value || !form.value.date || !form.value.vacationTypeId) return;
-  saving.value = true;
-  const payload: CreateVacationDayDto = {
-    vacationTypeId: parseInt(form.value.vacationTypeId),
-    date: form.value.date,
-    amount: parseFloat(form.value.amount),
-    note: form.value.note.trim() || undefined,
-  };
+const saveEdit = async () => {
+  if (!canEditSubmit.value || !editingDay.value) return;
+  editSaving.value = true;
   try {
-    if (editingDay.value) {
-      const updated = await vacationService.update(editingDay.value.id, payload);
-      const idx = vacationDays.value.findIndex((d) => d.id === editingDay.value!.id);
-      if (idx !== -1) vacationDays.value[idx] = updated;
-      toast.success("Vacation day updated");
-    } else {
-      const created = await vacationService.create(payload);
-      vacationDays.value.unshift(created);
-      toast.success("Vacation day added");
-    }
+    const payload: CreateVacationDayDto = {
+      vacationTypeId: parseInt(editForm.value.vacationTypeId),
+      date: editForm.value.date,
+      amount: parseFloat(editForm.value.amount),
+      note: editForm.value.note.trim() || undefined,
+    };
+    const updated = await vacationService.update(editingDay.value.id, payload);
+    const idx = vacationDays.value.findIndex((d) => d.id === editingDay.value!.id);
+    if (idx !== -1) vacationDays.value[idx] = updated;
     balances.value = await vacationService.getBalances();
-    dialogVisible.value = false;
+    toast.success("Vacation day updated");
+    editDialogVisible.value = false;
   } catch (err: unknown) {
     const msg =
       (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      "Failed to save vacation day";
+      "Failed to update vacation day";
     toast.error(msg);
   } finally {
-    saving.value = false;
+    editSaving.value = false;
   }
 };
 
@@ -251,9 +358,6 @@ const deleteDay = (day: VacationDay) => {
       try {
         await vacationService.delete(day.id);
         vacationDays.value = vacationDays.value.filter((d) => d.id !== day.id);
-        if (selectedIso.value && !vacationsByDate.value.has(selectedIso.value)) {
-          selectedIso.value = null;
-        }
         balances.value = await vacationService.getBalances();
         toast.success("Vacation day removed");
       } catch {
@@ -268,10 +372,18 @@ const deleteDay = (day: VacationDay) => {
 const displayDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
+const popoverDateLabel = computed(() => {
+  if (!openPopoverIso.value) return "";
+  return new Date(openPopoverIso.value + "T00:00:00").toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+});
+
 const balanceBarWidth = (balance: VacationBalance) => {
   if (balance.yearlyBalance === 0) return "0%";
-  const pct = Math.min((balance.usedDays / balance.yearlyBalance) * 100, 100);
-  return `${pct}%`;
+  return `${Math.min((balance.usedDays / balance.yearlyBalance) * 100, 100)}%`;
 };
 
 const balanceBarColor = (balance: VacationBalance) => {
@@ -305,21 +417,11 @@ onMounted(async () => {
     <div class="p-6 lg:p-8">
       <div class="max-w-4xl mx-auto">
         <!-- Header -->
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Plan and track your vacation days
-            </p>
-          </div>
-          <Button
-            @click="openCreate"
-            :disabled="balances.length === 0"
-            :title="balances.length === 0 ? 'No vacation types assigned yet' : undefined"
-          >
-            <PlusIcon class="size-4" />
-            Plan a day
-          </Button>
+        <div class="mb-8">
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Click any day on the calendar to plan or view vacation entries
+          </p>
         </div>
 
         <!-- Balance cards -->
@@ -358,10 +460,7 @@ onMounted(async () => {
               </div>
               <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
                 <div
-                  :class="[
-                    'h-1.5 rounded-full transition-all duration-300',
-                    balanceBarColor(balance),
-                  ]"
+                  :class="['h-1.5 rounded-full transition-all duration-300', balanceBarColor(balance)]"
                   :style="{ width: balanceBarWidth(balance) }"
                 />
               </div>
@@ -416,132 +515,240 @@ onMounted(async () => {
 
             <!-- Day cells -->
             <div class="grid grid-cols-7">
-              <div
+              <Popover
                 v-for="cell in calendarDays"
                 :key="cell.iso"
-                :class="[
-                  'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors',
-                  !cell.isCurrentMonth && 'bg-slate-50/60 dark:bg-slate-900/40',
-                  cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
-                  selectedIso === cell.iso
-                    ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500'
-                    : '',
-                  vacationsByDate.has(cell.iso)
-                    ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                    : 'cursor-default',
-                ]"
-                @click="selectDay(cell.iso)"
+                :open="openPopoverIso === cell.iso"
+                @update:open="(v) => (v ? openPopover(cell.iso) : closePopover())"
               >
-                <!-- Day number -->
-                <div
-                  :class="[
-                    'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
-                    cell.isToday
-                      ? 'bg-indigo-600 text-white'
-                      : cell.isCurrentMonth
-                        ? 'text-slate-700 dark:text-slate-200'
-                        : 'text-slate-300 dark:text-slate-600',
-                  ]"
-                >
-                  {{ cell.day }}
-                </div>
+                <PopoverTrigger as-child>
+                  <div
+                    :class="[
+                      'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors select-none',
+                      !cell.isCurrentMonth && 'opacity-40',
+                      cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
+                      cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
+                      openPopoverIso === cell.iso
+                        ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500'
+                        : '',
+                      highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso
+                        ? 'bg-indigo-50 dark:bg-indigo-950/30'
+                        : '',
+                      !cell.isWeekend && balances.length > 0
+                        ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        : 'cursor-default',
+                    ]"
+                    @click="!cell.isWeekend && balances.length > 0 ? openPopover(cell.iso) : undefined"
+                  >
+                    <!-- Day number -->
+                    <div
+                      :class="[
+                        'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
+                        cell.isToday
+                          ? 'bg-indigo-600 text-white'
+                          : cell.isWeekend
+                            ? 'text-slate-400 dark:text-slate-600'
+                            : cell.isCurrentMonth
+                              ? 'text-slate-700 dark:text-slate-200'
+                              : 'text-slate-300 dark:text-slate-600',
+                      ]"
+                    >
+                      {{ cell.day }}
+                    </div>
 
-                <!-- Vacation chips -->
-                <template v-if="vacationsByDate.has(cell.iso)">
-                  <div
-                    v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
-                    :key="entry.id"
-                    :style="{
-                      backgroundColor: (entry.vacationTypeColor ?? '#6366f1') + '28',
-                      borderLeftColor: entry.vacationTypeColor ?? '#6366f1',
-                    }"
-                    class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
-                  >
-                    {{ entry.vacationTypeName
-                    }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
+                    <!-- Vacation chips -->
+                    <template v-if="vacationsByDate.has(cell.iso)">
+                      <div
+                        v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
+                        :key="entry.id"
+                        :style="{
+                          backgroundColor: (entry.vacationTypeColor ?? '#6366f1') + '28',
+                          borderLeftColor: entry.vacationTypeColor ?? '#6366f1',
+                        }"
+                        class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
+                      >
+                        {{ entry.vacationTypeName
+                        }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
+                      </div>
+                      <div
+                        v-if="vacationsByDate.get(cell.iso)!.length > MAX_VISIBLE"
+                        class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
+                      >
+                        +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
+                      </div>
+                    </template>
                   </div>
+                </PopoverTrigger>
+
+                <PopoverContent
+                  class="w-72 p-0 shadow-lg"
+                  side="bottom"
+                  :side-offset="4"
+                  :collision-padding="12"
+                  @interact-outside="closePopover"
+                >
+                  <!-- Popover header -->
                   <div
-                    v-if="vacationsByDate.get(cell.iso)!.length > MAX_VISIBLE"
-                    class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
+                    class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800"
                   >
-                    +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
+                    <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
+                      {{ popoverDateLabel }}
+                    </span>
+                    <button
+                      class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      @click="closePopover"
+                    >
+                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                </template>
-              </div>
+
+                  <!-- Existing entries -->
+                  <div
+                    v-if="vacationsByDate.has(cell.iso)"
+                    class="divide-y divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800"
+                  >
+                    <div
+                      v-for="entry in vacationsByDate.get(cell.iso)"
+                      :key="entry.id"
+                      class="flex items-center gap-2.5 px-4 py-2.5"
+                    >
+                      <div
+                        class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
+                        :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+                      />
+                      <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                          {{ entry.vacationTypeName }}
+                        </p>
+                        <p v-if="entry.note" class="text-xs text-slate-400 dark:text-slate-500 truncate">
+                          {{ entry.note }}
+                        </p>
+                      </div>
+                      <span
+                        :class="[
+                          'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
+                          entry.amount === 1
+                            ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
+                        ]"
+                      >
+                        {{ entry.amount === 1 ? "Full" : "½" }}
+                      </span>
+                      <div class="flex items-center gap-0.5 shrink-0">
+                        <button
+                          class="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          title="Edit"
+                          @click="openEdit(entry)"
+                        >
+                          <PencilIcon class="size-3.5" />
+                        </button>
+                        <button
+                          class="p-1 rounded text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                          title="Delete"
+                          @click="deleteDay(entry)"
+                        >
+                          <Trash2Icon class="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Create form -->
+                  <div class="p-4 space-y-3">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      Plan vacation
+                    </p>
+
+                    <!-- Vacation type -->
+                    <div class="space-y-1">
+                      <Label class="text-xs">Type</Label>
+                      <Select v-model="popoverForm.vacationTypeId">
+                        <SelectTrigger class="h-8 text-sm">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="balance in balances"
+                            :key="balance.vacationTypeId"
+                            :value="String(balance.vacationTypeId)"
+                          >
+                            {{ balance.vacationTypeName }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <!-- Date range -->
+                    <div class="grid grid-cols-2 gap-2">
+                      <div class="space-y-1">
+                        <Label class="text-xs">From</Label>
+                        <Input v-model="popoverForm.startDate" type="date" class="h-8 text-sm" />
+                      </div>
+                      <div class="space-y-1">
+                        <Label class="text-xs">To</Label>
+                        <Input v-model="popoverForm.endDate" type="date" class="h-8 text-sm" />
+                      </div>
+                    </div>
+
+                    <!-- Duration -->
+                    <div class="space-y-1">
+                      <Label class="text-xs">Duration</Label>
+                      <Select v-model="popoverForm.amount">
+                        <SelectTrigger class="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Full day</SelectItem>
+                          <SelectItem value="0.5">Half day</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <!-- Range summary -->
+                    <div
+                      v-if="isRangeMode"
+                      class="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2"
+                    >
+                      {{ workingDaysInRange }} working day{{ workingDaysInRange !== 1 ? "s" : "" }}
+                      selected
+                      <span class="text-slate-400 dark:text-slate-500">(weekends skipped)</span>
+                    </div>
+
+                    <!-- Balance feedback -->
+                    <div
+                      v-if="popoverForm.vacationTypeId && popoverLiveRemaining !== null"
+                      :class="[
+                        'rounded-lg px-3 py-2 text-xs flex items-center gap-1.5',
+                        popoverLiveRemaining < 0
+                          ? 'bg-destructive/10 text-destructive'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+                      ]"
+                    >
+                      <XCircleIcon v-if="popoverLiveRemaining < 0" class="size-3.5 shrink-0" />
+                      <CheckCircleIcon v-else class="size-3.5 shrink-0" />
+                      <span v-if="popoverLiveRemaining < 0">
+                        Exceeds balance by {{ Math.abs(popoverLiveRemaining) }} day(s)
+                      </span>
+                      <span v-else>{{ popoverLiveRemaining }} day(s) remaining after this</span>
+                    </div>
+
+                    <Button
+                      class="w-full"
+                      size="sm"
+                      :disabled="popoverSaving || !canPopoverSubmit"
+                      @click="savePopover"
+                    >
+                      <Loader2Icon v-if="popoverSaving" class="size-3.5 animate-spin" />
+                      <PlusIcon v-else class="size-3.5" />
+                      {{ isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
-
-          <!-- Day detail panel -->
-          <Transition
-            enter-active-class="transition-all duration-200 ease-out"
-            leave-active-class="transition-all duration-150 ease-in"
-            enter-from-class="opacity-0 -translate-y-1"
-            enter-to-class="opacity-100 translate-y-0"
-            leave-from-class="opacity-100"
-            leave-to-class="opacity-0"
-          >
-            <div v-if="selectedIso && selectedEntries.length" class="mt-3 card p-4">
-              <div class="flex items-center justify-between mb-3">
-                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 capitalize">
-                  {{ selectedLabel }}
-                </h3>
-                <div class="flex items-center gap-1">
-                  <Button variant="outline" size="sm" @click="openCreate">
-                    <PlusIcon class="size-3.5" />
-                    Add
-                  </Button>
-                  <Button variant="ghost" size="icon" class="size-7" @click="selectedIso = null">
-                    <XIcon class="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-              <div class="divide-y divide-slate-100 dark:divide-slate-800">
-                <div
-                  v-for="entry in selectedEntries"
-                  :key="entry.id"
-                  class="flex items-center gap-3 py-2.5"
-                >
-                  <div
-                    class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
-                    :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
-                  />
-                  <span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {{ entry.vacationTypeName }}
-                    <span v-if="entry.note" class="font-normal text-slate-400 dark:text-slate-500">
-                      · {{ entry.note }}</span
-                    >
-                  </span>
-                  <span
-                    :class="[
-                      'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
-                      entry.amount === 1
-                        ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
-                        : 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
-                    ]"
-                    >{{ entry.amount === 1 ? "Full day" : "Half day" }}</span
-                  >
-                  <div class="flex items-center gap-1 shrink-0">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                      @click="openEdit(entry)"
-                    >
-                      <PencilIcon class="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-                      @click="deleteDay(entry)"
-                    >
-                      <Trash2Icon class="size-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Transition>
         </section>
 
         <!-- Planned days list -->
@@ -622,17 +829,17 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Plan / Edit dialog -->
-    <Dialog v-model:open="dialogVisible">
+    <!-- Edit dialog -->
+    <Dialog v-model:open="editDialogVisible">
       <DialogContent class="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{{ dialogTitle }}</DialogTitle>
+          <DialogTitle>Edit vacation day</DialogTitle>
         </DialogHeader>
 
         <div class="flex flex-col gap-4 py-2">
           <div class="space-y-1.5">
             <Label>Vacation type <span class="text-destructive">*</span></Label>
-            <Select v-model="form.vacationTypeId">
+            <Select v-model="editForm.vacationTypeId">
               <SelectTrigger class="w-full">
                 <SelectValue placeholder="Select a type" />
               </SelectTrigger>
@@ -650,12 +857,12 @@ onMounted(async () => {
 
           <div class="space-y-1.5">
             <Label>Date <span class="text-destructive">*</span></Label>
-            <Input v-model="form.date" type="date" />
+            <Input v-model="editForm.date" type="date" />
           </div>
 
           <div class="space-y-1.5">
             <Label>Duration <span class="text-destructive">*</span></Label>
-            <Select v-model="form.amount">
+            <Select v-model="editForm.amount">
               <SelectTrigger class="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -668,32 +875,37 @@ onMounted(async () => {
 
           <div class="space-y-1.5">
             <Label>Note</Label>
-            <Input v-model="form.note" type="text" placeholder="Optional note" maxlength="500" />
+            <Input
+              v-model="editForm.note"
+              type="text"
+              placeholder="Optional note"
+              maxlength="500"
+            />
           </div>
 
           <div
-            v-if="form.vacationTypeId && liveRemaining !== null"
+            v-if="editForm.vacationTypeId && editLiveRemaining !== null"
             :class="[
               'rounded-lg px-3 py-2 text-sm flex items-center gap-2',
-              liveRemaining < 0
+              editLiveRemaining < 0
                 ? 'bg-destructive/10 text-destructive'
                 : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
             ]"
           >
-            <XCircleIcon v-if="liveRemaining < 0" class="size-3.5 shrink-0" />
+            <XCircleIcon v-if="editLiveRemaining < 0" class="size-3.5 shrink-0" />
             <CheckCircleIcon v-else class="size-3.5 shrink-0" />
-            <span v-if="liveRemaining < 0"
-              >Exceeds balance — {{ Math.abs(liveRemaining) }} day(s) short</span
-            >
-            <span v-else>{{ liveRemaining }} day(s) remaining after this entry</span>
+            <span v-if="editLiveRemaining < 0">
+              Exceeds balance — {{ Math.abs(editLiveRemaining) }} day(s) short
+            </span>
+            <span v-else>{{ editLiveRemaining }} day(s) remaining after this entry</span>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="dialogVisible = false">Cancel</Button>
-          <Button @click="save" :disabled="saving || !canSubmit">
-            <Loader2Icon v-if="saving" class="size-4 animate-spin" />
-            {{ editingDay ? "Save changes" : "Plan day" }}
+          <Button variant="outline" @click="editDialogVisible = false">Cancel</Button>
+          <Button @click="saveEdit" :disabled="editSaving || !canEditSubmit">
+            <Loader2Icon v-if="editSaving" class="size-4 animate-spin" />
+            Save changes
           </Button>
         </DialogFooter>
       </DialogContent>
