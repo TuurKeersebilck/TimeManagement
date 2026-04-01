@@ -63,6 +63,16 @@ public class VacationsController(
         return Ok(updated);
     }
 
+    [HttpPost("range")]
+    public async Task<ActionResult<VacationRangeResultDto>> CreateVacationRange([FromBody] CreateVacationRangeDto dto, CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var result = await _service.CreateVacationRangeAsync(user.Id, dto, ct);
+        return Ok(result);
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteVacationDay(int id, CancellationToken ct)
     {

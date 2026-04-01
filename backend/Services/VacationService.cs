@@ -150,6 +150,93 @@ public class VacationService(AppDbContext db) : IVacationService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task<VacationRangeResultDto> CreateVacationRangeAsync(string userId, CreateVacationRangeDto dto, CancellationToken ct = default)
+    {
+        ValidateAmount(dto.Amount);
+
+        if (dto.EndDate < dto.StartDate)
+            throw new ArgumentException("End date must be on or after start date.");
+
+        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+
+        var balance = await _db.EmployeeVacationBalances
+            .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
+            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
+
+        // Enumerate all calendar days in the range
+        var allDays = new List<DateOnly>();
+        for (var d = dto.StartDate; d <= dto.EndDate; d = d.AddDays(1))
+            allDays.Add(d);
+
+        var workingDays = allDays
+            .Where(d => d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday)
+            .ToList();
+
+        int skippedWeekends = allDays.Count - workingDays.Count;
+
+        // Filter out dates that already have an entry for this type
+        var existingDates = await _db.VacationDays
+            .Where(d => d.UserId == userId && d.VacationTypeId == dto.VacationTypeId
+                        && d.Date >= dto.StartDate && d.Date <= dto.EndDate)
+            .Select(d => d.Date)
+            .ToListAsync(ct);
+
+        var newDays = workingDays.Where(d => !existingDates.Contains(d)).ToList();
+        int skippedExisting = workingDays.Count - newDays.Count;
+
+        if (newDays.Count == 0)
+            return new VacationRangeResultDto
+            {
+                Created = [],
+                SkippedWeekends = skippedWeekends,
+                SkippedExisting = skippedExisting,
+            };
+
+        // Validate balance (only count days in the current year)
+        var currentYear = DateTime.UtcNow.Year;
+        var alreadyUsed = await _db.VacationDays
+            .Where(d => d.UserId == userId && d.VacationTypeId == dto.VacationTypeId && d.Date.Year == currentYear)
+            .SumAsync(d => d.Amount, ct);
+
+        decimal totalNewAmount = newDays.Count(d => d.Year == currentYear) * dto.Amount;
+
+        if (alreadyUsed + totalNewAmount > balance.YearlyBalance)
+            throw new InsufficientVacationBalanceException(
+                $"Insufficient balance. Remaining: {balance.YearlyBalance - alreadyUsed} day(s), needed: {totalNewAmount}.");
+
+        var entities = newDays.Select(d => new VacationDay
+        {
+            UserId = userId,
+            VacationTypeId = dto.VacationTypeId,
+            Date = d,
+            Amount = dto.Amount,
+            Note = dto.Note?.Trim(),
+        }).ToList();
+
+        _db.VacationDays.AddRange(entities);
+        await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        var type = await _db.VacationTypes.FindAsync([dto.VacationTypeId], ct)
+            ?? throw new ResourceNotFoundException("Vacation type not found.");
+
+        return new VacationRangeResultDto
+        {
+            Created = entities.Select(e => new VacationDayDto
+            {
+                Id = e.Id,
+                VacationTypeId = e.VacationTypeId,
+                VacationTypeName = type.Name,
+                VacationTypeColor = type.Color,
+                Date = e.Date,
+                Amount = e.Amount,
+                Note = e.Note,
+            }).ToList(),
+            SkippedWeekends = skippedWeekends,
+            SkippedExisting = skippedExisting,
+        };
+    }
+
     private static void ValidateAmount(decimal amount)
     {
         if (amount != 0.5m && amount != 1.0m)

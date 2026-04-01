@@ -28,3 +28,19 @@ public class CreateVacationDayDto
     public decimal Amount { get; set; }
     public string? Note { get; set; }
 }
+
+public class CreateVacationRangeDto
+{
+    public int VacationTypeId { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public decimal Amount { get; set; }
+    public string? Note { get; set; }
+}
+
+public class VacationRangeResultDto
+{
+    public IEnumerable<VacationDayDto> Created { get; set; } = [];
+    public int SkippedWeekends { get; set; }
+    public int SkippedExisting { get; set; }
+}
