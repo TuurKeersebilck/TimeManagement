@@ -95,19 +95,37 @@ function buildCalendarDays(year: number, month: number): CalDay[] {
   for (let i = startDow - 1; i >= 0; i--) {
     const d = new Date(year, month, -i);
     const dow = d.getDay();
-    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false, isWeekend: dow === 0 || dow === 6 });
+    days.push({
+      iso: toIso(d),
+      day: d.getDate(),
+      isCurrentMonth: false,
+      isToday: false,
+      isWeekend: dow === 0 || dow === 6,
+    });
   }
   for (let n = 1; n <= lastDay.getDate(); n++) {
     const d = new Date(year, month, n);
     const iso = toIso(d);
     const dow = d.getDay();
-    days.push({ iso, day: n, isCurrentMonth: true, isToday: iso === todayIso, isWeekend: dow === 0 || dow === 6 });
+    days.push({
+      iso,
+      day: n,
+      isCurrentMonth: true,
+      isToday: iso === todayIso,
+      isWeekend: dow === 0 || dow === 6,
+    });
   }
   const remaining = 42 - days.length;
   for (let n = 1; n <= remaining; n++) {
     const d = new Date(year, month + 1, n);
     const dow = d.getDay();
-    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false, isWeekend: dow === 0 || dow === 6 });
+    days.push({
+      iso: toIso(d),
+      day: d.getDate(),
+      isCurrentMonth: false,
+      isToday: false,
+      isWeekend: dow === 0 || dow === 6,
+    });
   }
   return days;
 }
@@ -536,7 +554,10 @@ onMounted(async () => {
               </div>
               <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
                 <div
-                  :class="['h-1.5 rounded-full transition-all duration-300', balanceBarColor(balance)]"
+                  :class="[
+                    'h-1.5 rounded-full transition-all duration-300',
+                    balanceBarColor(balance),
+                  ]"
                   :style="{ width: balanceBarWidth(balance) }"
                 />
               </div>
@@ -670,23 +691,27 @@ onMounted(async () => {
                   </div>
                 </PopoverTrigger>
 
-                <PopoverContent
-                  class="w-72 p-0 shadow-lg"
-                  side="bottom"
-                  :collision-padding="12"
-                >
+                <PopoverContent class="w-72 p-0 shadow-lg" side="bottom" :collision-padding="12">
                   <!-- Popover header -->
                   <div
                     class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800"
                   >
-                    <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
+                    <span
+                      class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize"
+                    >
                       {{ popoverDateLabel }}
                     </span>
                     <button
                       class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                       @click="closePopover"
                     >
-                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg
+                        class="size-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
                         <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
                     </button>
@@ -720,7 +745,10 @@ onMounted(async () => {
                         <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                           {{ entry.vacationTypeName }}
                         </p>
-                        <p v-if="entry.note" class="text-xs text-slate-400 dark:text-slate-500 truncate">
+                        <p
+                          v-if="entry.note"
+                          class="text-xs text-slate-400 dark:text-slate-500 truncate"
+                        >
                           {{ entry.note }}
                         </p>
                       </div>
@@ -755,7 +783,9 @@ onMounted(async () => {
 
                   <!-- Create form -->
                   <div class="p-4 space-y-3">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    <p
+                      class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+                    >
                       Plan vacation
                     </p>
 
@@ -942,9 +972,13 @@ onMounted(async () => {
           class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col"
           @click.self="yearOverlayOpen = false"
         >
-          <div class="flex flex-col flex-1 overflow-hidden bg-white dark:bg-slate-900 m-4 lg:m-8 rounded-2xl shadow-2xl">
+          <div
+            class="flex flex-col flex-1 overflow-hidden bg-white dark:bg-slate-900 m-4 lg:m-8 rounded-2xl shadow-2xl"
+          >
             <!-- Overlay header -->
-            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+            <div
+              class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0"
+            >
               <div class="flex items-center gap-3">
                 <Button variant="ghost" size="icon" class="size-8" @click="overlayYear--">
                   <ChevronLeftIcon class="size-4" />
@@ -958,13 +992,19 @@ onMounted(async () => {
               </div>
               <div class="flex items-center gap-4">
                 <!-- Legend -->
-                <div class="hidden sm:flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                <div
+                  class="hidden sm:flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400"
+                >
                   <span class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-sm bg-indigo-100 dark:bg-indigo-950 border-l-2 border-indigo-400 inline-block" />
+                    <span
+                      class="w-3 h-3 rounded-sm bg-indigo-100 dark:bg-indigo-950 border-l-2 border-indigo-400 inline-block"
+                    />
                     Vacation
                   </span>
                   <span class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-950/40 border-l-2 border-amber-400 inline-block" />
+                    <span
+                      class="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-950/40 border-l-2 border-amber-400 inline-block"
+                    />
                     Holiday
                   </span>
                   <span class="flex items-center gap-1.5">
@@ -981,18 +1021,16 @@ onMounted(async () => {
             <!-- 12-month grid -->
             <div class="flex-1 overflow-y-auto p-4 lg:p-6">
               <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                <div
-                  v-for="miniMonth in overlayMonths"
-                  :key="miniMonth.month"
-                  class="card p-3"
-                >
-                  <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 capitalize">
+                <div v-for="miniMonth in overlayMonths" :key="miniMonth.month" class="card p-3">
+                  <p
+                    class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 capitalize"
+                  >
                     {{ miniMonth.label }}
                   </p>
                   <!-- Weekday headers -->
                   <div class="grid grid-cols-7 mb-1">
                     <div
-                      v-for="wd in ['M','T','W','T','F','S','S']"
+                      v-for="wd in ['M', 'T', 'W', 'T', 'F', 'S', 'S']"
                       :key="wd"
                       class="text-center text-[10px] font-semibold text-slate-400 dark:text-slate-500"
                     >
@@ -1008,10 +1046,24 @@ onMounted(async () => {
                         'relative text-[11px] h-6 flex items-center justify-center rounded',
                         !cell.isCurrentMonth && 'opacity-20',
                         cell.isToday && 'bg-indigo-600 text-white font-bold',
-                        !cell.isToday && vacationsByDate.has(cell.iso) && 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium',
-                        !cell.isToday && holidaysByDate.has(cell.iso) && !vacationsByDate.has(cell.iso) && 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
-                        !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && cell.isWeekend && 'text-slate-400 dark:text-slate-600',
-                        !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && !cell.isWeekend && cell.isCurrentMonth && 'text-slate-700 dark:text-slate-300',
+                        !cell.isToday &&
+                          vacationsByDate.has(cell.iso) &&
+                          'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium',
+                        !cell.isToday &&
+                          holidaysByDate.has(cell.iso) &&
+                          !vacationsByDate.has(cell.iso) &&
+                          'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+                        !cell.isToday &&
+                          !vacationsByDate.has(cell.iso) &&
+                          !holidaysByDate.has(cell.iso) &&
+                          cell.isWeekend &&
+                          'text-slate-400 dark:text-slate-600',
+                        !cell.isToday &&
+                          !vacationsByDate.has(cell.iso) &&
+                          !holidaysByDate.has(cell.iso) &&
+                          !cell.isWeekend &&
+                          cell.isCurrentMonth &&
+                          'text-slate-700 dark:text-slate-300',
                       ]"
                       :title="holidaysByDate.get(cell.iso)?.name"
                     >

@@ -75,7 +75,9 @@ onMounted(async () => {
                 <template v-if="todayStatus === 'logged'">
                   {{ totalHoursToday }}h logged today — great work!
                 </template>
-                <template v-else-if="todayStatus === 'not-logged'"> No hours logged yet today </template>
+                <template v-else-if="todayStatus === 'not-logged'">
+                  No hours logged yet today
+                </template>
                 <template v-else> Enjoy your weekend! </template>
               </p>
             </div>
@@ -83,7 +85,7 @@ onMounted(async () => {
 
           <button
             v-if="todayStatus !== 'weekend'"
-            class="text-sm font-medium shrink-0 transition-colors"
+            class="text-sm font-medium shrink-0 transition-colors cursor-pointer"
             :class="
               todayStatus === 'logged'
                 ? 'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100'
@@ -103,7 +105,9 @@ onMounted(async () => {
               <div class="stat-card">
                 <div class="flex items-center gap-2 mb-1">
                   <ClockIcon class="size-3.5 text-slate-400" />
-                  <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <p
+                    class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  >
                     Today
                   </p>
                 </div>
@@ -119,7 +123,9 @@ onMounted(async () => {
               <div class="stat-card">
                 <div class="flex items-center gap-2 mb-1">
                   <ClockIcon class="size-3.5 text-slate-400" />
-                  <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <p
+                    class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  >
                     This week
                   </p>
                 </div>
@@ -135,7 +141,9 @@ onMounted(async () => {
               <div class="stat-card">
                 <div class="flex items-center gap-2 mb-1">
                   <ClockIcon class="size-3.5 text-slate-400" />
-                  <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <p
+                    class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                  >
                     This month
                   </p>
                 </div>

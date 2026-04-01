@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { holidayService, type PublicHoliday, type AvailableCountry } from "@/services/holidayService";
+import {
+  holidayService,
+  type PublicHoliday,
+  type AvailableCountry,
+} from "@/services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -168,7 +172,9 @@ const formatDate = (iso: string) =>
 
         <!-- Country configuration -->
         <section class="mb-8">
-          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
+          <h2
+            class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3"
+          >
             Country & Public Holidays
           </h2>
 
@@ -215,7 +221,9 @@ const formatDate = (iso: string) =>
         <!-- Holidays list -->
         <section>
           <div class="flex items-center justify-between mb-3">
-            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            <h2
+              class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+            >
               Holidays
             </h2>
             <div class="flex items-center gap-2">
