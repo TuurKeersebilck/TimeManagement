@@ -519,7 +519,13 @@ onMounted(async () => {
                 v-for="cell in calendarDays"
                 :key="cell.iso"
                 :open="openPopoverIso === cell.iso"
-                @update:open="(v) => (v ? openPopover(cell.iso) : closePopover())"
+                @update:open="
+                  (v) => {
+                    if (v && cell.isCurrentMonth && !cell.isWeekend && balances.length > 0)
+                      openPopover(cell.iso);
+                    else if (!v) closePopover();
+                  }
+                "
               >
                 <PopoverTrigger as-child>
                   <div
@@ -534,11 +540,10 @@ onMounted(async () => {
                       highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso
                         ? 'bg-indigo-50 dark:bg-indigo-950/30'
                         : '',
-                      !cell.isWeekend && balances.length > 0
+                      cell.isCurrentMonth && !cell.isWeekend && balances.length > 0
                         ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                        : 'cursor-default',
+                        : 'cursor-default pointer-events-none',
                     ]"
-                    @click="!cell.isWeekend && balances.length > 0 ? openPopover(cell.iso) : undefined"
                   >
                     <!-- Day number -->
                     <div
@@ -583,9 +588,7 @@ onMounted(async () => {
                 <PopoverContent
                   class="w-72 p-0 shadow-lg"
                   side="bottom"
-                  :side-offset="4"
                   :collision-padding="12"
-                  @interact-outside="closePopover"
                 >
                   <!-- Popover header -->
                   <div
