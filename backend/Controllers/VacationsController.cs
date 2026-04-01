@@ -73,6 +73,13 @@ public class VacationsController(
         return Ok(result);
     }
 
+    [HttpGet("team")]
+    public async Task<ActionResult<IEnumerable<TeamVacationDayDto>>> GetTeamVacationDays(CancellationToken ct)
+    {
+        var days = await _service.GetTeamVacationDaysAsync(ct);
+        return Ok(days);
+    }
+
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteVacationDay(int id, CancellationToken ct)
     {

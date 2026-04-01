@@ -40,6 +40,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/VacationsView.vue"),
     meta: { requiresAuth: true },
   },
+  {
+    path: "/team",
+    name: "team-calendar",
+    component: () => import("../views/TeamCalendarView.vue"),
+    meta: { requiresAuth: true },
+  },
 
   // Admin-only routes
   {

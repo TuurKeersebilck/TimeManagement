@@ -7,6 +7,7 @@ import {
   LayoutDashboardIcon,
   ClockIcon,
   CalendarIcon,
+  CalendarDaysIcon,
   TagIcon,
   UsersIcon,
   SunIcon,
@@ -47,6 +48,7 @@ const employeeNav: NavItem[] = [
   { name: "Dashboard", to: "/", icon: LayoutDashboardIcon },
   { name: "My Time Logs", to: "/time-tracking", icon: ClockIcon },
   { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
+  { name: "Team Calendar", to: "/team", icon: CalendarDaysIcon },
 ];
 
 const adminNav: NavItem[] = [

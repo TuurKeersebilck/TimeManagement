@@ -237,6 +237,23 @@ public class VacationService(AppDbContext db) : IVacationService
         };
     }
 
+    public async Task<IEnumerable<TeamVacationDayDto>> GetTeamVacationDaysAsync(CancellationToken ct = default)
+    {
+        return await _db.VacationDays
+            .AsNoTracking()
+            .OrderBy(d => d.Date)
+            .Select(d => new TeamVacationDayDto
+            {
+                EmployeeId = d.UserId,
+                EmployeeName = d.User.FullName,
+                Date = d.Date,
+                Amount = d.Amount,
+                VacationTypeName = d.VacationType.Name,
+                VacationTypeColor = d.VacationType.Color,
+            })
+            .ToListAsync(ct);
+    }
+
     private static void ValidateAmount(decimal amount)
     {
         if (amount != 0.5m && amount != 1.0m)

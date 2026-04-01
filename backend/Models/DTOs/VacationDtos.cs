@@ -44,3 +44,13 @@ public class VacationRangeResultDto
     public int SkippedWeekends { get; set; }
     public int SkippedExisting { get; set; }
 }
+
+public class TeamVacationDayDto
+{
+    public string EmployeeId { get; set; } = string.Empty;
+    public string EmployeeName { get; set; } = string.Empty;
+    public DateOnly Date { get; set; }
+    public decimal Amount { get; set; }
+    public string VacationTypeName { get; set; } = string.Empty;
+    public string? VacationTypeColor { get; set; }
+}

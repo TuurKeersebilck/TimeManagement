@@ -40,6 +40,15 @@ export interface VacationRangeResult {
   skippedExisting: number;
 }
 
+export interface TeamVacationDay {
+  employeeId: string;
+  employeeName: string;
+  date: string; // "YYYY-MM-DD"
+  amount: number;
+  vacationTypeName: string;
+  vacationTypeColor?: string;
+}
+
 export const vacationService = {
   async getBalances(): Promise<VacationBalance[]> {
     const res = await apiClient.get<VacationBalance[]>("/vacations/balances");
@@ -67,6 +76,11 @@ export const vacationService = {
 
   async createRange(data: CreateVacationRangeDto): Promise<VacationRangeResult> {
     const res = await apiClient.post<VacationRangeResult>("/vacations/range", data);
+    return res.data;
+  },
+
+  async getTeamVacationDays(): Promise<TeamVacationDay[]> {
+    const res = await apiClient.get<TeamVacationDay[]>("/vacations/team");
     return res.data;
   },
 };
