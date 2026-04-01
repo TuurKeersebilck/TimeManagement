@@ -78,6 +78,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/admin/VacationTypesView.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: "/admin/settings",
+    name: "admin-settings",
+    component: () => import("../views/admin/AppSettingsView.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
 
   { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
 ];

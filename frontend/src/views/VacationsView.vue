@@ -7,6 +7,7 @@ import {
   type VacationDay,
   type CreateVacationDayDto,
 } from "../services/vacationService";
+import { holidayService, type PublicHoliday } from "../services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
@@ -37,6 +38,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
+  Maximize2Icon,
+  XIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -44,7 +47,70 @@ const { confirm } = useConfirmDialog();
 
 const balances = ref<VacationBalance[]>([]);
 const vacationDays = ref<VacationDay[]>([]);
+const holidays = ref<PublicHoliday[]>([]);
 const loading = ref(false);
+
+// ─── Holidays ─────────────────────────────────────────────────────────────────
+
+const holidaysByDate = computed(() => {
+  const map = new Map<string, PublicHoliday>();
+  for (const h of holidays.value) map.set(h.date, h);
+  return map;
+});
+
+// ─── Year overlay ─────────────────────────────────────────────────────────────
+
+const yearOverlayOpen = ref(false);
+const overlayYear = ref(new Date().getFullYear());
+
+interface MiniCalMonth {
+  year: number;
+  month: number; // 0-based
+  label: string;
+  days: CalDay[];
+}
+
+const overlayMonths = computed<MiniCalMonth[]>(() => {
+  const months: MiniCalMonth[] = [];
+  for (let m = 0; m < 12; m++) {
+    const label = new Date(overlayYear.value, m, 1).toLocaleDateString(undefined, {
+      month: "long",
+    });
+    months.push({
+      year: overlayYear.value,
+      month: m,
+      label,
+      days: buildCalendarDays(overlayYear.value, m),
+    });
+  }
+  return months;
+});
+
+function buildCalendarDays(year: number, month: number): CalDay[] {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startDow = (firstDay.getDay() + 6) % 7;
+  const days: CalDay[] = [];
+
+  for (let i = startDow - 1; i >= 0; i--) {
+    const d = new Date(year, month, -i);
+    const dow = d.getDay();
+    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false, isWeekend: dow === 0 || dow === 6 });
+  }
+  for (let n = 1; n <= lastDay.getDate(); n++) {
+    const d = new Date(year, month, n);
+    const iso = toIso(d);
+    const dow = d.getDay();
+    days.push({ iso, day: n, isCurrentMonth: true, isToday: iso === todayIso, isWeekend: dow === 0 || dow === 6 });
+  }
+  const remaining = 42 - days.length;
+  for (let n = 1; n <= remaining; n++) {
+    const d = new Date(year, month + 1, n);
+    const dow = d.getDay();
+    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false, isWeekend: dow === 0 || dow === 6 });
+  }
+  return days;
+}
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -160,7 +226,7 @@ const popoverForm = ref({
   note: "",
 });
 
-// Working days count between start and end (inclusive, excl. weekends)
+// Working days count between start and end (inclusive, excl. weekends + holidays)
 const workingDaysInRange = computed(() => {
   const { startDate, endDate } = popoverForm.value;
   if (!startDate || !endDate) return 0;
@@ -171,7 +237,8 @@ const workingDaysInRange = computed(() => {
   const d = new Date(start);
   while (d <= end) {
     const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) count++;
+    const iso = toIso(d);
+    if (dow !== 0 && dow !== 6 && !holidaysByDate.value.has(iso)) count++;
     d.setDate(d.getDate() + 1);
   }
   return count;
@@ -398,12 +465,15 @@ const balanceBarColor = (balance: VacationBalance) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const [b, d] = await Promise.all([
+    const year = new Date().getFullYear();
+    const [b, d, h] = await Promise.all([
       vacationService.getBalances(),
       vacationService.getVacationDays(),
+      holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
     ]);
     balances.value = b;
     vacationDays.value = d;
+    holidays.value = h;
   } catch {
     toast.error("Failed to load vacation data");
   } finally {
@@ -417,11 +487,17 @@ onMounted(async () => {
     <div class="p-6 lg:p-8">
       <div class="max-w-4xl mx-auto">
         <!-- Header -->
-        <div class="mb-8">
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Click any day on the calendar to plan or view vacation entries
-          </p>
+        <div class="flex items-start justify-between mb-8">
+          <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Click any day on the calendar to plan or view vacation entries
+            </p>
+          </div>
+          <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
+            <Maximize2Icon class="size-3.5" />
+            Year view
+          </Button>
         </div>
 
         <!-- Balance cards -->
@@ -561,6 +637,15 @@ onMounted(async () => {
                       {{ cell.day }}
                     </div>
 
+                    <!-- Holiday marker -->
+                    <div
+                      v-if="holidaysByDate.has(cell.iso)"
+                      class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-l-2 border-amber-400"
+                      :title="holidaysByDate.get(cell.iso)!.name"
+                    >
+                      {{ holidaysByDate.get(cell.iso)!.name }}
+                    </div>
+
                     <!-- Vacation chips -->
                     <template v-if="vacationsByDate.has(cell.iso)">
                       <div
@@ -605,6 +690,16 @@ onMounted(async () => {
                         <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
                     </button>
+                  </div>
+
+                  <!-- Holiday notice -->
+                  <div
+                    v-if="holidaysByDate.has(cell.iso)"
+                    class="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900"
+                  >
+                    <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                      🎉 {{ holidaysByDate.get(cell.iso)!.name }}
+                    </span>
                   </div>
 
                   <!-- Existing entries -->
@@ -831,6 +926,105 @@ onMounted(async () => {
         </section>
       </div>
     </div>
+
+    <!-- Year overview overlay -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition-opacity duration-200 ease-out"
+        leave-active-class="transition-opacity duration-150 ease-in"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="yearOverlayOpen"
+          class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col"
+          @click.self="yearOverlayOpen = false"
+        >
+          <div class="flex flex-col flex-1 overflow-hidden bg-white dark:bg-slate-900 m-4 lg:m-8 rounded-2xl shadow-2xl">
+            <!-- Overlay header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              <div class="flex items-center gap-3">
+                <Button variant="ghost" size="icon" class="size-8" @click="overlayYear--">
+                  <ChevronLeftIcon class="size-4" />
+                </Button>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  {{ overlayYear }}
+                </h2>
+                <Button variant="ghost" size="icon" class="size-8" @click="overlayYear++">
+                  <ChevronRightIcon class="size-4" />
+                </Button>
+              </div>
+              <div class="flex items-center gap-4">
+                <!-- Legend -->
+                <div class="hidden sm:flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-sm bg-indigo-100 dark:bg-indigo-950 border-l-2 border-indigo-400 inline-block" />
+                    Vacation
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-950/40 border-l-2 border-amber-400 inline-block" />
+                    Holiday
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block" />
+                    Today
+                  </span>
+                </div>
+                <Button variant="ghost" size="icon" class="size-8" @click="yearOverlayOpen = false">
+                  <XIcon class="size-4" />
+                </Button>
+              </div>
+            </div>
+
+            <!-- 12-month grid -->
+            <div class="flex-1 overflow-y-auto p-4 lg:p-6">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div
+                  v-for="miniMonth in overlayMonths"
+                  :key="miniMonth.month"
+                  class="card p-3"
+                >
+                  <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 capitalize">
+                    {{ miniMonth.label }}
+                  </p>
+                  <!-- Weekday headers -->
+                  <div class="grid grid-cols-7 mb-1">
+                    <div
+                      v-for="wd in ['M','T','W','T','F','S','S']"
+                      :key="wd"
+                      class="text-center text-[10px] font-semibold text-slate-400 dark:text-slate-500"
+                    >
+                      {{ wd }}
+                    </div>
+                  </div>
+                  <!-- Day cells -->
+                  <div class="grid grid-cols-7 gap-y-0.5">
+                    <div
+                      v-for="cell in miniMonth.days"
+                      :key="cell.iso"
+                      :class="[
+                        'relative text-[11px] h-6 flex items-center justify-center rounded',
+                        !cell.isCurrentMonth && 'opacity-20',
+                        cell.isToday && 'bg-indigo-600 text-white font-bold',
+                        !cell.isToday && vacationsByDate.has(cell.iso) && 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-medium',
+                        !cell.isToday && holidaysByDate.has(cell.iso) && !vacationsByDate.has(cell.iso) && 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
+                        !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && cell.isWeekend && 'text-slate-400 dark:text-slate-600',
+                        !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && !cell.isWeekend && cell.isCurrentMonth && 'text-slate-700 dark:text-slate-300',
+                      ]"
+                      :title="holidaysByDate.get(cell.iso)?.name"
+                    >
+                      {{ cell.day }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- Edit dialog -->
     <Dialog v-model:open="editDialogVisible">
