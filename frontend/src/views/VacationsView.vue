@@ -53,11 +53,9 @@ const loading = ref(false);
 
 // ─── Calendar composable ─────────────────────────────────────────────────────
 
-const { currentMonth, monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth } =
+const { monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth } =
   useCalendar();
 
-// keep currentMonth in scope to avoid unused-var warning
-void currentMonth;
 
 // ─── Holidays ─────────────────────────────────────────────────────────────────
 

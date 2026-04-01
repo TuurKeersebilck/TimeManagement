@@ -9,7 +9,6 @@ import YearOverlay, { type OverlayEntry } from "@/components/YearOverlay.vue";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import {
-  CalendarIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   Maximize2Icon,

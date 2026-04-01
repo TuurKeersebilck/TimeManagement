@@ -44,7 +44,6 @@ export function buildCalendarDays(year: number, month: number): CalDay[] {
 }
 
 export const WEEK_DAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-export const WEEK_DAYS_MINI = ["M", "T", "W", "T", "F", "S", "S"];
 
 export function useCalendar() {
   const currentMonth = ref(new Date());
@@ -75,5 +74,5 @@ export function useCalendar() {
     currentMonth.value = new Date(year, month, 1);
   };
 
-  return { currentMonth, monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth };
+  return { monthLabel, calendarDays, prevMonth, nextMonth, goToday, jumpToMonth };
 }
