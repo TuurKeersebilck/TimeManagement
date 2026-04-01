@@ -73,6 +73,7 @@ try
     builder.Services.AddScoped<ITimeLogService, TimeLogService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
+    builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();
 
     var app = builder.Build();
 

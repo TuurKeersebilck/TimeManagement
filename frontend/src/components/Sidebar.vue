@@ -14,6 +14,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LogOutIcon,
+  SettingsIcon,
 } from "lucide-vue-next";
 
 interface Props {
@@ -54,6 +55,7 @@ const adminNav: NavItem[] = [
   { name: "Vacation Overview", to: "/admin/vacations", icon: CalendarIcon },
   { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
   { name: "Manage Employees", to: "/admin/employees", icon: UsersIcon },
+  { name: "App Settings", to: "/admin/settings", icon: SettingsIcon },
 ];
 
 const navigationItems = computed(() => (isAdmin.value ? adminNav : employeeNav));
