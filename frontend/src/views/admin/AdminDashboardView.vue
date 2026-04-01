@@ -176,7 +176,7 @@ onMounted(async () => {
               </h2>
               <button
                 @click="router.push({ name: 'admin-time-logs' })"
-                class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
               >
                 View all logs →
               </button>
@@ -307,7 +307,7 @@ onMounted(async () => {
                 </h2>
                 <button
                   @click="router.push({ name: 'admin-vacations' })"
-                  class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                  class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
                 >
                   Calendar →
                 </button>
