@@ -10,6 +10,8 @@ export interface PublicHoliday {
 export interface AppConfiguration {
   countryCode: string | null;
   countryName?: string | null;
+  defaultDailyHours?: number | null;
+  defaultWeeklyHours?: number | null;
 }
 
 export interface AvailableCountry {
@@ -57,5 +59,10 @@ export const holidayService = {
 
   async deleteHoliday(id: number): Promise<void> {
     await apiClient.delete(`/admin/settings/holidays/${id}`);
+  },
+
+  async setDefaultTargets(defaultDailyHours: number | null, defaultWeeklyHours: number | null): Promise<AppConfiguration> {
+    const res = await apiClient.put<AppConfiguration>("/admin/settings/targets", { defaultDailyHours, defaultWeeklyHours });
+    return res.data;
   },
 };

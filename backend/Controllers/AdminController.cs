@@ -108,6 +108,26 @@ public class AdminController(IAdminService adminService) : ControllerBase
         return NoContent();
     }
 
+    // ─── Working hours targets ────────────────────────────────────────────────
+
+    [HttpGet("employees/{userId}/target")]
+    public async Task<ActionResult<EmployeeTargetDto>> GetEmployeeTarget(string userId, CancellationToken ct)
+        => Ok(await _adminService.GetEmployeeTargetAsync(userId, ct));
+
+    [HttpPut("employees/{userId}/target")]
+    public async Task<ActionResult<EmployeeTargetDto>> SetEmployeeTarget(
+        string userId,
+        [FromBody] SetEmployeeTargetDto dto,
+        CancellationToken ct)
+        => Ok(await _adminService.SetEmployeeTargetAsync(userId, dto, ct));
+
+    [HttpGet("employees/{userId}/weekly-summary")]
+    public async Task<ActionResult<IEnumerable<WeekSummaryDto>>> GetWeeklySummary(
+        string userId,
+        [FromQuery] int weeks = 8,
+        CancellationToken ct = default)
+        => Ok(await _adminService.GetEmployeeWeeklySummaryAsync(userId, weeks, ct));
+
     // ─── Vacation overview ────────────────────────────────────────────────────
 
     [HttpGet("vacations")]

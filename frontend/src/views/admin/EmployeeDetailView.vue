@@ -2,7 +2,13 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { adminService, type Employee, type AdminVacationDay } from "../../services/adminService";
+import {
+  adminService,
+  type Employee,
+  type AdminVacationDay,
+  type EmployeeTarget,
+  type WeekSummary,
+} from "../../services/adminService";
 import {
   vacationTypeService,
   type VacationType,
@@ -27,6 +33,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import WeeklyHoursChart from "@/components/WeeklyHoursChart.vue";
+import { useTheme } from "@/composables/useTheme";
 import {
   ArrowLeftIcon,
   PlusIcon,
@@ -34,12 +42,14 @@ import {
   Trash2Icon,
   CalendarIcon,
   Loader2Icon,
+  ClockIcon,
 } from "lucide-vue-next";
 
 const route = useRoute();
 const router = useRouter();
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
+const { isDark } = useTheme();
 
 const userId = route.params.id as string;
 
@@ -48,6 +58,27 @@ const balances = ref<EmployeeVacationBalance[]>([]);
 const allTypes = ref<VacationType[]>([]);
 const vacationDays = ref<AdminVacationDay[]>([]);
 const loading = ref(false);
+
+// ─── Working hours target ─────────────────────────────────────────────────────
+
+const target = ref<EmployeeTarget | null>(null);
+const weeklySummary = ref<WeekSummary[]>([]);
+const targetForm = ref({ dailyHours: "", weeklyHours: "" });
+const savingTarget = ref(false);
+
+const saveTarget = async () => {
+  savingTarget.value = true;
+  try {
+    const daily = targetForm.value.dailyHours ? parseFloat(targetForm.value.dailyHours) : null;
+    const weekly = targetForm.value.weeklyHours ? parseFloat(targetForm.value.weeklyHours) : null;
+    target.value = await adminService.setEmployeeTarget(userId, { dailyHours: daily, weeklyHours: weekly });
+    toast.success("Target saved");
+  } catch {
+    toast.error("Failed to save target");
+  } finally {
+    savingTarget.value = false;
+  }
+};
 
 // ─── Assign dialog ────────────────────────────────────────────────────────────
 
@@ -170,11 +201,13 @@ const displayDate = (iso: string) =>
 onMounted(async () => {
   loading.value = true;
   try {
-    const [employees, fetchedBalances, fetchedTypes, fetchedDays] = await Promise.all([
+    const [employees, fetchedBalances, fetchedTypes, fetchedDays, fetchedTarget, fetchedSummary] = await Promise.all([
       adminService.getEmployees(),
       vacationTypeService.getEmployeeBalances(userId),
       vacationTypeService.getAll(),
       adminService.getAllVacationDays({ userId }),
+      adminService.getEmployeeTarget(userId),
+      adminService.getWeeklySummary(userId, 8),
     ]);
     employee.value = employees.find((e) => e.id === userId) ?? null;
     if (!employee.value) {
@@ -184,6 +217,12 @@ onMounted(async () => {
     balances.value = fetchedBalances;
     allTypes.value = fetchedTypes;
     vacationDays.value = fetchedDays;
+    target.value = fetchedTarget;
+    weeklySummary.value = fetchedSummary;
+    targetForm.value = {
+      dailyHours: fetchedTarget.dailyHours != null ? String(fetchedTarget.dailyHours) : "",
+      weeklyHours: fetchedTarget.weeklyHours != null ? String(fetchedTarget.weeklyHours) : "",
+    };
   } catch {
     toast.error("Failed to load employee");
   } finally {
@@ -348,6 +387,76 @@ onMounted(async () => {
                   remaining</span
                 >
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Working hours target section -->
+        <div class="mt-6" v-if="!loading">
+          <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+            Working hours target
+          </h2>
+
+          <div class="card p-5 space-y-4">
+            <!-- Current resolved targets -->
+            <div class="flex items-center gap-3">
+              <ClockIcon class="size-4 text-indigo-500 shrink-0" />
+              <div class="text-sm text-slate-600 dark:text-slate-400">
+                <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours">
+                  <span class="font-medium text-slate-900 dark:text-slate-100">
+                    {{ target?.resolvedDailyHours ?? "—" }}h/day
+                  </span>
+                  ·
+                  <span class="font-medium text-slate-900 dark:text-slate-100">
+                    {{ target?.resolvedWeeklyHours ?? "—" }}h/week
+                  </span>
+                  <span v-if="target?.hasOverride" class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                    Override
+                  </span>
+                  <span v-else class="ml-1.5 text-xs text-slate-400 dark:text-slate-500">(global default)</span>
+                </span>
+                <span v-else class="text-slate-400 dark:text-slate-500">No target configured</span>
+              </div>
+            </div>
+
+            <!-- Override form -->
+            <div class="flex items-end gap-3 pt-1">
+              <div class="space-y-1.5">
+                <Label class="text-xs">Daily (h) — leave blank to use default</Label>
+                <Input
+                  v-model="targetForm.dailyHours"
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="0.5"
+                  placeholder="default"
+                  class="w-28 h-8 text-sm"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label class="text-xs">Weekly (h) — leave blank to use default</Label>
+                <Input
+                  v-model="targetForm.weeklyHours"
+                  type="number"
+                  min="0"
+                  max="168"
+                  step="0.5"
+                  placeholder="default"
+                  class="w-28 h-8 text-sm"
+                />
+              </div>
+              <Button size="sm" :disabled="savingTarget" @click="saveTarget">
+                <Loader2Icon v-if="savingTarget" class="size-3.5 animate-spin" />
+                Save
+              </Button>
+            </div>
+
+            <!-- Weekly chart -->
+            <div v-if="weeklySummary.length > 0" class="pt-2">
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">
+                Last 8 weeks — logged vs. target
+              </p>
+              <WeeklyHoursChart :weeks="weeklySummary" :is-dark="isDark" />
             </div>
           </div>
         </div>

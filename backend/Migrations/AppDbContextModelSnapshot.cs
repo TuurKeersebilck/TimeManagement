@@ -131,9 +131,41 @@ namespace TimeManagementBackend.Migrations
                     b.Property<string>("CountryCode")
                         .HasColumnType("text");
 
+                    b.Property<decimal?>("DefaultDailyHours")
+                        .HasColumnType("numeric(4,2)");
+
+                    b.Property<decimal?>("DefaultWeeklyHours")
+                        .HasColumnType("numeric(4,2)");
+
                     b.HasKey("Id");
 
                     b.ToTable("AppConfigurations");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.EmployeeTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("DailyHours")
+                        .HasColumnType("numeric(4,2)");
+
+                    b.Property<decimal?>("WeeklyHours")
+                        .HasColumnType("numeric(4,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeTargets");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.EmployeeVacationBalance", b =>
@@ -356,6 +388,17 @@ namespace TimeManagementBackend.Migrations
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.PasswordResetToken", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.EmployeeTarget", b =>
                 {
                     b.HasOne("TimeManagementBackend.Models.User", "User")
                         .WithMany()

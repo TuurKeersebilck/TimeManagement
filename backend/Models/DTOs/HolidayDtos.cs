@@ -18,6 +18,14 @@ public class AppConfigurationDto
 {
     public string? CountryCode { get; set; }
     public string? CountryName { get; set; }
+    public decimal? DefaultDailyHours { get; set; }
+    public decimal? DefaultWeeklyHours { get; set; }
+}
+
+public class SetDefaultTargetsDto
+{
+    public decimal? DefaultDailyHours { get; set; }
+    public decimal? DefaultWeeklyHours { get; set; }
 }
 
 public class SetCountryDto

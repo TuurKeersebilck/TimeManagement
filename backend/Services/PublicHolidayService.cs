@@ -16,7 +16,35 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
     public async Task<AppConfigurationDto> GetConfigurationAsync(CancellationToken ct = default)
     {
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
-        return new AppConfigurationDto { CountryCode = config?.CountryCode };
+        return new AppConfigurationDto
+        {
+            CountryCode = config?.CountryCode,
+            DefaultDailyHours = config?.DefaultDailyHours,
+            DefaultWeeklyHours = config?.DefaultWeeklyHours,
+        };
+    }
+
+    public async Task<AppConfigurationDto> SetDefaultTargetsAsync(decimal? dailyHours, decimal? weeklyHours, CancellationToken ct = default)
+    {
+        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+        if (config == null)
+        {
+            config = new AppConfiguration { DefaultDailyHours = dailyHours, DefaultWeeklyHours = weeklyHours };
+            db.AppConfigurations.Add(config);
+        }
+        else
+        {
+            config.DefaultDailyHours = dailyHours;
+            config.DefaultWeeklyHours = weeklyHours;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return new AppConfigurationDto
+        {
+            CountryCode = config.CountryCode,
+            DefaultDailyHours = config.DefaultDailyHours,
+            DefaultWeeklyHours = config.DefaultWeeklyHours,
+        };
     }
 
     public async Task<AppConfigurationDto> SetCountryAsync(string countryCode, CancellationToken ct = default)
@@ -41,7 +69,12 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         await FetchAndStoreAsync(normalized, currentYear, ct);
         await FetchAndStoreAsync(normalized, currentYear + 1, ct);
 
-        return new AppConfigurationDto { CountryCode = config.CountryCode };
+        return new AppConfigurationDto
+        {
+            CountryCode = config.CountryCode,
+            DefaultDailyHours = config.DefaultDailyHours,
+            DefaultWeeklyHours = config.DefaultWeeklyHours,
+        };
     }
 
     // ─── Holidays ─────────────────────────────────────────────────────────────

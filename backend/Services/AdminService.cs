@@ -48,16 +48,52 @@ public class AdminService(AppDbContext context) : IAdminService
 
     public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(CancellationToken ct = default)
     {
-        return await _context.Users
+        var config = await _context.AppConfigurations.FirstOrDefaultAsync(ct);
+
+        // Current week bounds (Monday–Sunday)
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var dow = (int)today.DayOfWeek;
+        var daysFromMonday = dow == 0 ? 6 : dow - 1;
+        var weekStart = today.AddDays(-daysFromMonday);
+        var weekEnd = weekStart.AddDays(6);
+
+        var users = await _context.Users
             .AsNoTracking()
             .OrderBy(u => u.FullName)
-            .Select(u => new EmployeeDto
+            .ToListAsync(ct);
+
+        var weekLogs = await _context.TimeLogs
+            .AsNoTracking()
+            .Where(l => l.Date >= weekStart && l.Date <= weekEnd)
+            .ToListAsync(ct);
+
+        var targets = await _context.EmployeeTargets
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return users.Select(u =>
+        {
+            var userLogs = weekLogs.Where(l => l.UserId == u.Id);
+            var weeklyLogged = (decimal)userLogs.Sum(l =>
+            {
+                var worked = l.EndTime - l.StartTime;
+                if (l.BreakStart.HasValue && l.BreakEnd.HasValue)
+                    worked -= l.BreakEnd.Value - l.BreakStart.Value;
+                return worked.TotalHours;
+            });
+
+            var target = targets.FirstOrDefault(t => t.UserId == u.Id);
+            var resolvedWeekly = target?.WeeklyHours ?? config?.DefaultWeeklyHours;
+
+            return new EmployeeDto
             {
                 Id = u.Id,
                 FullName = u.FullName,
                 Email = u.Email!,
-            })
-            .ToListAsync(ct);
+                WeeklyHoursLogged = Math.Round(weeklyLogged, 2),
+                ResolvedWeeklyTarget = resolvedWeekly,
+            };
+        });
     }
 
     // ─── Vacation types ───────────────────────────────────────────────────────
@@ -204,6 +240,87 @@ public class AdminService(AppDbContext context) : IAdminService
 
         _context.EmployeeVacationBalances.Remove(entity);
         await _context.SaveChangesAsync(ct);
+    }
+
+    // ─── Working hours targets ────────────────────────────────────────────────
+
+    public async Task<EmployeeTargetDto> GetEmployeeTargetAsync(string userId, CancellationToken ct = default)
+    {
+        var config = await _context.AppConfigurations.FirstOrDefaultAsync(ct);
+        var target = await _context.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == userId, ct);
+
+        return new EmployeeTargetDto
+        {
+            DailyHours = target?.DailyHours,
+            WeeklyHours = target?.WeeklyHours,
+            ResolvedDailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
+            ResolvedWeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
+            HasOverride = target != null && (target.DailyHours.HasValue || target.WeeklyHours.HasValue),
+        };
+    }
+
+    public async Task<EmployeeTargetDto> SetEmployeeTargetAsync(string userId, SetEmployeeTargetDto dto, CancellationToken ct = default)
+    {
+        var target = await _context.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == userId, ct);
+        if (target == null)
+        {
+            target = new EmployeeTarget { UserId = userId };
+            _context.EmployeeTargets.Add(target);
+        }
+
+        target.DailyHours = dto.DailyHours;
+        target.WeeklyHours = dto.WeeklyHours;
+        await _context.SaveChangesAsync(ct);
+
+        return await GetEmployeeTargetAsync(userId, ct);
+    }
+
+    public async Task<IEnumerable<WeekSummaryDto>> GetEmployeeWeeklySummaryAsync(string userId, int weeks, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var dow = (int)today.DayOfWeek;
+        var daysFromMonday = dow == 0 ? 6 : dow - 1;
+        var thisWeekStart = today.AddDays(-daysFromMonday);
+
+        // Build week ranges from oldest to newest
+        var weekRanges = Enumerable.Range(0, weeks)
+            .Select(i => thisWeekStart.AddDays(-7 * (weeks - 1 - i)))
+            .Select(start => (Start: start, End: start.AddDays(6)))
+            .ToList();
+
+        var from = weekRanges[0].Start;
+        var to = weekRanges[^1].End;
+
+        var logs = await _context.TimeLogs
+            .AsNoTracking()
+            .Where(l => l.UserId == userId && l.Date >= from && l.Date <= to)
+            .ToListAsync(ct);
+
+        var target = await GetEmployeeTargetAsync(userId, ct);
+
+        return weekRanges.Select(w =>
+        {
+            var weekLogs = logs.Where(l => l.Date >= w.Start && l.Date <= w.End);
+            var hoursLogged = (decimal)weekLogs.Sum(l =>
+            {
+                var worked = l.EndTime - l.StartTime;
+                if (l.BreakStart.HasValue && l.BreakEnd.HasValue)
+                    worked -= l.BreakEnd.Value - l.BreakStart.Value;
+                return worked.TotalHours;
+            });
+
+            // ISO week number
+            var jan1 = new DateOnly(w.Start.Year, 1, 1);
+            var weekNum = (w.Start.DayOfYear - 1) / 7 + 1;
+
+            return new WeekSummaryDto
+            {
+                WeekLabel = $"W{weekNum}",
+                WeekStart = w.Start.ToString("yyyy-MM-dd"),
+                HoursLogged = Math.Round(hoursLogged, 2),
+                Target = target.ResolvedWeeklyHours,
+            };
+        });
     }
 
     // ─── Vacation overview ────────────────────────────────────────────────────

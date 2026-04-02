@@ -52,4 +52,9 @@ export const timeLogService = {
   async delete(id: number): Promise<void> {
     await apiClient.delete(`/timelogs/${id}`);
   },
+
+  async getMyTarget(): Promise<{ dailyHours?: number | null; weeklyHours?: number | null }> {
+    const res = await apiClient.get<{ dailyHours?: number | null; weeklyHours?: number | null }>("/timelogs/target");
+    return res.data;
+  },
 };

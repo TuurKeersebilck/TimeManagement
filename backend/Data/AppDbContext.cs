@@ -19,6 +19,7 @@ public class AppDbContext : IdentityUserContext<User>
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
     public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
+    public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
