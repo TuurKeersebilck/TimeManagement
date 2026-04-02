@@ -52,6 +52,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/VacationsView.vue"),
     meta: { requiresAuth: true },
   },
+  {
+    path: "/team-calendar",
+    name: "team-calendar",
+    component: () => import("../views/TeamCalendarView.vue"),
+    meta: { requiresAuth: true },
+  },
 
   // Admin-only routes
   {
@@ -68,7 +74,7 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: "/admin/vacations",
-    redirect: "/vacations",
+    redirect: "/team-calendar",
   },
   {
     path: "/admin/employees",
