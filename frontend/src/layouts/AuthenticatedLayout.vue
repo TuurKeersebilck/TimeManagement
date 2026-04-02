@@ -2,13 +2,14 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import Sidebar from "@/components/Sidebar.vue";
+import NotificationBell from "@/components/NotificationBell.vue";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
 import { MenuIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const sidebarOpen = ref<boolean>(true);
-const { clearUser } = useAuth();
+const { clearUser, isAdmin } = useAuth();
 
 const handleLogout = async (): Promise<void> => {
   clearUser();
@@ -39,9 +40,10 @@ const toggleSidebar = (): void => {
         <button @click="toggleSidebar" class="btn-ghost !px-2 !py-2" aria-label="Open menu">
           <MenuIcon class="size-5" />
         </button>
-        <span class="ml-3 text-sm font-semibold text-slate-900 dark:text-slate-100">
+        <span class="ml-3 flex-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
           Time Management
         </span>
+        <NotificationBell v-if="isAdmin" />
       </header>
 
       <!-- Page content -->

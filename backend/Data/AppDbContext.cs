@@ -20,6 +20,7 @@ public class AppDbContext : IdentityUserContext<User>
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
     public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
     public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -62,6 +63,12 @@ public class AppDbContext : IdentityUserContext<User>
         {
             entity.HasIndex(h => new { h.CountryCode, h.Year });
             entity.HasIndex(h => h.Date);
+        });
+
+        builder.Entity<Notification>(entity =>
+        {
+            entity.HasIndex(n => new { n.RecipientUserId, n.IsRead });
+            entity.HasIndex(n => n.CreatedAt);
         });
     }
 }

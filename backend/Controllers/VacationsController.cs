@@ -14,10 +14,12 @@ namespace TimeManagementBackend.Controllers;
 public class VacationsController(
     IVacationService service,
     IAdminService adminService,
+    INotificationService notificationService,
     UserManager<User> userManager) : ControllerBase
 {
     private readonly IVacationService _service = service;
     private readonly IAdminService _adminService = adminService;
+    private readonly INotificationService _notificationService = notificationService;
     private readonly UserManager<User> _userManager = userManager;
 
     private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
@@ -52,6 +54,11 @@ public class VacationsController(
             return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
 
         var created = await _service.CreateVacationDayAsync(user.Id, dto, ct);
+
+        var dateLabel = dto.Date.ToString("d MMM yyyy");
+        await _notificationService.NotifyAdminsAsync(
+            $"{user.FullName} planned a vacation on {dateLabel}", ct);
+
         return CreatedAtAction(nameof(GetVacationDays), created);
     }
 
@@ -72,6 +79,17 @@ public class VacationsController(
         if (user == null) return Unauthorized();
 
         var result = await _service.CreateVacationRangeAsync(user.Id, dto, ct);
+
+        if (result.Created.Any())
+        {
+            var startLabel = dto.StartDate.ToString("d MMM yyyy");
+            var endLabel = dto.EndDate.ToString("d MMM yyyy");
+            var message = dto.StartDate == dto.EndDate
+                ? $"{user.FullName} planned a vacation on {startLabel}"
+                : $"{user.FullName} planned a vacation from {startLabel} until {endLabel}";
+            await _notificationService.NotifyAdminsAsync(message, ct);
+        }
+
         return Ok(result);
     }
 
