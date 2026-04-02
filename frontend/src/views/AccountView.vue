@@ -53,7 +53,7 @@ const passwordsMatch = computed(() =>
 
 const canSubmit = computed(() =>
   form.value.currentPassword &&
-  strengthScore.value >= 2 &&
+  strengthScore.value >= 3 &&
   form.value.newPassword === form.value.confirmPassword
 );
 
