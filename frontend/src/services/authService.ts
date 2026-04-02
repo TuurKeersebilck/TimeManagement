@@ -64,6 +64,14 @@ export const authService = {
     await apiClient.put("/auth/change-password", payload);
   },
 
+  async forgotPassword(email: string): Promise<void> {
+    await apiClient.post("/auth/forgot-password", { email });
+  },
+
+  async resetPassword(token: string, newPassword: string, confirmPassword: string): Promise<void> {
+    await apiClient.post("/auth/reset-password", { token, newPassword, confirmPassword });
+  },
+
   async logout(): Promise<void> {
     try {
       await apiClient.post("/auth/logout");

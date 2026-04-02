@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using TimeManagementBackend.Config;
+using TimeManagementBackend.Services;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Middleware;
 using TimeManagementBackend.Models;
@@ -74,6 +75,21 @@ try
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
     builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();
+
+    // Register email service (MailKit)
+    var smtpConfig = new SmtpConfig
+    {
+        Host     = Environment.GetEnvironmentVariable("SMTP_HOST")     ?? string.Empty,
+        Port     = int.TryParse(Environment.GetEnvironmentVariable("SMTP_PORT"), out var p) ? p : 587,
+        User     = Environment.GetEnvironmentVariable("SMTP_USER")     ?? string.Empty,
+        Password = Environment.GetEnvironmentVariable("SMTP_PASS")     ?? string.Empty,
+        From     = Environment.GetEnvironmentVariable("SMTP_FROM")     ?? string.Empty,
+    };
+    builder.Services.AddSingleton(smtpConfig);
+    builder.Services.AddScoped<IEmailService, EmailService>();
+
+    // Expose APP_URL to configuration so controllers can read it
+    builder.Configuration["AppUrl"] = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
 
     var app = builder.Build();
 

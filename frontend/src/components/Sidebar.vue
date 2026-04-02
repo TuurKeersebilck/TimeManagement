@@ -15,6 +15,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   LogOutIcon,
+  KeyRoundIcon,
   SettingsIcon,
 } from "lucide-vue-next";
 
@@ -48,6 +49,7 @@ const employeeNav: NavItem[] = [
   { name: "Dashboard", to: "/", icon: LayoutDashboardIcon },
   { name: "My Time Logs", to: "/time-tracking", icon: ClockIcon },
   { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
+  { name: "Account", to: "/account", icon: KeyRoundIcon },
 ];
 
 const adminPersonalNav: NavItem[] = [

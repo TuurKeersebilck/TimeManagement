@@ -18,6 +18,18 @@ const routes: Array<RouteRecordRaw> = [
     component: RegisterView,
     meta: { guest: true },
   },
+  {
+    path: "/forgot-password",
+    name: "forgot-password",
+    component: () => import("../views/ForgotPasswordView.vue"),
+    meta: { guest: true },
+  },
+  {
+    path: "/reset-password",
+    name: "reset-password",
+    component: () => import("../views/ResetPasswordView.vue"),
+    meta: { guest: true },
+  },
 
   // Shared (employee + admin)
   {
@@ -81,6 +93,13 @@ const routes: Array<RouteRecordRaw> = [
     name: "admin-settings",
     component: () => import("../views/admin/AppSettingsView.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
+  },
+
+  {
+    path: "/account",
+    name: "account",
+    component: () => import("../views/AccountView.vue"),
+    meta: { requiresAuth: true },
   },
 
   { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
