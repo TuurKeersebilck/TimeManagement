@@ -71,4 +71,16 @@ public class TimeLogService(AppDbContext db, IMapper mapper) : ITimeLogService
         await _db.SaveChangesAsync(cancellationToken);
         return true;
     }
+
+    public async Task<MyTargetDto> GetMyTargetAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var config = await _db.AppConfigurations.FirstOrDefaultAsync(cancellationToken);
+        var target = await _db.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == userId, cancellationToken);
+
+        return new MyTargetDto
+        {
+            DailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
+            WeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
+        };
+    }
 }

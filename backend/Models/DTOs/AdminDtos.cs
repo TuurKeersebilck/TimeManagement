@@ -1,3 +1,5 @@
+using TimeManagementBackend.Helpers;
+
 namespace TimeManagementBackend.Models.DTOs;
 
 public class AdminTimeLogDto
@@ -13,16 +15,8 @@ public class AdminTimeLogDto
     public TimeSpan? BreakEnd { get; set; }
     public string? Description { get; set; }
 
-    public double TotalHours
-    {
-        get
-        {
-            var worked = EndTime - StartTime;
-            if (BreakStart.HasValue && BreakEnd.HasValue)
-                worked -= BreakEnd.Value - BreakStart.Value;
-            return worked.TotalHours;
-        }
-    }
+    public double TotalHours =>
+        TimeCalculationHelper.CalculateWorkedHours(StartTime, EndTime, BreakStart, BreakEnd);
 }
 
 public class EmployeeDto

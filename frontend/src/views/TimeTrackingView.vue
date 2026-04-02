@@ -5,6 +5,7 @@ import { timeLogService, type TimeLog, type TimeLogCreate } from "../services/ti
 import { useTimeCalculations } from "../composables/useTimeCalculations";
 import { useTimeLogsStore } from "../composables/useTimeLogsStore";
 import { useAppToast } from "@/composables/useAppToast";
+import { extractApiError } from "@/utils/apiError";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
   Dialog,
@@ -191,13 +192,8 @@ const saveTimeLog = async () => {
     showDialog.value = false;
     await refreshTimeLogs();
     toast.success(editMode.value ? "Time log updated" : "Time log saved");
-  } catch (error: any) {
-    const message =
-      error.response?.data?.message ||
-      error.response?.data ||
-      error.message ||
-      "Failed to save time log";
-    toast.error(message);
+  } catch (err: unknown) {
+    toast.error(extractApiError(err, "Failed to save time log"));
   } finally {
     saving.value = false;
   }

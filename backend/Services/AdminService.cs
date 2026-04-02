@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -50,12 +51,7 @@ public class AdminService(AppDbContext context) : IAdminService
     {
         var config = await _context.AppConfigurations.FirstOrDefaultAsync(ct);
 
-        // Current week bounds (Monday–Sunday)
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var dow = (int)today.DayOfWeek;
-        var daysFromMonday = dow == 0 ? 6 : dow - 1;
-        var weekStart = today.AddDays(-daysFromMonday);
-        var weekEnd = weekStart.AddDays(6);
+        var (weekStart, weekEnd) = TimeCalculationHelper.GetCurrentWeekBounds();
 
         var users = await _context.Users
             .AsNoTracking()
@@ -75,12 +71,7 @@ public class AdminService(AppDbContext context) : IAdminService
         {
             var userLogs = weekLogs.Where(l => l.UserId == u.Id);
             var weeklyLogged = (decimal)userLogs.Sum(l =>
-            {
-                var worked = l.EndTime - l.StartTime;
-                if (l.BreakStart.HasValue && l.BreakEnd.HasValue)
-                    worked -= l.BreakEnd.Value - l.BreakStart.Value;
-                return worked.TotalHours;
-            });
+                TimeCalculationHelper.CalculateWorkedHours(l.StartTime, l.EndTime, l.BreakStart, l.BreakEnd));
 
             var target = targets.FirstOrDefault(t => t.UserId == u.Id);
             var resolvedWeekly = target?.WeeklyHours ?? config?.DefaultWeeklyHours;
@@ -109,7 +100,7 @@ public class AdminService(AppDbContext context) : IAdminService
                 Name = v.Name,
                 Description = v.Description,
                 Color = v.Color,
-                AssignedEmployeeCount = _context.EmployeeVacationBalances.Count(b => b.VacationTypeId == v.Id),
+                AssignedEmployeeCount = v.EmployeeBalances.Count(),
             })
             .ToListAsync(ct);
     }
@@ -277,10 +268,7 @@ public class AdminService(AppDbContext context) : IAdminService
 
     public async Task<IEnumerable<WeekSummaryDto>> GetEmployeeWeeklySummaryAsync(string userId, int weeks, CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var dow = (int)today.DayOfWeek;
-        var daysFromMonday = dow == 0 ? 6 : dow - 1;
-        var thisWeekStart = today.AddDays(-daysFromMonday);
+        var (thisWeekStart, _) = TimeCalculationHelper.GetCurrentWeekBounds();
 
         // Build week ranges from oldest to newest
         var weekRanges = Enumerable.Range(0, weeks)
@@ -302,12 +290,7 @@ public class AdminService(AppDbContext context) : IAdminService
         {
             var weekLogs = logs.Where(l => l.Date >= w.Start && l.Date <= w.End);
             var hoursLogged = (decimal)weekLogs.Sum(l =>
-            {
-                var worked = l.EndTime - l.StartTime;
-                if (l.BreakStart.HasValue && l.BreakEnd.HasValue)
-                    worked -= l.BreakEnd.Value - l.BreakStart.Value;
-                return worked.TotalHours;
-            });
+                TimeCalculationHelper.CalculateWorkedHours(l.StartTime, l.EndTime, l.BreakStart, l.BreakEnd));
 
             // ISO week number
             var jan1 = new DateOnly(w.Start.Year, 1, 1);

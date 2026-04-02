@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using TimeManagementBackend.Data;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
@@ -15,16 +13,9 @@ namespace TimeManagementBackend.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class TimeLogsController(
     ITimeLogService service,
-    UserManager<User> userManager,
-    AppDbContext db,
-    ILogger<TimeLogsController> logger) : ControllerBase
+    UserManager<User> userManager) : ApiControllerBase(userManager)
 {
     private readonly ITimeLogService _service = service;
-    private readonly UserManager<User> _userManager = userManager;
-    private readonly AppDbContext _db = db;
-    private readonly ILogger<TimeLogsController> _logger = logger;
-
-    private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
 
     private static string? ValidateTimes(TimeSpan startTime, TimeSpan endTime, TimeSpan? breakStart, TimeSpan? breakEnd)
     {
@@ -55,14 +46,7 @@ public class TimeLogsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var config = await _db.AppConfigurations.FirstOrDefaultAsync(ct);
-        var target = await _db.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == user.Id, ct);
-
-        return Ok(new MyTargetDto
-        {
-            DailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
-            WeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
-        });
+        return Ok(await _service.GetMyTargetAsync(user.Id, ct));
     }
 
     [HttpGet]

@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
+import { extractApiError } from "@/utils/apiError";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,7 @@ const handleRegister = async (): Promise<void> => {
 
     router.push("/");
   } catch (err) {
-    error.value = (err as Error).message || "Registration failed. Please try again.";
+    error.value = extractApiError(err, "Registration failed. Please try again.");
   } finally {
     loading.value = false;
   }

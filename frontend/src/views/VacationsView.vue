@@ -11,6 +11,7 @@ import {
 import { holidayService, type PublicHoliday } from "../services/holidayService";
 import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
+import { extractApiError } from "@/utils/apiError";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
   Dialog,
@@ -311,10 +312,7 @@ const savePopover = async () => {
     balances.value = await vacationService.getBalances();
     closePopover();
   } catch (err: unknown) {
-    const msg =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      "Failed to plan vacation";
-    toast.error(msg);
+    toast.error(extractApiError(err, "Failed to plan vacation"));
   } finally {
     popoverSaving.value = false;
   }
@@ -381,10 +379,7 @@ const saveEdit = async () => {
     toast.success("Vacation day updated");
     editDialogVisible.value = false;
   } catch (err: unknown) {
-    const msg =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      "Failed to update vacation day";
-    toast.error(msg);
+    toast.error(extractApiError(err, "Failed to update vacation day"));
   } finally {
     editSaving.value = false;
   }
