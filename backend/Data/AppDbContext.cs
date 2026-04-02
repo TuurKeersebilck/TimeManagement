@@ -17,6 +17,8 @@ public class AppDbContext : IdentityUserContext<User>
     public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
     public DbSet<VacationDay> VacationDays => Set<VacationDay>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
+    public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -53,6 +55,12 @@ public class AppDbContext : IdentityUserContext<User>
             entity.Property(e => e.Amount).HasColumnType("numeric(3,1)");
             entity.HasIndex(d => new { d.UserId, d.Date });
             entity.HasIndex(d => d.VacationTypeId);
+        });
+
+        builder.Entity<PublicHoliday>(entity =>
+        {
+            entity.HasIndex(h => new { h.CountryCode, h.Year });
+            entity.HasIndex(h => h.Date);
         });
     }
 }

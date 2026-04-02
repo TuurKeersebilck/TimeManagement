@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   vacationService,
   type VacationBalance,
   type VacationDay,
   type CreateVacationDayDto,
+  type TeamVacationDay,
 } from "../services/vacationService";
+import { holidayService, type PublicHoliday } from "../services/holidayService";
+import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import {
@@ -27,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import YearCalendarOverlay from "@/components/YearCalendarOverlay.vue";
 import {
   PencilIcon,
   Trash2Icon,
@@ -37,14 +41,30 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
+  Maximize2Icon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
+const { currentUser } = useAuth();
 
 const balances = ref<VacationBalance[]>([]);
 const vacationDays = ref<VacationDay[]>([]);
+const holidays = ref<PublicHoliday[]>([]);
+const teamVacationDays = ref<TeamVacationDay[]>([]);
 const loading = ref(false);
+
+// ─── Holidays ─────────────────────────────────────────────────────────────────
+
+const holidaysByDate = computed(() => {
+  const map = new Map<string, PublicHoliday>();
+  for (const h of holidays.value) map.set(h.date, h);
+  return map;
+});
+
+// ─── Year overlay ─────────────────────────────────────────────────────────────
+
+const yearOverlayOpen = ref(false);
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -144,6 +164,29 @@ const vacationsByDate = computed(() => {
   return map;
 });
 
+const teamVacationsByDate = computed(() => {
+  const map = new Map<string, TeamVacationDay[]>();
+  for (const d of teamVacationDays.value) {
+    if (d.userId === currentUser.value?.id) continue;
+    if (!map.has(d.date)) map.set(d.date, []);
+    map.get(d.date)!.push(d);
+  }
+  return map;
+});
+
+const fetchTeamVacationDays = async () => {
+  try {
+    teamVacationDays.value = await vacationService.getTeamVacationDays({
+      year: currentMonth.value.getFullYear(),
+      month: currentMonth.value.getMonth() + 1,
+    });
+  } catch {
+    // non-critical, fail silently
+  }
+};
+
+watch(currentMonth, fetchTeamVacationDays);
+
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_VISIBLE = 2;
 
@@ -160,7 +203,7 @@ const popoverForm = ref({
   note: "",
 });
 
-// Working days count between start and end (inclusive, excl. weekends)
+// Working days count between start and end (inclusive, excl. weekends + holidays)
 const workingDaysInRange = computed(() => {
   const { startDate, endDate } = popoverForm.value;
   if (!startDate || !endDate) return 0;
@@ -171,7 +214,8 @@ const workingDaysInRange = computed(() => {
   const d = new Date(start);
   while (d <= end) {
     const dow = d.getDay();
-    if (dow !== 0 && dow !== 6) count++;
+    const iso = toIso(d);
+    if (dow !== 0 && dow !== 6 && !holidaysByDate.value.has(iso)) count++;
     d.setDate(d.getDate() + 1);
   }
   return count;
@@ -398,12 +442,18 @@ const balanceBarColor = (balance: VacationBalance) => {
 onMounted(async () => {
   loading.value = true;
   try {
-    const [b, d] = await Promise.all([
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    const [b, d, h, t] = await Promise.all([
       vacationService.getBalances(),
       vacationService.getVacationDays(),
+      holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
+      vacationService.getTeamVacationDays({ year, month }).catch(() => [] as TeamVacationDay[]),
     ]);
     balances.value = b;
     vacationDays.value = d;
+    holidays.value = h;
+    teamVacationDays.value = t;
   } catch {
     toast.error("Failed to load vacation data");
   } finally {
@@ -415,14 +465,20 @@ onMounted(async () => {
 <template>
   <AuthenticatedLayout>
     <div class="p-6 lg:p-8">
-      <div class="max-w-4xl mx-auto">
+      <div class="max-w-5xl mx-auto">
         <!-- Header -->
-        <div class="mb-8">
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">My Vacations</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Click any day on the calendar to plan or view vacation entries
-          </p>
+        <div class="mb-6">
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Vacations</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Plan your vacation and see when your team is off</p>
         </div>
+
+        <div class="flex justify-end mb-6">
+          <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
+            <Maximize2Icon class="size-3.5" />
+            Year view
+          </Button>
+        </div>
+        <div class="max-w-4xl">
 
         <!-- Balance cards -->
         <section class="mb-8">
@@ -460,7 +516,10 @@ onMounted(async () => {
               </div>
               <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
                 <div
-                  :class="['h-1.5 rounded-full transition-all duration-300', balanceBarColor(balance)]"
+                  :class="[
+                    'h-1.5 rounded-full transition-all duration-300',
+                    balanceBarColor(balance),
+                  ]"
                   :style="{ width: balanceBarWidth(balance) }"
                 />
               </div>
@@ -561,7 +620,16 @@ onMounted(async () => {
                       {{ cell.day }}
                     </div>
 
-                    <!-- Vacation chips -->
+                    <!-- Holiday marker -->
+                    <div
+                      v-if="holidaysByDate.has(cell.iso)"
+                      class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-l-2 border-amber-400"
+                      :title="holidaysByDate.get(cell.iso)!.name"
+                    >
+                      {{ holidaysByDate.get(cell.iso)!.name }}
+                    </div>
+
+                    <!-- Own vacation chips -->
                     <template v-if="vacationsByDate.has(cell.iso)">
                       <div
                         v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
@@ -582,29 +650,55 @@ onMounted(async () => {
                         +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
                       </div>
                     </template>
+
+                    <!-- Teammates' chips -->
+                    <template v-if="teamVacationsByDate.has(cell.iso)">
+                      <div
+                        v-for="entry in teamVacationsByDate.get(cell.iso)!.slice(0, 2)"
+                        :key="`team-${entry.id}`"
+                        :style="{ borderLeftColor: entry.vacationTypeColor ?? '#6366f1' }"
+                        class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50"
+                      >
+                        {{ entry.employeeName.split(" ")[0] }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
+                      </div>
+                    </template>
                   </div>
                 </PopoverTrigger>
 
-                <PopoverContent
-                  class="w-72 p-0 shadow-lg"
-                  side="bottom"
-                  :collision-padding="12"
-                >
+                <PopoverContent class="w-72 p-0 shadow-lg" side="bottom" :collision-padding="12">
                   <!-- Popover header -->
                   <div
                     class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800"
                   >
-                    <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
+                    <span
+                      class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize"
+                    >
                       {{ popoverDateLabel }}
                     </span>
                     <button
                       class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
                       @click="closePopover"
                     >
-                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <svg
+                        class="size-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
                         <path d="M18 6 6 18M6 6l12 12" />
                       </svg>
                     </button>
+                  </div>
+
+                  <!-- Holiday notice -->
+                  <div
+                    v-if="holidaysByDate.has(cell.iso)"
+                    class="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900"
+                  >
+                    <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                      🎉 {{ holidaysByDate.get(cell.iso)!.name }}
+                    </span>
                   </div>
 
                   <!-- Existing entries -->
@@ -625,7 +719,10 @@ onMounted(async () => {
                         <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
                           {{ entry.vacationTypeName }}
                         </p>
-                        <p v-if="entry.note" class="text-xs text-slate-400 dark:text-slate-500 truncate">
+                        <p
+                          v-if="entry.note"
+                          class="text-xs text-slate-400 dark:text-slate-500 truncate"
+                        >
                           {{ entry.note }}
                         </p>
                       </div>
@@ -658,9 +755,44 @@ onMounted(async () => {
                     </div>
                   </div>
 
+                  <!-- Teammates' entries (read-only) -->
+                  <div
+                    v-if="teamVacationsByDate.has(cell.iso)"
+                    class="divide-y divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800"
+                  >
+                    <div
+                      v-for="entry in teamVacationsByDate.get(cell.iso)"
+                      :key="`team-${entry.id}`"
+                      class="flex items-center gap-2.5 px-4 py-2"
+                    >
+                      <div
+                        class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
+                        :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+                      />
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
+                          {{ entry.employeeName }}
+                        </p>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 truncate">
+                          {{ entry.vacationTypeName }}
+                        </p>
+                      </div>
+                      <span
+                        :class="[
+                          'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
+                          entry.amount === 1
+                            ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+                        ]"
+                      >{{ entry.amount === 1 ? "Full" : "½" }}</span>
+                    </div>
+                  </div>
+
                   <!-- Create form -->
                   <div class="p-4 space-y-3">
-                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    <p
+                      class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+                    >
                       Plan vacation
                     </p>
 
@@ -829,8 +961,12 @@ onMounted(async () => {
             </div>
           </div>
         </section>
+        </div>
       </div>
     </div>
+
+    <!-- Year overview overlay -->
+    <YearCalendarOverlay v-model:open="yearOverlayOpen" :vacations-by-date="vacationsByDate" :team-vacations-by-date="teamVacationsByDate" />
 
     <!-- Edit dialog -->
     <Dialog v-model:open="editDialogVisible">

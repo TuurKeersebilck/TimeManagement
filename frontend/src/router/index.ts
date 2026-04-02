@@ -68,9 +68,7 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: "/admin/vacations",
-    name: "admin-vacations",
-    component: () => import("../views/admin/VacationsView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    redirect: "/vacations",
   },
   {
     path: "/admin/employees",
@@ -88,6 +86,12 @@ const routes: Array<RouteRecordRaw> = [
     path: "/admin/vacation-types",
     name: "admin-vacation-types",
     component: () => import("../views/admin/VacationTypesView.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: "/admin/settings",
+    name: "admin-settings",
+    component: () => import("../views/admin/AppSettingsView.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
 

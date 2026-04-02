@@ -26,6 +26,24 @@ export interface CreateVacationDayDto {
   note?: string;
 }
 
+export interface TeamVacationDay {
+  id: number;
+  userId: string;
+  employeeName: string;
+  vacationTypeId: number;
+  vacationTypeName: string;
+  vacationTypeColor?: string;
+  date: string;
+  amount: number;
+  note?: string;
+}
+
+export interface VacationType {
+  id: number;
+  name: string;
+  color?: string;
+}
+
 export interface CreateVacationRangeDto {
   vacationTypeId: number;
   startDate: string;
@@ -67,6 +85,20 @@ export const vacationService = {
 
   async createRange(data: CreateVacationRangeDto): Promise<VacationRangeResult> {
     const res = await apiClient.post<VacationRangeResult>("/vacations/range", data);
+    return res.data;
+  },
+
+  async getTeamVacationDays(params?: {
+    vacationTypeId?: number;
+    year?: number;
+    month?: number;
+  }): Promise<TeamVacationDay[]> {
+    const res = await apiClient.get<TeamVacationDay[]>("/vacations/team", { params });
+    return res.data;
+  },
+
+  async getVacationTypes(): Promise<VacationType[]> {
+    const res = await apiClient.get<VacationType[]>("/vacations/types");
     return res.data;
   },
 };

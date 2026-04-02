@@ -50,7 +50,6 @@ public class AdminService(AppDbContext context) : IAdminService
     {
         return await _context.Users
             .AsNoTracking()
-            .Where(u => u.Role == UserRole.Employee)
             .OrderBy(u => u.FullName)
             .Select(u => new EmployeeDto
             {

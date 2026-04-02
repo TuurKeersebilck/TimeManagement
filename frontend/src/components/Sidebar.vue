@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, type Component } from "vue";
+import { ref, computed, onMounted, type Component } from "vue";
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useTheme } from "../composables/useTheme";
@@ -13,8 +13,10 @@ import {
   MoonIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   LogOutIcon,
   KeyRoundIcon,
+  SettingsIcon,
 } from "lucide-vue-next";
 
 interface Props {
@@ -50,15 +52,21 @@ const employeeNav: NavItem[] = [
   { name: "Account", to: "/account", icon: KeyRoundIcon },
 ];
 
-const adminNav: NavItem[] = [
+const adminPersonalNav: NavItem[] = [
   { name: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboardIcon },
-  { name: "All Time Logs", to: "/admin/time-logs", icon: ClockIcon },
-  { name: "Vacation Overview", to: "/admin/vacations", icon: CalendarIcon },
-  { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
-  { name: "Manage Employees", to: "/admin/employees", icon: UsersIcon },
+  { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
 ];
 
-const navigationItems = computed(() => (isAdmin.value ? adminNav : employeeNav));
+const adminSectionNav: NavItem[] = [
+  { name: "All Time Logs", to: "/admin/time-logs", icon: ClockIcon },
+  { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
+  { name: "Employees", to: "/admin/employees", icon: UsersIcon },
+  { name: "App Settings", to: "/admin/settings", icon: SettingsIcon },
+];
+
+const navigationItems = computed(() => (isAdmin.value ? adminPersonalNav : employeeNav));
+
+const adminSectionOpen = ref(route.path.startsWith("/admin/") && route.path !== "/admin/dashboard");
 
 const handleNavClick = () => {
   if (window.innerWidth < 1024) emit("toggle");
@@ -120,6 +128,8 @@ onMounted(() => fetchUser());
       >
         {{ isAdmin ? "Admin" : "Employee" }}
       </p>
+
+      <!-- Personal nav links (all roles) -->
       <div class="space-y-0.5">
         <router-link
           v-for="item in navigationItems"
@@ -137,6 +147,48 @@ onMounted(() => fetchUser());
           <span v-if="isOpen" class="truncate">{{ item.name }}</span>
         </router-link>
       </div>
+
+      <!-- Administration section (admin only) -->
+      <template v-if="isAdmin">
+        <!-- Section divider + toggle -->
+        <div :class="['mt-4 mb-1', !isOpen && 'lg:hidden']">
+          <button
+            class="w-full flex items-center justify-between px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+            @click="adminSectionOpen = !adminSectionOpen"
+          >
+            <span>Manage</span>
+            <ChevronDownIcon
+              :class="[
+                'size-3.5 transition-transform duration-200',
+                adminSectionOpen && 'rotate-180',
+              ]"
+            />
+          </button>
+        </div>
+        <!-- Collapsed sidebar: just show icons with a faint divider -->
+        <div
+          v-if="!isOpen"
+          class="hidden lg:block mt-3 mb-1 mx-3 border-t border-slate-200 dark:border-slate-700"
+        />
+
+        <div v-show="adminSectionOpen || !isOpen" class="space-y-0.5">
+          <router-link
+            v-for="item in adminSectionNav"
+            :key="item.name"
+            :to="item.to"
+            @click="handleNavClick"
+            :class="[
+              'nav-link',
+              !isOpen && 'lg:justify-center lg:!px-0',
+              isActive(item.to) && 'nav-link-active',
+            ]"
+            :title="!isOpen ? item.name : undefined"
+          >
+            <component :is="item.icon" class="size-[18px] shrink-0" />
+            <span v-if="isOpen" class="truncate">{{ item.name }}</span>
+          </router-link>
+        </div>
+      </template>
     </nav>
 
     <!-- Bottom section -->

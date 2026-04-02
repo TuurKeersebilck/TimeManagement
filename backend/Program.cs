@@ -74,6 +74,7 @@ try
     builder.Services.AddScoped<ITimeLogService, TimeLogService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
+    builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();
 
     // Register email service (MailKit)
     var smtpConfig = new SmtpConfig
