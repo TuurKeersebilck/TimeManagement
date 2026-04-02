@@ -15,14 +15,11 @@ public class VacationsController(
     IVacationService service,
     IAdminService adminService,
     INotificationService notificationService,
-    UserManager<User> userManager) : ControllerBase
+    UserManager<User> userManager) : ApiControllerBase(userManager)
 {
     private readonly IVacationService _service = service;
     private readonly IAdminService _adminService = adminService;
     private readonly INotificationService _notificationService = notificationService;
-    private readonly UserManager<User> _userManager = userManager;
-
-    private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
 
     [HttpGet("balances")]
     public async Task<ActionResult<IEnumerable<VacationBalanceDto>>> GetBalances(CancellationToken ct)

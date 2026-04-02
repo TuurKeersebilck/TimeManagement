@@ -10,4 +10,5 @@ public interface ITimeLogService
     Task<TimeLogDto> CreateAsync(TimeLogCreateDto createDto, string userId, CancellationToken cancellationToken = default);
     Task<bool> UpdateAsync(int id, TimeLogUpdateDto updateDto, string userId, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(int id, string userId, CancellationToken cancellationToken = default);
+    Task<MyTargetDto> GetMyTargetAsync(string userId, CancellationToken cancellationToken = default);
 }

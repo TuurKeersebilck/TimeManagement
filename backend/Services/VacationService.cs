@@ -80,9 +80,7 @@ public class VacationService(AppDbContext db) : IVacationService
             ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
 
         var currentYear = DateTime.UtcNow.Year;
-        var used = await _db.VacationDays
-            .Where(d => d.UserId == userId && d.VacationTypeId == dto.VacationTypeId && d.Date.Year == currentYear)
-            .SumAsync(d => d.Amount, ct);
+        var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
 
         if (used + dto.Amount > balance.YearlyBalance)
             throw new InsufficientVacationBalanceException(
@@ -119,9 +117,7 @@ public class VacationService(AppDbContext db) : IVacationService
             ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
 
         var currentYear = DateTime.UtcNow.Year;
-        var used = await _db.VacationDays
-            .Where(d => d.UserId == userId && d.VacationTypeId == dto.VacationTypeId && d.Date.Year == currentYear && d.Id != id)
-            .SumAsync(d => d.Amount, ct);
+        var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, excludeId: id, ct: ct);
 
         if (used + dto.Amount > balance.YearlyBalance)
             throw new InsufficientVacationBalanceException(
@@ -194,9 +190,7 @@ public class VacationService(AppDbContext db) : IVacationService
 
         // Validate balance (only count days in the current year)
         var currentYear = DateTime.UtcNow.Year;
-        var alreadyUsed = await _db.VacationDays
-            .Where(d => d.UserId == userId && d.VacationTypeId == dto.VacationTypeId && d.Date.Year == currentYear)
-            .SumAsync(d => d.Amount, ct);
+        var alreadyUsed = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
 
         decimal totalNewAmount = newDays.Count(d => d.Year == currentYear) * dto.Amount;
 
@@ -235,6 +229,18 @@ public class VacationService(AppDbContext db) : IVacationService
             SkippedWeekends = skippedWeekends,
             SkippedExisting = skippedExisting,
         };
+    }
+
+    private Task<decimal> GetUsedVacationDaysAsync(
+        string userId, int vacationTypeId, int year, int? excludeId = null, CancellationToken ct = default)
+    {
+        var query = _db.VacationDays
+            .Where(d => d.UserId == userId && d.VacationTypeId == vacationTypeId && d.Date.Year == year);
+
+        if (excludeId.HasValue)
+            query = query.Where(d => d.Id != excludeId.Value);
+
+        return query.SumAsync(d => d.Amount, ct);
     }
 
     private static void ValidateAmount(decimal amount)

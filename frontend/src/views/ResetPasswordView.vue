@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { authService } from "../services/authService";
+import { extractApiError } from "@/utils/apiError";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -71,9 +72,7 @@ const submit = async () => {
     done.value = true;
     setTimeout(() => router.push("/login"), 3000);
   } catch (err: unknown) {
-    error.value =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      "This reset link is invalid or has expired.";
+    error.value = extractApiError(err, "This reset link is invalid or has expired.");
   } finally {
     loading.value = false;
   }

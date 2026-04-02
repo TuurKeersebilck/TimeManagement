@@ -4,14 +4,13 @@ import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { authService, type ChangePasswordPayload, type UpdateProfilePayload } from "../services/authService";
 import { useAuth } from "@/composables/useAuth";
-import { useAppToast } from "@/composables/useAppToast";
+import { useApiCall } from "@/composables/useApiCall";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon } from "lucide-vue-next";
 
 const router = useRouter();
-const toast = useAppToast();
 const { currentUser, fetchUser } = useAuth();
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -28,27 +27,18 @@ watch(
   { immediate: true }
 );
 
-const profileSaving = ref(false);
-const profileError = ref("");
-
 const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.value.email));
 const profileCanSubmit = computed(() => profile.value.fullName.trim() && emailValid.value);
 
-const saveProfile = async () => {
-  profileError.value = "";
-  profileSaving.value = true;
-  try {
-    await authService.updateProfile(profile.value);
-    await fetchUser(true);
-    toast.success("Profile updated");
-  } catch (err: unknown) {
-    profileError.value =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      "Failed to update profile";
-  } finally {
-    profileSaving.value = false;
-  }
-};
+const {
+  execute: saveProfile,
+  loading: profileSaving,
+  error: profileError,
+} = useApiCall(() => authService.updateProfile(profile.value), {
+  successMessage: "Profile updated",
+  errorToast: true,
+  onSuccess: () => fetchUser(true),
+});
 
 // ─── Password ─────────────────────────────────────────────────────────────────
 
@@ -57,9 +47,6 @@ const form = ref<ChangePasswordPayload>({
   newPassword: "",
   confirmPassword: "",
 });
-
-const saving = ref(false);
-const error = ref("");
 
 const strengthChecks = computed(() => ({
   length:    form.value.newPassword.length >= 8,
@@ -95,22 +82,18 @@ const canSubmit = computed(() =>
   form.value.newPassword === form.value.confirmPassword
 );
 
-const submit = async () => {
-  error.value = "";
-  saving.value = true;
-  try {
-    await authService.changePassword(form.value);
-    toast.success("Password changed — please sign in again");
+const {
+  execute: submit,
+  loading: saving,
+  error,
+} = useApiCall(() => authService.changePassword(form.value), {
+  successMessage: "Password changed — please sign in again",
+  errorToast: true,
+  onSuccess: () => {
     authService.clearSession();
     router.push("/login");
-  } catch (err: unknown) {
-    error.value =
-      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-      "Failed to change password";
-  } finally {
-    saving.value = false;
-  }
-};
+  },
+});
 </script>
 
 <template>

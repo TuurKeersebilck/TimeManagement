@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { authService } from "../services/authService";
+import { extractApiError } from "@/utils/apiError";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ const handleLogin = async (): Promise<void> => {
     authService.setUserInfo(response.email, response.fullName, response.roles);
     router.push("/");
   } catch (err) {
-    error.value = (err as Error).message || "Invalid email or password";
+    error.value = extractApiError(err, "Invalid email or password");
   } finally {
     loading.value = false;
   }

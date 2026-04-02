@@ -13,12 +13,9 @@ namespace TimeManagementBackend.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
 public class NotificationsController(
     INotificationService notificationService,
-    UserManager<User> userManager) : ControllerBase
+    UserManager<User> userManager) : ApiControllerBase(userManager)
 {
     private readonly INotificationService _notificationService = notificationService;
-    private readonly UserManager<User> _userManager = userManager;
-
-    private Task<User?> GetCurrentUserAsync() => _userManager.GetUserAsync(User);
 
     [HttpGet]
     public async Task<ActionResult<IList<NotificationDto>>> GetNotifications(CancellationToken ct)
