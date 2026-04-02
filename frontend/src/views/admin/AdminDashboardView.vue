@@ -307,7 +307,7 @@ onMounted(async () => {
                   Upcoming vacations
                 </h2>
                 <button
-                  @click="router.push({ name: 'admin-vacations' })"
+                  @click="router.push({ name: 'team-calendar' })"
                   class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
                 >
                   Calendar →
