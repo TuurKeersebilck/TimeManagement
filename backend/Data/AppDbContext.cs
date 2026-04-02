@@ -16,6 +16,7 @@ public class AppDbContext : IdentityUserContext<User>
     public DbSet<VacationType> VacationTypes => Set<VacationType>();
     public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
     public DbSet<VacationDay> VacationDays => Set<VacationDay>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -70,7 +70,12 @@ const handleLogin = async (): Promise<void> => {
 
           <!-- Password Field -->
           <div class="space-y-2">
-            <Label for="password">Password</Label>
+            <div class="flex items-center justify-between">
+              <Label for="password">Password</Label>
+              <RouterLink to="/forgot-password" class="text-xs text-muted-foreground hover:text-foreground">
+                Forgot password?
+              </RouterLink>
+            </div>
             <Input
               id="password"
               v-model="password"

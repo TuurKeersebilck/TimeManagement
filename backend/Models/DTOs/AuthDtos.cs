@@ -78,3 +78,24 @@ public class ChangePasswordDto
     [Compare("NewPassword", ErrorMessage = "Passwords do not match")]
     public string ConfirmPassword { get; set; } = string.Empty;
 }
+
+public class ForgotPasswordDto
+{
+    [Required(ErrorMessage = "Email is required")]
+    [EmailAddress(ErrorMessage = "Invalid email address")]
+    public string Email { get; set; } = string.Empty;
+}
+
+public class ResetPasswordDto
+{
+    [Required]
+    public string Token { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "New password is required")]
+    [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+    public string NewPassword { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Confirm password is required")]
+    [Compare("NewPassword", ErrorMessage = "Passwords do not match")]
+    public string ConfirmPassword { get; set; } = string.Empty;
+}

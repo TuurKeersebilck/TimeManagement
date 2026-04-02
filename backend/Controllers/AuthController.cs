@@ -2,9 +2,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using TimeManagementBackend.Config;
+using TimeManagementBackend.Data;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
@@ -21,6 +25,9 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly JwtConfig _jwtConfig;
     private readonly ITokenBlacklistService _blacklist;
+    private readonly AppDbContext _db;
+    private readonly IEmailService _email;
+    private readonly string _appUrl;
 
     public AuthController(
         UserManager<User> userManager,
@@ -28,6 +35,9 @@ public class AuthController : ControllerBase
         JwtService jwtService,
         JwtConfig jwtConfig,
         ITokenBlacklistService blacklist,
+        AppDbContext db,
+        IEmailService email,
+        IConfiguration configuration,
         ILogger<AuthController> logger)
     {
         _userManager = userManager;
@@ -35,6 +45,9 @@ public class AuthController : ControllerBase
         _jwtService = jwtService;
         _jwtConfig = jwtConfig;
         _blacklist = blacklist;
+        _db = db;
+        _email = email;
+        _appUrl = configuration["AppUrl"] ?? "http://localhost:5173";
         _logger = logger;
     }
 
@@ -191,6 +204,71 @@ public class AuthController : ControllerBase
         }
 
         Response.Cookies.Delete("access_token");
+        return NoContent();
+    }
+
+    [HttpPost("forgot-password")]
+    [EnableRateLimiting("login-limit")]
+    public async Task<IActionResult> ForgotPassword(ForgotPasswordDto dto)
+    {
+        // Always return 204 — never reveal whether the email exists
+        var user = await _userManager.FindByEmailAsync(dto.Email);
+        if (user == null)
+        {
+            _logger.LogInformation("Forgot-password request for unknown email {Email}", dto.Email);
+            return NoContent();
+        }
+
+        // Invalidate any existing unused tokens for this user
+        var existing = await _db.PasswordResetTokens
+            .Where(t => t.UserId == user.Id && !t.Used && t.ExpiresAt > DateTime.UtcNow)
+            .ToListAsync();
+        foreach (var t in existing) t.Used = true;
+
+        // Generate a cryptographically random token
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(48));
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawToken)));
+
+        _db.PasswordResetTokens.Add(new PasswordResetToken
+        {
+            UserId = user.Id,
+            TokenHash = hash,
+            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            Used = false,
+        });
+        await _db.SaveChangesAsync();
+
+        var resetLink = $"{_appUrl}/reset-password?token={Uri.EscapeDataString(rawToken)}";
+        await _email.SendPasswordResetEmailAsync(user.Email!, user.FullName, resetLink);
+
+        _logger.LogInformation("Password reset email sent to {Email}", user.Email);
+        return NoContent();
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(dto.Token)));
+
+        var record = await _db.PasswordResetTokens
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TokenHash == hash && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+
+        if (record == null)
+            return BadRequest(new ErrorResponseDto { Message = "This reset link is invalid or has expired.", Code = "INVALID_TOKEN" });
+
+        var result = await _userManager.ResetPasswordAsync(
+            record.User,
+            await _userManager.GeneratePasswordResetTokenAsync(record.User),
+            dto.NewPassword);
+
+        if (!result.Succeeded)
+            return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
+
+        record.Used = true;
+        await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Password reset completed for user {UserId}", record.UserId);
         return NoContent();
     }
 
