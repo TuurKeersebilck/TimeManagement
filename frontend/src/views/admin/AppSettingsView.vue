@@ -34,6 +34,7 @@ import {
   Trash2Icon,
   Loader2Icon,
   CalendarIcon,
+  ClockIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -45,6 +46,10 @@ const selectedYear = ref(currentYear);
 const countryCode = ref<string>("");
 const countries = ref<AvailableCountry[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
+
+const defaultDailyHours = ref<string>("");
+const defaultWeeklyHours = ref<string>("");
+const savingTargets = ref(false);
 
 const loadingCountries = ref(false);
 const loadingHolidays = ref(false);
@@ -71,6 +76,8 @@ onMounted(async () => {
     ]);
     countries.value = available;
     if (config.countryCode) countryCode.value = config.countryCode;
+    if (config.defaultDailyHours != null) defaultDailyHours.value = String(config.defaultDailyHours);
+    if (config.defaultWeeklyHours != null) defaultWeeklyHours.value = String(config.defaultWeeklyHours);
   } catch {
     toast.error("Failed to load settings");
   } finally {
@@ -151,6 +158,20 @@ const deleteHoliday = (holiday: PublicHoliday) => {
   });
 };
 
+const saveTargets = async () => {
+  savingTargets.value = true;
+  try {
+    const daily = defaultDailyHours.value ? parseFloat(defaultDailyHours.value) : null;
+    const weekly = defaultWeeklyHours.value ? parseFloat(defaultWeeklyHours.value) : null;
+    await holidayService.setDefaultTargets(daily, weekly);
+    toast.success("Default targets saved");
+  } catch {
+    toast.error("Failed to save targets");
+  } finally {
+    savingTargets.value = false;
+  }
+};
+
 const formatDate = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
     day: "numeric",
@@ -212,6 +233,60 @@ const formatDate = (iso: string) =>
               </div>
               <Button :disabled="!countryCode || savingCountry" @click="saveCountry">
                 <Loader2Icon v-if="savingCountry" class="size-4 animate-spin" />
+                Save
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Working hours targets -->
+        <section class="mb-8">
+          <h2
+            class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3"
+          >
+            Working Hours Targets
+          </h2>
+
+          <div class="card p-5">
+            <div class="flex items-start gap-3 mb-5">
+              <ClockIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
+              <div>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  Default targets
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  These apply to all employees unless overridden individually in their profile.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-end gap-3">
+              <div class="space-y-1.5">
+                <Label>Daily target (hours)</Label>
+                <Input
+                  v-model="defaultDailyHours"
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="0.5"
+                  placeholder="e.g. 8"
+                  class="w-32"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label>Weekly target (hours)</Label>
+                <Input
+                  v-model="defaultWeeklyHours"
+                  type="number"
+                  min="0"
+                  max="168"
+                  step="0.5"
+                  placeholder="e.g. 40"
+                  class="w-32"
+                />
+              </div>
+              <Button :disabled="savingTargets" @click="saveTargets">
+                <Loader2Icon v-if="savingTargets" class="size-4 animate-spin" />
                 Save
               </Button>
             </div>

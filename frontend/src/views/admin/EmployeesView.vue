@@ -20,6 +20,11 @@ const router = useRouter();
 const employees = ref<Employee[]>([]);
 const loading = ref(false);
 
+const weekStatus = (emp: Employee): "on-track" | "behind" | "none" => {
+  if (emp.resolvedWeeklyTarget == null) return "none";
+  return emp.weeklyHoursLogged >= emp.resolvedWeeklyTarget ? "on-track" : "behind";
+};
+
 onMounted(async () => {
   loading.value = true;
   try {
@@ -55,10 +60,11 @@ onMounted(async () => {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>This week</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableEmpty v-if="employees.length === 0" :colspan="2">
+              <TableEmpty v-if="employees.length === 0" :colspan="3">
                 <UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">No employees found.</p>
               </TableEmpty>
@@ -73,6 +79,27 @@ onMounted(async () => {
                 </TableCell>
                 <TableCell class="text-slate-600 dark:text-slate-400">
                   {{ employee.email }}
+                </TableCell>
+                <TableCell>
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">
+                      {{ employee.weeklyHoursLogged.toFixed(1) }}h
+                      <span v-if="employee.resolvedWeeklyTarget != null" class="text-slate-400 dark:text-slate-500">
+                        / {{ employee.resolvedWeeklyTarget }}h
+                      </span>
+                    </span>
+                    <span
+                      v-if="weekStatus(employee) !== 'none'"
+                      :class="[
+                        'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
+                        weekStatus(employee) === 'on-track'
+                          ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
+                      ]"
+                    >
+                      {{ weekStatus(employee) === "on-track" ? "On track" : "Behind" }}
+                    </span>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>

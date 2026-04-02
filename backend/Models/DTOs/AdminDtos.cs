@@ -30,6 +30,37 @@ public class EmployeeDto
     public string Id { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public decimal WeeklyHoursLogged { get; set; }
+    public decimal? ResolvedWeeklyTarget { get; set; }
+}
+
+public class EmployeeTargetDto
+{
+    public decimal? DailyHours { get; set; }       // null = using global default
+    public decimal? WeeklyHours { get; set; }      // null = using global default
+    public decimal? ResolvedDailyHours { get; set; }
+    public decimal? ResolvedWeeklyHours { get; set; }
+    public bool HasOverride { get; set; }
+}
+
+public class SetEmployeeTargetDto
+{
+    public decimal? DailyHours { get; set; }
+    public decimal? WeeklyHours { get; set; }
+}
+
+public class WeekSummaryDto
+{
+    public string WeekLabel { get; set; } = string.Empty;
+    public string WeekStart { get; set; } = string.Empty; // "YYYY-MM-DD"
+    public decimal HoursLogged { get; set; }
+    public decimal? Target { get; set; }
+}
+
+public class MyTargetDto
+{
+    public decimal? DailyHours { get; set; }
+    public decimal? WeeklyHours { get; set; }
 }
 
 public class VacationTypeDto

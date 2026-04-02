@@ -21,4 +21,9 @@ public interface IAdminService
 
     // Vacation overview (admin calendar)
     Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(string? userId = null, int? vacationTypeId = null, int? year = null, int? month = null, CancellationToken ct = default);
+
+    // Working hours targets
+    Task<EmployeeTargetDto> GetEmployeeTargetAsync(string userId, CancellationToken ct = default);
+    Task<EmployeeTargetDto> SetEmployeeTargetAsync(string userId, SetEmployeeTargetDto dto, CancellationToken ct = default);
+    Task<IEnumerable<WeekSummaryDto>> GetEmployeeWeeklySummaryAsync(string userId, int weeks, CancellationToken ct = default);
 }
