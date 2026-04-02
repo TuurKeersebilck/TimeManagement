@@ -168,10 +168,12 @@ watch(currentMonth, fetchTeamVacationDays);
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_VISIBLE = 2;
 
-// ─── Popover (inline create) ──────────────────────────────────────────────────
+// ─── Popover (inline create / edit) ──────────────────────────────────────────
 
 const openPopoverIso = ref<string | null>(null);
 const popoverSaving = ref(false);
+const popoverEditingId = ref<number | null>(null);
+const isPopoverEditMode = computed(() => popoverEditingId.value !== null);
 
 const popoverForm = ref({
   vacationTypeId: "",
@@ -199,7 +201,7 @@ const workingDaysInRange = computed(() => {
 });
 
 const isRangeMode = computed(
-  () => popoverForm.value.startDate !== popoverForm.value.endDate && !!popoverForm.value.endDate
+  () => !isPopoverEditMode.value && popoverForm.value.startDate !== popoverForm.value.endDate && !!popoverForm.value.endDate
 );
 
 const popoverLiveRemaining = computed(() => {
@@ -207,6 +209,15 @@ const popoverLiveRemaining = computed(() => {
   const typeId = parseInt(popoverForm.value.vacationTypeId);
   const balance = balances.value.find((b) => b.vacationTypeId === typeId);
   if (!balance) return null;
+  if (isPopoverEditMode.value) {
+    const orig = vacationDays.value.find((d) => d.id === popoverEditingId.value);
+    let base = balance.remainingDays;
+    if (orig && orig.vacationTypeId === typeId) {
+      const origYear = new Date(orig.date + "T00:00:00").getFullYear();
+      if (origYear === new Date().getFullYear()) base += orig.amount;
+    }
+    return base - parseFloat(popoverForm.value.amount || "1");
+  }
   const cost = workingDaysInRange.value * parseFloat(popoverForm.value.amount || "1");
   return balance.remainingDays - cost;
 });
@@ -214,7 +225,7 @@ const popoverLiveRemaining = computed(() => {
 const canPopoverSubmit = computed(() => {
   if (!popoverForm.value.vacationTypeId || !popoverForm.value.startDate) return false;
   if (popoverLiveRemaining.value === null || popoverLiveRemaining.value < 0) return false;
-  if (workingDaysInRange.value === 0) return false;
+  if (!isPopoverEditMode.value && workingDaysInRange.value === 0) return false;
   return true;
 });
 
@@ -244,13 +255,27 @@ const popoverDateLabel = computed(() => {
 
 const openPopover = (iso: string) => {
   openPopoverIso.value = iso;
-  popoverForm.value = {
-    vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
-    startDate: iso,
-    endDate: iso,
-    amount: "1",
-    note: "",
-  };
+  const existing = vacationsByDate.value.get(iso);
+  if (existing && existing.length > 0) {
+    const v = existing[0];
+    popoverEditingId.value = v.id;
+    popoverForm.value = {
+      vacationTypeId: String(v.vacationTypeId),
+      startDate: v.date,
+      endDate: v.date,
+      amount: String(v.amount),
+      note: v.note ?? "",
+    };
+  } else {
+    popoverEditingId.value = null;
+    popoverForm.value = {
+      vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
+      startDate: iso,
+      endDate: iso,
+      amount: "1",
+      note: "",
+    };
+  }
 };
 
 const closePopover = () => {
@@ -263,7 +288,17 @@ const savePopover = async () => {
   try {
     const { vacationTypeId, startDate, endDate, amount, note } = popoverForm.value;
 
-    if (startDate === endDate) {
+    if (isPopoverEditMode.value) {
+      const updated = await vacationService.update(popoverEditingId.value!, {
+        vacationTypeId: parseInt(vacationTypeId),
+        date: startDate,
+        amount: parseFloat(amount),
+        note: note.trim() || undefined,
+      });
+      const idx = vacationDays.value.findIndex((d) => d.id === popoverEditingId.value);
+      if (idx !== -1) vacationDays.value[idx] = updated;
+      toast.success("Vacation day updated");
+    } else if (startDate === endDate) {
       const payload: CreateVacationDayDto = {
         vacationTypeId: parseInt(vacationTypeId),
         date: startDate,
@@ -293,7 +328,7 @@ const savePopover = async () => {
     balances.value = await vacationService.getBalances();
     closePopover();
   } catch (err: unknown) {
-    toast.error(extractApiError(err, "Failed to plan vacation"));
+    toast.error(extractApiError(err, "Failed to save vacation"));
   } finally {
     popoverSaving.value = false;
   }
@@ -428,7 +463,7 @@ onMounted(async () => {
                   :open="openPopoverIso === cell.iso"
                   @update:open="
                     (v) => {
-                      if (v && cell.isCurrentMonth && !cell.isWeekend && balances.length > 0)
+                      if (v && cell.isCurrentMonth && (!cell.isWeekend && balances.length > 0 || vacationsByDate.has(cell.iso)))
                         openPopover(cell.iso);
                       else if (!v) closePopover();
                     }
@@ -443,7 +478,7 @@ onMounted(async () => {
                         cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
                         openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500' : '',
                         highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-indigo-50 dark:bg-indigo-950/30' : '',
-                        cell.isCurrentMonth && !cell.isWeekend && balances.length > 0
+                        cell.isCurrentMonth && (!cell.isWeekend && balances.length > 0 || vacationsByDate.has(cell.iso))
                           ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
                           : 'cursor-default pointer-events-none',
                       ]"
@@ -585,38 +620,10 @@ onMounted(async () => {
                       </div>
                     </div>
 
-                    <!-- Teammates' entries (read-only) -->
-                    <div
-                      v-if="teamVacationsByDate.has(cell.iso)"
-                      class="divide-y divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800"
-                    >
-                      <div
-                        v-for="entry in teamVacationsByDate.get(cell.iso)"
-                        :key="`team-${entry.id}`"
-                        class="flex items-center gap-2.5 px-4 py-2"
-                      >
-                        <div
-                          class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
-                          :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
-                        />
-                        <div class="flex-1 min-w-0">
-                          <p class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
-                            {{ entry.employeeName }}
-                          </p>
-                          <p class="text-xs text-slate-400 dark:text-slate-500 truncate">
-                            {{ entry.vacationTypeName }}
-                          </p>
-                        </div>
-                        <span class="text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                          {{ entry.amount === 1 ? "Full" : "½" }}
-                        </span>
-                      </div>
-                    </div>
-
-                    <!-- Create form -->
+                    <!-- Create / Edit form -->
                     <div class="p-4 space-y-3">
                       <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                        Plan vacation
+                        {{ isPopoverEditMode ? "Edit vacation" : "Plan vacation" }}
                       </p>
 
                       <div class="space-y-1">
@@ -637,12 +644,12 @@ onMounted(async () => {
                         </Select>
                       </div>
 
-                      <div class="grid grid-cols-2 gap-2">
+                      <div :class="isPopoverEditMode ? '' : 'grid grid-cols-2 gap-2'">
                         <div class="space-y-1">
-                          <Label class="text-xs">From</Label>
+                          <Label class="text-xs">{{ isPopoverEditMode ? "Date" : "From" }}</Label>
                           <Input v-model="popoverForm.startDate" type="date" class="h-8 text-sm" />
                         </div>
-                        <div class="space-y-1">
+                        <div v-if="!isPopoverEditMode" class="space-y-1">
                           <Label class="text-xs">To</Label>
                           <Input v-model="popoverForm.endDate" type="date" class="h-8 text-sm" />
                         </div>
@@ -659,6 +666,11 @@ onMounted(async () => {
                             <SelectItem value="0.5">Half day</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+
+                      <div class="space-y-1">
+                        <Label class="text-xs">Note</Label>
+                        <Input v-model="popoverForm.note" type="text" placeholder="Optional" class="h-8 text-sm" maxlength="500" />
                       </div>
 
                       <div
@@ -693,8 +705,8 @@ onMounted(async () => {
                         @click="savePopover"
                       >
                         <Loader2Icon v-if="popoverSaving" class="size-3.5 animate-spin" />
-                        <PlusIcon v-else class="size-3.5" />
-                        {{ isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
+                        <PlusIcon v-else-if="!isPopoverEditMode" class="size-3.5" />
+                        {{ isPopoverEditMode ? "Save changes" : isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
                       </Button>
                     </div>
                   </PopoverContent>
