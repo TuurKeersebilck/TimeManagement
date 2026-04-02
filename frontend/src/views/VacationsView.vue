@@ -173,6 +173,13 @@ const popoverSaving = ref(false);
 const popoverEditingId = ref<number | null>(null);
 const isPopoverEditMode = computed(() => popoverEditingId.value !== null);
 
+const popoverDayEntries = computed(() =>
+  openPopoverIso.value ? (vacationsByDate.value.get(openPopoverIso.value) ?? []) : []
+);
+const popoverDayTotal = computed(() =>
+  popoverDayEntries.value.reduce((sum, e) => sum + e.amount, 0)
+);
+
 const popoverForm = ref({
   vacationTypeId: "",
   startDate: "",
@@ -198,8 +205,12 @@ const workingDaysInRange = computed(() => {
   return count;
 });
 
+// Range mode is only available when the day has no existing entries
 const isRangeMode = computed(
-  () => !isPopoverEditMode.value && popoverForm.value.startDate !== popoverForm.value.endDate && !!popoverForm.value.endDate
+  () => !isPopoverEditMode.value
+    && popoverDayEntries.value.length === 0
+    && popoverForm.value.startDate !== popoverForm.value.endDate
+    && !!popoverForm.value.endDate
 );
 
 const popoverLiveRemaining = computed(() => {
@@ -251,19 +262,34 @@ const popoverDateLabel = computed(() => {
   });
 });
 
+const fillFormForEntry = (v: VacationDay) => {
+  popoverEditingId.value = v.id;
+  popoverForm.value = {
+    vacationTypeId: String(v.vacationTypeId),
+    startDate: v.date,
+    endDate: v.date,
+    amount: String(v.amount),
+    note: v.note ?? "",
+  };
+};
+
+const switchToNewMode = () => {
+  popoverEditingId.value = null;
+  const remaining = 1 - popoverDayTotal.value;
+  popoverForm.value = {
+    vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
+    startDate: openPopoverIso.value ?? "",
+    endDate: openPopoverIso.value ?? "",
+    amount: String(remaining <= 0.5 ? 0.5 : 1),
+    note: "",
+  };
+};
+
 const openPopover = (iso: string) => {
   openPopoverIso.value = iso;
   const existing = vacationsByDate.value.get(iso);
   if (existing && existing.length > 0) {
-    const v = existing[0];
-    popoverEditingId.value = v.id;
-    popoverForm.value = {
-      vacationTypeId: String(v.vacationTypeId),
-      startDate: v.date,
-      endDate: v.date,
-      amount: String(v.amount),
-      note: v.note ?? "",
-    };
+    fillFormForEntry(existing[0]);
   } else {
     popoverEditingId.value = null;
     popoverForm.value = {
@@ -557,6 +583,46 @@ onMounted(async () => {
                       </span>
                     </div>
 
+                    <!-- Entry switcher (multiple entries on same day) -->
+                    <div
+                      v-if="popoverDayEntries.length > 0"
+                      class="flex flex-wrap gap-1.5 px-4 pt-3 pb-1"
+                    >
+                      <button
+                        v-for="entry in popoverDayEntries"
+                        :key="entry.id"
+                        type="button"
+                        :class="[
+                          'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                          popoverEditingId === entry.id
+                            ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+                        ]"
+                        @click="fillFormForEntry(entry)"
+                      >
+                        <span
+                          class="w-1.5 h-1.5 rounded-full shrink-0"
+                          :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+                        />
+                        {{ entry.vacationTypeName }}
+                        <span class="opacity-60">{{ entry.amount === 1 ? "Full" : "½" }}</span>
+                      </button>
+                      <button
+                        v-if="popoverDayTotal < 1"
+                        type="button"
+                        :class="[
+                          'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                          !isPopoverEditMode
+                            ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+                        ]"
+                        @click="switchToNewMode"
+                      >
+                        <PlusIcon class="size-3" />
+                        Add
+                      </button>
+                    </div>
+
                     <!-- Create / Edit form -->
                     <div class="p-4 space-y-3">
                       <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -581,12 +647,12 @@ onMounted(async () => {
                         </Select>
                       </div>
 
-                      <div :class="isPopoverEditMode ? '' : 'grid grid-cols-2 gap-2'">
+                      <div :class="isPopoverEditMode || popoverDayEntries.length > 0 ? '' : 'grid grid-cols-2 gap-2'">
                         <div class="space-y-1">
-                          <Label class="text-xs">{{ isPopoverEditMode ? "Date" : "From" }}</Label>
+                          <Label class="text-xs">{{ isPopoverEditMode || popoverDayEntries.length > 0 ? "Date" : "From" }}</Label>
                           <Input v-model="popoverForm.startDate" type="date" class="h-8 text-sm" />
                         </div>
-                        <div v-if="!isPopoverEditMode" class="space-y-1">
+                        <div v-if="!isPopoverEditMode && popoverDayEntries.length === 0" class="space-y-1">
                           <Label class="text-xs">To</Label>
                           <Input v-model="popoverForm.endDate" type="date" class="h-8 text-sm" />
                         </div>
