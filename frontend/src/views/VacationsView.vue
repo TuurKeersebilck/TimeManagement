@@ -27,7 +27,6 @@ import { Label } from "@/components/ui/label";
 import YearCalendarOverlay from "@/components/YearCalendarOverlay.vue";
 import VacationBalanceCards from "@/components/VacationBalanceCards.vue";
 import VacationDaysList from "@/components/VacationDaysList.vue";
-import VacationEditDialog from "@/components/VacationEditDialog.vue";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -36,7 +35,6 @@ import {
   ChevronRightIcon,
   PlusIcon,
   Maximize2Icon,
-  PencilIcon,
   Trash2Icon,
 } from "lucide-vue-next";
 
@@ -334,21 +332,11 @@ const savePopover = async () => {
   }
 };
 
-// ─── Edit dialog ──────────────────────────────────────────────────────────────
-
-const editDialogOpen = ref(false);
-const editingDay = ref<VacationDay | null>(null);
-
-const openEdit = (day: VacationDay) => {
-  editingDay.value = day;
+const deletePopoverEntry = () => {
+  const day = vacationDays.value.find((d) => d.id === popoverEditingId.value);
+  if (!day) return;
   closePopover();
-  editDialogOpen.value = true;
-};
-
-const onEditSaved = (updated: VacationDay, newBalances: VacationBalance[]) => {
-  const idx = vacationDays.value.findIndex((d) => d.id === updated.id);
-  if (idx !== -1) vacationDays.value[idx] = updated;
-  balances.value = newBalances;
+  deleteDay(day);
 };
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -569,57 +557,6 @@ onMounted(async () => {
                       </span>
                     </div>
 
-                    <!-- Own existing entries -->
-                    <div
-                      v-if="vacationsByDate.has(cell.iso)"
-                      class="divide-y divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800"
-                    >
-                      <div
-                        v-for="entry in vacationsByDate.get(cell.iso)"
-                        :key="entry.id"
-                        class="flex items-center gap-2.5 px-4 py-2.5"
-                      >
-                        <div
-                          class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
-                          :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
-                        />
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                            {{ entry.vacationTypeName }}
-                          </p>
-                          <p v-if="entry.note" class="text-xs text-slate-400 dark:text-slate-500 truncate">
-                            {{ entry.note }}
-                          </p>
-                        </div>
-                        <span
-                          :class="[
-                            'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
-                            entry.amount === 1
-                              ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
-                              : 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
-                          ]"
-                        >
-                          {{ entry.amount === 1 ? "Full" : "½" }}
-                        </span>
-                        <div class="flex items-center gap-0.5 shrink-0">
-                          <button
-                            class="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                            title="Edit"
-                            @click="openEdit(entry)"
-                          >
-                            <PencilIcon class="size-3.5" />
-                          </button>
-                          <button
-                            class="p-1 rounded text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                            title="Delete"
-                            @click="deleteDay(entry)"
-                          >
-                            <Trash2Icon class="size-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
                     <!-- Create / Edit form -->
                     <div class="p-4 space-y-3">
                       <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -708,6 +645,17 @@ onMounted(async () => {
                         <PlusIcon v-else-if="!isPopoverEditMode" class="size-3.5" />
                         {{ isPopoverEditMode ? "Save changes" : isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
                       </Button>
+                      <Button
+                        v-if="isPopoverEditMode"
+                        class="w-full"
+                        size="sm"
+                        variant="ghost"
+                        :disabled="popoverSaving"
+                        @click="deletePopoverEntry"
+                      >
+                        <Trash2Icon class="size-3.5" />
+                        Delete
+                      </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -719,7 +667,6 @@ onMounted(async () => {
           <VacationDaysList
             :vacation-days="vacationDays"
             :loading="loading"
-            @edit="openEdit"
             @delete="deleteDay"
           />
         </div>
@@ -733,12 +680,5 @@ onMounted(async () => {
       :team-vacations-by-date="teamVacationsByDate"
     />
 
-    <!-- Edit dialog -->
-    <VacationEditDialog
-      v-model:open="editDialogOpen"
-      :editing-day="editingDay"
-      :balances="balances"
-      @saved="onEditSaved"
-    />
   </AuthenticatedLayout>
 </template>

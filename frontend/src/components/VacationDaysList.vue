@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CalendarIcon, PencilIcon, Trash2Icon } from "lucide-vue-next";
+import { CalendarIcon, Trash2Icon } from "lucide-vue-next";
 import { Button } from "@/components/ui/button";
 import type { VacationDay } from "../services/vacationService";
 
@@ -9,7 +9,6 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  edit: [day: VacationDay];
   delete: [day: VacationDay];
 }>();
 
@@ -27,7 +26,7 @@ const displayDate = (iso: string) =>
       <div v-for="i in 3" :key="i" class="flex items-center gap-4 px-5 py-4">
         <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
         <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse flex-1" />
-        <div class="h-6 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+        <div class="h-6 bg-slate-200 dark:bg-slate-700 rounded w-8 animate-pulse" />
       </div>
     </div>
 
@@ -55,36 +54,15 @@ const displayDate = (iso: string) =>
             <span v-if="day.note" class="text-slate-400 dark:text-slate-500"> · {{ day.note }}</span>
           </span>
         </div>
-        <span
-          :class="[
-            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium shrink-0',
-            day.amount === 1
-              ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
-              : 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
-          ]"
+        <Button
+          variant="ghost"
+          size="icon"
+          class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+          title="Delete"
+          @click="emit('delete', day)"
         >
-          {{ day.amount === 1 ? "Full day" : "Half day" }}
-        </span>
-        <div class="flex items-center gap-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-            title="Edit"
-            @click="emit('edit', day)"
-          >
-            <PencilIcon class="size-3.5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-            title="Delete"
-            @click="emit('delete', day)"
-          >
-            <Trash2Icon class="size-3.5" />
-          </Button>
-        </div>
+          <Trash2Icon class="size-3.5" />
+        </Button>
       </div>
     </div>
   </section>
