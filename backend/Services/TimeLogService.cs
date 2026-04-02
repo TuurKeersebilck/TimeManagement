@@ -40,7 +40,7 @@ public class TimeLogService(AppDbContext db, IMapper mapper) : ITimeLogService
         return t == null ? null : _mapper.Map<TimeLogDto>(t);
     }
 
-    public async Task<TimeLogDto> CreateAsync(TimeLogCreateDto createDto, string userId, CancellationToken cancellationToken = default)
+    public async Task<TimeLogDto> CreateAsync(TimeLogFormDto createDto, string userId, CancellationToken cancellationToken = default)
     {
         var timeLog = _mapper.Map<TimeLog>(createDto);
         timeLog.UserId = userId;
@@ -51,7 +51,7 @@ public class TimeLogService(AppDbContext db, IMapper mapper) : ITimeLogService
         return _mapper.Map<TimeLogDto>(timeLog);
     }
 
-    public async Task<bool> UpdateAsync(int id, TimeLogCreateDto updateDto, string userId, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateAsync(int id, TimeLogFormDto updateDto, string userId, CancellationToken cancellationToken = default)
     {
         var existing = await _db.TimeLogs.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (existing == null) return false;

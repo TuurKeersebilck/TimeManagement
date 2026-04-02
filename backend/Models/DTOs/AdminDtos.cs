@@ -66,7 +66,7 @@ public class VacationTypeDto
     public int AssignedEmployeeCount { get; set; }
 }
 
-public class VacationTypeCreateDto
+public class VacationTypeFormDto
 {
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }

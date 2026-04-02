@@ -105,7 +105,7 @@ public class AdminService(AppDbContext context) : IAdminService
             .ToListAsync(ct);
     }
 
-    public async Task<VacationTypeDto> CreateVacationTypeAsync(VacationTypeCreateDto dto, CancellationToken ct = default)
+    public async Task<VacationTypeDto> CreateVacationTypeAsync(VacationTypeFormDto dto, CancellationToken ct = default)
     {
         var entity = new VacationType
         {
@@ -127,7 +127,7 @@ public class AdminService(AppDbContext context) : IAdminService
         };
     }
 
-    public async Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeCreateDto dto, CancellationToken ct = default)
+    public async Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeFormDto dto, CancellationToken ct = default)
     {
         var entity = await _context.VacationTypes
             .FirstOrDefaultAsync(v => v.Id == id, ct)

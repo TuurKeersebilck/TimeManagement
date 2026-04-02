@@ -17,7 +17,7 @@ public class TimeLogDto
         TimeCalculationHelper.CalculateWorkedHours(StartTime, EndTime, BreakStart, BreakEnd);
 }
 
-public class TimeLogCreateDto
+public class TimeLogFormDto
 {
     [Required]
     public DateOnly Date { get; set; }
