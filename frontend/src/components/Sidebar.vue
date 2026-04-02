@@ -3,6 +3,7 @@ import { ref, computed, onMounted, type Component } from "vue";
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useTheme } from "../composables/useTheme";
+import NotificationBell from "./NotificationBell.vue";
 import {
   LayoutDashboardIcon,
   ClockIcon,
@@ -112,6 +113,7 @@ onMounted(() => fetchUser());
       >
         Time Management
       </span>
+      <NotificationBell v-if="isAdmin" />
       <button
         @click="emit('toggle')"
         class="btn-ghost !px-2 !py-2 shrink-0"
