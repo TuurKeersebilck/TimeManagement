@@ -7,7 +7,7 @@ import { extractApiError } from "@/utils/apiError";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2Icon } from "lucide-vue-next";
+import { Loader2Icon, EyeIcon, EyeOffIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const fullname = ref<string>("");
@@ -16,6 +16,8 @@ const password = ref<string>("");
 const confirmPassword = ref<string>("");
 const loading = ref<boolean>(false);
 const error = ref<string>("");
+const showPassword = ref(false);
+const showConfirmPassword = ref(false);
 const { fetchUser } = useAuth();
 
 const passwordsMatch = computed<boolean>(() => {
@@ -119,14 +121,26 @@ const handleRegister = async (): Promise<void> => {
           <!-- Password Field -->
           <div class="space-y-2">
             <Label for="password">Password</Label>
-            <Input
-              id="password"
-              v-model="password"
-              type="password"
-              required
-              autocomplete="new-password"
-              placeholder="••••••••"
-            />
+            <div class="relative">
+              <Input
+                id="password"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                autocomplete="new-password"
+                placeholder="••••••••"
+                class="pr-10"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors"
+                @click="showPassword = !showPassword"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              >
+                <EyeOffIcon v-if="showPassword" class="size-4" />
+                <EyeIcon v-else class="size-4" />
+              </button>
+            </div>
             <!-- Password Strength Indicator -->
             <div v-if="passwordStrength" class="space-y-1">
               <div class="flex items-center gap-2">
@@ -160,19 +174,31 @@ const handleRegister = async (): Promise<void> => {
           <!-- Confirm Password Field -->
           <div class="space-y-2">
             <Label for="confirmPassword">Confirm password</Label>
-            <Input
-              id="confirmPassword"
-              v-model="confirmPassword"
-              type="password"
-              required
-              autocomplete="new-password"
-              placeholder="••••••••"
-              :class="
-                confirmPassword && !passwordsMatch
-                  ? 'border-destructive focus-visible:ring-destructive/50'
-                  : ''
-              "
-            />
+            <div class="relative">
+              <Input
+                id="confirmPassword"
+                v-model="confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                required
+                autocomplete="new-password"
+                placeholder="••••••••"
+                class="pr-10"
+                :class="
+                  confirmPassword && !passwordsMatch
+                    ? 'border-destructive focus-visible:ring-destructive/50'
+                    : ''
+                "
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors"
+                @click="showConfirmPassword = !showConfirmPassword"
+                :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'"
+              >
+                <EyeOffIcon v-if="showConfirmPassword" class="size-4" />
+                <EyeIcon v-else class="size-4" />
+              </button>
+            </div>
             <p v-if="confirmPassword && !passwordsMatch" class="text-xs text-destructive">
               Passwords do not match
             </p>

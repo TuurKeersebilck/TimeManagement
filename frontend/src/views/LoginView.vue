@@ -6,7 +6,7 @@ import { extractApiError } from "@/utils/apiError";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2Icon } from "lucide-vue-next";
+import { Loader2Icon, EyeIcon, EyeOffIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const email = ref<string>("");
@@ -14,6 +14,7 @@ const password = ref<string>("");
 const rememberMe = ref<boolean>(false);
 const loading = ref<boolean>(false);
 const error = ref<string>("");
+const showPassword = ref(false);
 
 const handleLogin = async (): Promise<void> => {
   error.value = "";
@@ -77,14 +78,26 @@ const handleLogin = async (): Promise<void> => {
                 Forgot password?
               </RouterLink>
             </div>
-            <Input
-              id="password"
-              v-model="password"
-              type="password"
-              required
-              autocomplete="current-password"
-              placeholder="••••••••"
-            />
+            <div class="relative">
+              <Input
+                id="password"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                autocomplete="current-password"
+                placeholder="••••••••"
+                class="pr-10"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors"
+                @click="showPassword = !showPassword"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              >
+                <EyeOffIcon v-if="showPassword" class="size-4" />
+                <EyeIcon v-else class="size-4" />
+              </button>
+            </div>
           </div>
 
           <!-- Remember Me -->
