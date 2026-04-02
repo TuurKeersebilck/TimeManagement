@@ -27,7 +27,6 @@ import { Label } from "@/components/ui/label";
 import YearCalendarOverlay from "@/components/YearCalendarOverlay.vue";
 import VacationBalanceCards from "@/components/VacationBalanceCards.vue";
 import VacationDaysList from "@/components/VacationDaysList.vue";
-import VacationEditDialog from "@/components/VacationEditDialog.vue";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -36,7 +35,6 @@ import {
   ChevronRightIcon,
   PlusIcon,
   Maximize2Icon,
-  PencilIcon,
   Trash2Icon,
 } from "lucide-vue-next";
 
@@ -175,6 +173,13 @@ const popoverSaving = ref(false);
 const popoverEditingId = ref<number | null>(null);
 const isPopoverEditMode = computed(() => popoverEditingId.value !== null);
 
+const popoverDayEntries = computed(() =>
+  openPopoverIso.value ? (vacationsByDate.value.get(openPopoverIso.value) ?? []) : []
+);
+const popoverDayTotal = computed(() =>
+  popoverDayEntries.value.reduce((sum, e) => sum + e.amount, 0)
+);
+
 const popoverForm = ref({
   vacationTypeId: "",
   startDate: "",
@@ -200,8 +205,12 @@ const workingDaysInRange = computed(() => {
   return count;
 });
 
+// Range mode is only available when the day has no existing entries
 const isRangeMode = computed(
-  () => !isPopoverEditMode.value && popoverForm.value.startDate !== popoverForm.value.endDate && !!popoverForm.value.endDate
+  () => !isPopoverEditMode.value
+    && popoverDayEntries.value.length === 0
+    && popoverForm.value.startDate !== popoverForm.value.endDate
+    && !!popoverForm.value.endDate
 );
 
 const popoverLiveRemaining = computed(() => {
@@ -253,19 +262,34 @@ const popoverDateLabel = computed(() => {
   });
 });
 
+const fillFormForEntry = (v: VacationDay) => {
+  popoverEditingId.value = v.id;
+  popoverForm.value = {
+    vacationTypeId: String(v.vacationTypeId),
+    startDate: v.date,
+    endDate: v.date,
+    amount: String(v.amount),
+    note: v.note ?? "",
+  };
+};
+
+const switchToNewMode = () => {
+  popoverEditingId.value = null;
+  const remaining = 1 - popoverDayTotal.value;
+  popoverForm.value = {
+    vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
+    startDate: openPopoverIso.value ?? "",
+    endDate: openPopoverIso.value ?? "",
+    amount: String(remaining <= 0.5 ? 0.5 : 1),
+    note: "",
+  };
+};
+
 const openPopover = (iso: string) => {
   openPopoverIso.value = iso;
   const existing = vacationsByDate.value.get(iso);
   if (existing && existing.length > 0) {
-    const v = existing[0];
-    popoverEditingId.value = v.id;
-    popoverForm.value = {
-      vacationTypeId: String(v.vacationTypeId),
-      startDate: v.date,
-      endDate: v.date,
-      amount: String(v.amount),
-      note: v.note ?? "",
-    };
+    fillFormForEntry(existing[0]);
   } else {
     popoverEditingId.value = null;
     popoverForm.value = {
@@ -334,21 +358,11 @@ const savePopover = async () => {
   }
 };
 
-// ─── Edit dialog ──────────────────────────────────────────────────────────────
-
-const editDialogOpen = ref(false);
-const editingDay = ref<VacationDay | null>(null);
-
-const openEdit = (day: VacationDay) => {
-  editingDay.value = day;
+const deletePopoverEntry = () => {
+  const day = vacationDays.value.find((d) => d.id === popoverEditingId.value);
+  if (!day) return;
   closePopover();
-  editDialogOpen.value = true;
-};
-
-const onEditSaved = (updated: VacationDay, newBalances: VacationBalance[]) => {
-  const idx = vacationDays.value.findIndex((d) => d.id === updated.id);
-  if (idx !== -1) vacationDays.value[idx] = updated;
-  balances.value = newBalances;
+  deleteDay(day);
 };
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -569,55 +583,44 @@ onMounted(async () => {
                       </span>
                     </div>
 
-                    <!-- Own existing entries -->
+                    <!-- Entry switcher (multiple entries on same day) -->
                     <div
-                      v-if="vacationsByDate.has(cell.iso)"
-                      class="divide-y divide-slate-100 dark:divide-slate-800 border-b border-slate-100 dark:border-slate-800"
+                      v-if="popoverDayEntries.length > 0"
+                      class="flex flex-wrap gap-1.5 px-4 pt-3 pb-1"
                     >
-                      <div
-                        v-for="entry in vacationsByDate.get(cell.iso)"
+                      <button
+                        v-for="entry in popoverDayEntries"
                         :key="entry.id"
-                        class="flex items-center gap-2.5 px-4 py-2.5"
+                        type="button"
+                        :class="[
+                          'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                          popoverEditingId === entry.id
+                            ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+                        ]"
+                        @click="fillFormForEntry(entry)"
                       >
-                        <div
-                          class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
+                        <span
+                          class="w-1.5 h-1.5 rounded-full shrink-0"
                           :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
                         />
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                            {{ entry.vacationTypeName }}
-                          </p>
-                          <p v-if="entry.note" class="text-xs text-slate-400 dark:text-slate-500 truncate">
-                            {{ entry.note }}
-                          </p>
-                        </div>
-                        <span
-                          :class="[
-                            'text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0',
-                            entry.amount === 1
-                              ? 'bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300'
-                              : 'bg-sky-50 dark:bg-sky-950 text-sky-700 dark:text-sky-300',
-                          ]"
-                        >
-                          {{ entry.amount === 1 ? "Full" : "½" }}
-                        </span>
-                        <div class="flex items-center gap-0.5 shrink-0">
-                          <button
-                            class="p-1 rounded text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                            title="Edit"
-                            @click="openEdit(entry)"
-                          >
-                            <PencilIcon class="size-3.5" />
-                          </button>
-                          <button
-                            class="p-1 rounded text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                            title="Delete"
-                            @click="deleteDay(entry)"
-                          >
-                            <Trash2Icon class="size-3.5" />
-                          </button>
-                        </div>
-                      </div>
+                        {{ entry.vacationTypeName }}
+                        <span class="opacity-60">{{ entry.amount === 1 ? "Full" : "½" }}</span>
+                      </button>
+                      <button
+                        v-if="popoverDayTotal < 1"
+                        type="button"
+                        :class="[
+                          'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                          !isPopoverEditMode
+                            ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+                        ]"
+                        @click="switchToNewMode"
+                      >
+                        <PlusIcon class="size-3" />
+                        Add
+                      </button>
                     </div>
 
                     <!-- Create / Edit form -->
@@ -644,12 +647,12 @@ onMounted(async () => {
                         </Select>
                       </div>
 
-                      <div :class="isPopoverEditMode ? '' : 'grid grid-cols-2 gap-2'">
+                      <div :class="isPopoverEditMode || popoverDayEntries.length > 0 ? '' : 'grid grid-cols-2 gap-2'">
                         <div class="space-y-1">
-                          <Label class="text-xs">{{ isPopoverEditMode ? "Date" : "From" }}</Label>
+                          <Label class="text-xs">{{ isPopoverEditMode || popoverDayEntries.length > 0 ? "Date" : "From" }}</Label>
                           <Input v-model="popoverForm.startDate" type="date" class="h-8 text-sm" />
                         </div>
-                        <div v-if="!isPopoverEditMode" class="space-y-1">
+                        <div v-if="!isPopoverEditMode && popoverDayEntries.length === 0" class="space-y-1">
                           <Label class="text-xs">To</Label>
                           <Input v-model="popoverForm.endDate" type="date" class="h-8 text-sm" />
                         </div>
@@ -708,6 +711,17 @@ onMounted(async () => {
                         <PlusIcon v-else-if="!isPopoverEditMode" class="size-3.5" />
                         {{ isPopoverEditMode ? "Save changes" : isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
                       </Button>
+                      <Button
+                        v-if="isPopoverEditMode"
+                        class="w-full"
+                        size="sm"
+                        variant="ghost"
+                        :disabled="popoverSaving"
+                        @click="deletePopoverEntry"
+                      >
+                        <Trash2Icon class="size-3.5" />
+                        Delete
+                      </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -719,7 +733,6 @@ onMounted(async () => {
           <VacationDaysList
             :vacation-days="vacationDays"
             :loading="loading"
-            @edit="openEdit"
             @delete="deleteDay"
           />
         </div>
@@ -733,12 +746,5 @@ onMounted(async () => {
       :team-vacations-by-date="teamVacationsByDate"
     />
 
-    <!-- Edit dialog -->
-    <VacationEditDialog
-      v-model:open="editDialogOpen"
-      :editing-day="editingDay"
-      :balances="balances"
-      @saved="onEditSaved"
-    />
   </AuthenticatedLayout>
 </template>
