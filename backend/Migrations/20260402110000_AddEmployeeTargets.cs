@@ -1,11 +1,15 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using TimeManagementBackend.Data;
 
 #nullable disable
 
 namespace TimeManagementBackend.Migrations
 {
-    /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20260402110000_AddEmployeeTargets")]
     public partial class AddEmployeeTargets : Migration
     {
         /// <inheritdoc />
