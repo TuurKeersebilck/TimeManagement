@@ -59,6 +59,7 @@ const adminPersonalNav: NavItem[] = [
 
 const adminSectionNav: NavItem[] = [
   { name: "All Time Logs", to: "/admin/time-logs", icon: ClockIcon },
+  { name: "Vacation Overview", to: "/admin/vacations", icon: CalendarIcon },
   { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
   { name: "Employees", to: "/admin/employees", icon: UsersIcon },
   { name: "App Settings", to: "/admin/settings", icon: SettingsIcon },

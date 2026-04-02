@@ -68,7 +68,9 @@ const routes: Array<RouteRecordRaw> = [
   },
   {
     path: "/admin/vacations",
-    redirect: "/vacations",
+    name: "admin-vacations",
+    component: () => import("../views/admin/VacationsView.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
     path: "/admin/employees",
