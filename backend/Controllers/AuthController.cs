@@ -17,39 +17,26 @@ namespace TimeManagementBackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController(
+    UserManager<User> userManager,
+    SignInManager<User> signInManager,
+    JwtService jwtService,
+    JwtConfig jwtConfig,
+    ITokenBlacklistService blacklist,
+    AppDbContext db,
+    IEmailService email,
+    IConfiguration configuration,
+    ILogger<AuthController> logger) : ControllerBase
 {
-    private readonly UserManager<User> _userManager;
-    private readonly SignInManager<User> _signInManager;
-    private readonly JwtService _jwtService;
-    private readonly ILogger<AuthController> _logger;
-    private readonly JwtConfig _jwtConfig;
-    private readonly ITokenBlacklistService _blacklist;
-    private readonly AppDbContext _db;
-    private readonly IEmailService _email;
-    private readonly string _appUrl;
-
-    public AuthController(
-        UserManager<User> userManager,
-        SignInManager<User> signInManager,
-        JwtService jwtService,
-        JwtConfig jwtConfig,
-        ITokenBlacklistService blacklist,
-        AppDbContext db,
-        IEmailService email,
-        IConfiguration configuration,
-        ILogger<AuthController> logger)
-    {
-        _userManager = userManager;
-        _signInManager = signInManager;
-        _jwtService = jwtService;
-        _jwtConfig = jwtConfig;
-        _blacklist = blacklist;
-        _db = db;
-        _email = email;
-        _appUrl = configuration["AppUrl"] ?? "http://localhost:5173";
-        _logger = logger;
-    }
+    private readonly UserManager<User> _userManager = userManager;
+    private readonly SignInManager<User> _signInManager = signInManager;
+    private readonly JwtService _jwtService = jwtService;
+    private readonly ILogger<AuthController> _logger = logger;
+    private readonly JwtConfig _jwtConfig = jwtConfig;
+    private readonly ITokenBlacklistService _blacklist = blacklist;
+    private readonly AppDbContext _db = db;
+    private readonly IEmailService _email = email;
+    private readonly string _appUrl = configuration["AppUrl"] ?? "http://localhost:5173";
 
     [HttpPost("register")]
     [EnableRateLimiting("register-limit")]

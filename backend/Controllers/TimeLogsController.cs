@@ -89,7 +89,7 @@ public class TimeLogsController(
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> UpdateTimeLog(int id, [FromBody] TimeLogUpdateDto dto, CancellationToken ct)
+    public async Task<IActionResult> UpdateTimeLog(int id, [FromBody] TimeLogCreateDto dto, CancellationToken ct)
     {
         if (id <= 0) return BadRequest(new ErrorResponseDto { Message = "Invalid id" });
 

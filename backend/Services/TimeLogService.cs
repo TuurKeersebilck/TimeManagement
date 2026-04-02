@@ -51,7 +51,7 @@ public class TimeLogService(AppDbContext db, IMapper mapper) : ITimeLogService
         return _mapper.Map<TimeLogDto>(timeLog);
     }
 
-    public async Task<bool> UpdateAsync(int id, TimeLogUpdateDto updateDto, string userId, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdateAsync(int id, TimeLogCreateDto updateDto, string userId, CancellationToken cancellationToken = default)
     {
         var existing = await _db.TimeLogs.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, cancellationToken);
         if (existing == null) return false;

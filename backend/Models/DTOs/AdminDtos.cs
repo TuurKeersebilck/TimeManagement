@@ -73,13 +73,6 @@ public class VacationTypeCreateDto
     public string? Color { get; set; }
 }
 
-public class VacationTypeUpdateDto
-{
-    public string Name { get; set; } = string.Empty;
-    public string? Description { get; set; }
-    public string? Color { get; set; }
-}
-
 public class EmployeeVacationBalanceDto
 {
     public int Id { get; set; }

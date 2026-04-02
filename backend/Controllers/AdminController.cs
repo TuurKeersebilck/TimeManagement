@@ -52,7 +52,7 @@ public class AdminController(IAdminService adminService) : ControllerBase
     [HttpPut("vacation-types/{id:int}")]
     public async Task<ActionResult<VacationTypeDto>> UpdateVacationType(
         int id,
-        [FromBody] VacationTypeUpdateDto dto,
+        [FromBody] VacationTypeCreateDto dto,
         CancellationToken ct)
     {
         var updated = await _adminService.UpdateVacationTypeAsync(id, dto, ct);

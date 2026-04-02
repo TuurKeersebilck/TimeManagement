@@ -10,7 +10,6 @@ public class AutoMapperProfile : Profile
     {
         CreateMap<TimeLog, TimeLogDto>();
         CreateMap<TimeLogCreateDto, TimeLog>();
-        CreateMap<TimeLogUpdateDto, TimeLog>();
         CreateMap<TimeLog, TimeLogCreateDto>();
     }
 }

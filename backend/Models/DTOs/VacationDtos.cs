@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TimeManagementBackend.Models.DTOs;
 
 public class VacationBalanceDto
@@ -23,18 +25,32 @@ public class VacationDayDto
 
 public class CreateVacationDayDto
 {
+    [Required]
     public int VacationTypeId { get; set; }
+
+    [Required]
     public DateOnly Date { get; set; }
+
+    [Required]
     public decimal Amount { get; set; }
+
     public string? Note { get; set; }
 }
 
 public class CreateVacationRangeDto
 {
+    [Required]
     public int VacationTypeId { get; set; }
+
+    [Required]
     public DateOnly StartDate { get; set; }
+
+    [Required]
     public DateOnly EndDate { get; set; }
+
+    [Required]
     public decimal Amount { get; set; }
+
     public string? Note { get; set; }
 }
 
