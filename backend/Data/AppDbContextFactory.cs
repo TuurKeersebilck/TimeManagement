@@ -9,10 +9,10 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     {
         LoadDotEnv();
 
-        // Fall back to a local dev connection for design-time tooling (migrations).
-        // A real Supabase connection string is required to run `dotnet ef database update`.
         var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
-            ?? "Host=localhost;Database=timemanagement_dev;Username=postgres;Password=postgres";
+            ?? throw new InvalidOperationException(
+                "CONNECTION_STRING environment variable must be set. " +
+                "Set it in your .env file before running EF Core migration commands.");
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         optionsBuilder.UseNpgsql(connectionString);
