@@ -1,16 +1,56 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { authService, type ChangePasswordPayload } from "../services/authService";
+import { authService, type ChangePasswordPayload, type UpdateProfilePayload } from "../services/authService";
+import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2Icon, CheckIcon, KeyRoundIcon } from "lucide-vue-next";
+import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const toast = useAppToast();
+const { currentUser, fetchUser } = useAuth();
+
+// ─── Profile ──────────────────────────────────────────────────────────────────
+
+const profile = ref<UpdateProfilePayload>({ fullName: "", email: "" });
+
+watch(
+  currentUser,
+  (user) => {
+    if (user) {
+      profile.value = { fullName: user.fullName, email: user.email };
+    }
+  },
+  { immediate: true }
+);
+
+const profileSaving = ref(false);
+const profileError = ref("");
+
+const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.value.email));
+const profileCanSubmit = computed(() => profile.value.fullName.trim() && emailValid.value);
+
+const saveProfile = async () => {
+  profileError.value = "";
+  profileSaving.value = true;
+  try {
+    await authService.updateProfile(profile.value);
+    await fetchUser(true);
+    toast.success("Profile updated");
+  } catch (err: unknown) {
+    profileError.value =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+      "Failed to update profile";
+  } finally {
+    profileSaving.value = false;
+  }
+};
+
+// ─── Password ─────────────────────────────────────────────────────────────────
 
 const form = ref<ChangePasswordPayload>({
   currentPassword: "",
@@ -20,8 +60,6 @@ const form = ref<ChangePasswordPayload>({
 
 const saving = ref(false);
 const error = ref("");
-
-// ─── Password strength ────────────────────────────────────────────────────────
 
 const strengthChecks = computed(() => ({
   length:    form.value.newPassword.length >= 8,
@@ -57,8 +95,6 @@ const canSubmit = computed(() =>
   form.value.newPassword === form.value.confirmPassword
 );
 
-// ─── Submit ───────────────────────────────────────────────────────────────────
-
 const submit = async () => {
   error.value = "";
   saving.value = true;
@@ -83,10 +119,57 @@ const submit = async () => {
       <div class="max-w-md mx-auto">
         <!-- Header -->
         <div class="mb-8">
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Account security</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Change your password</p>
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Account</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Manage your profile and security settings</p>
         </div>
 
+        <!-- Profile section -->
+        <div class="card p-6 space-y-5 mb-6">
+          <div class="flex items-center gap-3 pb-1">
+            <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
+              <UserIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Profile</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Update your name and email address</p>
+            </div>
+          </div>
+
+          <!-- Error -->
+          <div
+            v-if="profileError"
+            class="bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3 rounded-lg"
+          >
+            {{ profileError }}
+          </div>
+
+          <!-- Full name -->
+          <div class="space-y-1.5">
+            <Label>Full name</Label>
+            <Input v-model="profile.fullName" type="text" autocomplete="name" placeholder="Jane Doe" />
+            <p v-if="!profile.fullName.trim()" class="text-xs text-destructive">Name is required</p>
+          </div>
+
+          <!-- Email -->
+          <div class="space-y-1.5">
+            <Label>Email address</Label>
+            <Input
+              v-model="profile.email"
+              type="email"
+              autocomplete="email"
+              placeholder="jane@example.com"
+              :class="profile.email && !emailValid ? 'border-destructive focus-visible:ring-destructive' : ''"
+            />
+            <p v-if="profile.email && !emailValid" class="text-xs text-destructive">Enter a valid email address</p>
+          </div>
+
+          <Button class="w-full" :disabled="profileSaving || !profileCanSubmit" @click="saveProfile">
+            <Loader2Icon v-if="profileSaving" class="size-4 animate-spin" />
+            Save profile
+          </Button>
+        </div>
+
+        <!-- Password section -->
         <div class="card p-6 space-y-5">
           <div class="flex items-center gap-3 pb-1">
             <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
