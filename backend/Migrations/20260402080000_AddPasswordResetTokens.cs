@@ -1,10 +1,15 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using TimeManagementBackend.Data;
 
 #nullable disable
 
 namespace TimeManagementBackend.Migrations;
 
+[DbContext(typeof(AppDbContext))]
+[Migration("20260402080000_AddPasswordResetTokens")]
 public partial class AddPasswordResetTokens : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

@@ -12,7 +12,7 @@ using TimeManagementBackend.Data;
 namespace TimeManagementBackend.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260402123046_AddNotifications")]
+    [Migration("20260402140000_AddNotifications")]
     partial class AddNotifications
     {
         /// <inheritdoc />
