@@ -35,20 +35,3 @@ public class TimeLogCreateDto
     public string? Description { get; set; }
 }
 
-public class TimeLogUpdateDto
-{
-    [Required]
-    public DateOnly Date { get; set; }
-
-    [Required]
-    public TimeSpan StartTime { get; set; }
-
-    [Required]
-    public TimeSpan EndTime { get; set; }
-
-    public TimeSpan? BreakStart { get; set; }
-
-    public TimeSpan? BreakEnd { get; set; }
-
-    public string? Description { get; set; }
-}
