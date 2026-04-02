@@ -268,7 +268,7 @@ public class AuthController(
         {
             HttpOnly = true,
             Secure = !isDev,
-            SameSite = SameSiteMode.Lax,
+            SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
             Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes)
         });
     }
