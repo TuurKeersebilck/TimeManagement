@@ -9,7 +9,7 @@ public class AutoMapperProfile : Profile
     public AutoMapperProfile()
     {
         CreateMap<TimeLog, TimeLogDto>();
-        CreateMap<TimeLogCreateDto, TimeLog>();
-        CreateMap<TimeLog, TimeLogCreateDto>();
+        CreateMap<TimeLogFormDto, TimeLog>();
+        CreateMap<TimeLog, TimeLogFormDto>();
     }
 }

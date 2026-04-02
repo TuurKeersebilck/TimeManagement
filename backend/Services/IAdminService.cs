@@ -9,8 +9,8 @@ public interface IAdminService
 
     // Vacation types
     Task<IEnumerable<VacationTypeDto>> GetVacationTypesAsync(CancellationToken ct = default);
-    Task<VacationTypeDto> CreateVacationTypeAsync(VacationTypeCreateDto dto, CancellationToken ct = default);
-    Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeCreateDto dto, CancellationToken ct = default);
+    Task<VacationTypeDto> CreateVacationTypeAsync(VacationTypeFormDto dto, CancellationToken ct = default);
+    Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeFormDto dto, CancellationToken ct = default);
     Task DeleteVacationTypeAsync(int id, CancellationToken ct = default);
 
     // Employee vacation balances

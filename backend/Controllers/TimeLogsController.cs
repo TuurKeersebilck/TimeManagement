@@ -73,7 +73,7 @@ public class TimeLogsController(
     }
 
     [HttpPost]
-    public async Task<ActionResult<TimeLogDto>> CreateTimeLog([FromBody] TimeLogCreateDto dto, CancellationToken ct)
+    public async Task<ActionResult<TimeLogDto>> CreateTimeLog([FromBody] TimeLogFormDto dto, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
@@ -89,7 +89,7 @@ public class TimeLogsController(
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> UpdateTimeLog(int id, [FromBody] TimeLogCreateDto dto, CancellationToken ct)
+    public async Task<IActionResult> UpdateTimeLog(int id, [FromBody] TimeLogFormDto dto, CancellationToken ct)
     {
         if (id <= 0) return BadRequest(new ErrorResponseDto { Message = "Invalid id" });
 
