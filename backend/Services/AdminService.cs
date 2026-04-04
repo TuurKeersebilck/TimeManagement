@@ -373,7 +373,6 @@ public class AdminService(AppDbContext context) : IAdminService
         sb.AppendLine("SUMMARY");
         sb.AppendLine("Name,Email,Days Worked,Total Hours,Vacation Days");
 
-        var logsByEmployee = logs.GroupBy(l => l.UserId);
         var vacsByEmployee = vacations.GroupBy(v => v.UserId).ToDictionary(g => g.Key, g => g.ToList());
 
         // Collect all employee IDs in sorted name order (use first log entry for name/email)
@@ -420,8 +419,8 @@ public class AdminService(AppDbContext context) : IAdminService
                 CsvEscape(log.EmployeeEmail),
                 log.Date.ToString("yyyy-MM-dd"),
                 log.Date.DayOfWeek.ToString(),
-                log.StartTime.ToString(@"hh\:mm"),
-                log.EndTime.ToString(@"hh\:mm"),
+                log.StartTime.ToString(@"HH\:mm"),
+                log.EndTime.ToString(@"HH\:mm"),
                 breakHours.ToString("F2"),
                 log.TotalHours.ToString("F2"),
                 CsvEscape(log.Description ?? "")
