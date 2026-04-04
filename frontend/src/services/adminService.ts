@@ -84,6 +84,19 @@ export const adminService = {
     return res.data;
   },
 
+  async downloadPayrollExport(year: number, month: number, userId?: string): Promise<void> {
+    const response = await apiClient.get("/admin/export", {
+      params: { year, month, userId: userId || undefined },
+      responseType: "blob",
+    });
+    const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `payroll_${year}_${String(month).padStart(2, "0")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
   async getAllVacationDays(filters?: {
     userId?: string;
     vacationTypeId?: number;

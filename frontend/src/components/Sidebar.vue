@@ -19,6 +19,7 @@ import {
   LogOutIcon,
   KeyRoundIcon,
   SettingsIcon,
+  DownloadIcon,
 } from "lucide-vue-next";
 
 interface Props {
@@ -65,6 +66,7 @@ const adminSectionNav: NavItem[] = [
   { name: "All Time Logs", to: "/admin/time-logs", icon: ClockIcon },
   { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
   { name: "Employees", to: "/admin/employees", icon: UsersIcon },
+  { name: "Payroll Export", to: "/admin/export", icon: DownloadIcon },
   { name: "App Settings", to: "/admin/settings", icon: SettingsIcon },
 ];
 
