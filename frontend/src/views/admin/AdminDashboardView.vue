@@ -30,7 +30,7 @@ const todayStr = (() => {
   return `${y}-${m}-${day}`;
 })();
 
-const todayLabel = new Date().toLocaleDateString("en-GB", {
+const todayLabel = new Date().toLocaleDateString(undefined, {
   weekday: "long",
   year: "numeric",
   month: "long",
