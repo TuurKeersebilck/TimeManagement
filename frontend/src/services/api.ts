@@ -12,14 +12,16 @@ const apiClient = axios.create({
   },
 });
 
-// On 401, clear local session state and redirect to login
+// On 401, clear local session state and redirect to login — but only if the user
+// was already authenticated (expired session), not on auth endpoint calls themselves.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const isLogoutCall = (error.config?.url as string | undefined)?.includes("/auth/logout");
-      authService.clearSession();
-      if (!isLogoutCall) {
+      const url = error.config?.url as string | undefined;
+      const isAuthCall = url?.includes("/auth/");
+      if (!isAuthCall) {
+        authService.clearSession();
         window.location.href = "/login";
       }
     }
