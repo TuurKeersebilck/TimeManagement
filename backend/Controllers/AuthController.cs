@@ -79,7 +79,7 @@ public class AuthController(
             _logger.LogInformation("User {Email} created successfully", user.Email);
 
             var token = _jwtService.GenerateToken(user);
-            SetAuthCookie(token);
+            SetAuthCookie(token, _jwtConfig.ExpiryInMinutes);
 
             return Ok(new AuthResponseDto
             {
@@ -125,8 +125,9 @@ public class AuthController(
 
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-            var token = _jwtService.GenerateToken(user);
-            SetAuthCookie(token);
+            var expiryMinutes = loginDto.RememberMe ? 60 * 24 * 30 : _jwtConfig.ExpiryInMinutes;
+            var token = _jwtService.GenerateToken(user, expiryMinutes);
+            SetAuthCookie(token, expiryMinutes);
 
             return Ok(new AuthResponseDto
             {
@@ -135,7 +136,7 @@ public class AuthController(
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 Roles = [user.Role.ToString()],
-                Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
+                Expiration = DateTime.Now.AddMinutes(expiryMinutes)
             });
         }
         catch (Exception ex)
@@ -259,7 +260,7 @@ public class AuthController(
         return NoContent();
     }
 
-    private void SetAuthCookie(string token)
+    private void SetAuthCookie(string token, int expiryMinutes)
     {
         var isDev = HttpContext.RequestServices
             .GetRequiredService<IWebHostEnvironment>().IsDevelopment();
@@ -269,7 +270,7 @@ public class AuthController(
             HttpOnly = true,
             Secure = !isDev,
             SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
-            Expires = DateTimeOffset.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes)
+            Expires = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
         });
     }
 

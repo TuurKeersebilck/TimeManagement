@@ -16,7 +16,7 @@ public class JwtService
         _jwtConfig = jwtConfig;
     }
 
-    public string GenerateToken(User user)
+    public string GenerateToken(User user, int? expiryMinutes = null)
     {
         var claims = new List<Claim>
         {
@@ -30,7 +30,7 @@ public class JwtService
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtConfig.Secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var expires = DateTime.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes);
+        var expires = DateTime.UtcNow.AddMinutes(expiryMinutes ?? _jwtConfig.ExpiryInMinutes);
 
         var token = new JwtSecurityToken(
             issuer: _jwtConfig.Issuer,
