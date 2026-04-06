@@ -225,7 +225,7 @@ const deleteTimeLog = async (id: number) => {
 // ─── Formatters ─────────────────────────────────────────────────────────────
 
 const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString("en-GB", {
+  new Date(dateStr).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",

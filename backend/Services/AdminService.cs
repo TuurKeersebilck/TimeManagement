@@ -306,6 +306,158 @@ public class AdminService(AppDbContext context) : IAdminService
         });
     }
 
+    // ─── Payroll export ───────────────────────────────────────────────────────
+
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    {
+        var dateFrom = new DateOnly(year, month, 1);
+        var dateTo = dateFrom.AddMonths(1).AddDays(-1);
+
+        var logsQuery = _context.TimeLogs
+            .AsNoTracking()
+            .Join(_context.Users, l => l.UserId, u => u.Id, (l, u) => new { l, u })
+            .Where(x => x.l.Date >= dateFrom && x.l.Date <= dateTo);
+
+        if (!string.IsNullOrEmpty(userId))
+            logsQuery = logsQuery.Where(x => x.l.UserId == userId);
+
+        var logs = await logsQuery
+            .OrderBy(x => x.u.FullName)
+            .ThenBy(x => x.l.Date)
+            .Select(x => new AdminTimeLogDto
+            {
+                Id = x.l.Id,
+                UserId = x.l.UserId!,
+                EmployeeName = x.u.FullName,
+                EmployeeEmail = x.u.Email!,
+                Date = x.l.Date,
+                StartTime = x.l.StartTime,
+                EndTime = x.l.EndTime,
+                BreakStart = x.l.BreakStart,
+                BreakEnd = x.l.BreakEnd,
+                Description = x.l.Description,
+            })
+            .ToListAsync(ct);
+
+        var vacationsQuery = _context.VacationDays
+            .AsNoTracking()
+            .Where(d => d.Date.Year == year && d.Date.Month == month);
+
+        if (!string.IsNullOrEmpty(userId))
+            vacationsQuery = vacationsQuery.Where(d => d.UserId == userId);
+
+        var vacations = await vacationsQuery
+            .OrderBy(d => d.User.FullName)
+            .ThenBy(d => d.Date)
+            .Select(d => new AdminVacationDayDto
+            {
+                Id = d.Id,
+                UserId = d.UserId,
+                EmployeeName = d.User.FullName,
+                VacationTypeId = d.VacationTypeId,
+                VacationTypeName = d.VacationType.Name,
+                Date = d.Date,
+                Amount = d.Amount,
+                Note = d.Note,
+            })
+            .ToListAsync(ct);
+
+        var sb = new System.Text.StringBuilder();
+        var monthName = new System.Globalization.CultureInfo("en-GB").DateTimeFormat.GetMonthName(month);
+
+        sb.AppendLine($"Payroll Report,{monthName} {year}");
+        sb.AppendLine($"Generated,{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine();
+
+        // ── Section 1: Summary ──────────────────────────────────────────────
+        sb.AppendLine("SUMMARY");
+        sb.AppendLine("Name,Email,Days Worked,Total Hours,Vacation Days");
+
+        var vacsByEmployee = vacations.GroupBy(v => v.UserId).ToDictionary(g => g.Key, g => g.ToList());
+
+        // Collect all employee IDs in sorted name order (use first log entry for name/email)
+        var employeeOrder = logs
+            .GroupBy(l => l.UserId)
+            .Select(g => (UserId: g.Key, Name: g.First().EmployeeName, Email: g.First().EmployeeEmail))
+            .OrderBy(e => e.Name)
+            .ToList();
+
+        // Also include employees with vacations but no logs
+        var employeesWithVacsOnly = vacations
+            .GroupBy(v => v.UserId)
+            .Where(g => !employeeOrder.Any(e => e.UserId == g.Key))
+            .Select(g => (UserId: g.Key, Name: g.First().EmployeeName, Email: string.Empty))
+            .OrderBy(e => e.Name);
+
+        var allEmployees = employeeOrder.Concat(employeesWithVacsOnly).ToList();
+
+        foreach (var emp in allEmployees)
+        {
+            var empLogs = logs.Where(l => l.UserId == emp.UserId).ToList();
+            var daysWorked = empLogs.Select(l => l.Date).Distinct().Count();
+            var totalHours = empLogs.Sum(l => l.TotalHours);
+            var vacDays = vacsByEmployee.TryGetValue(emp.UserId, out var vList)
+                ? vList.Sum(v => (double)v.Amount)
+                : 0.0;
+
+            sb.AppendLine($"{CsvEscape(emp.Name)},{CsvEscape(emp.Email)},{daysWorked},{totalHours:F2},{vacDays:F1}");
+        }
+
+        // ── Section 2: Daily Detail ─────────────────────────────────────────
+        sb.AppendLine();
+        sb.AppendLine("DAILY DETAIL");
+        sb.AppendLine("Employee,Email,Date,Day,Start,End,Break Duration (h),Net Hours,Description");
+
+        foreach (var log in logs)
+        {
+            var breakHours = log.BreakStart.HasValue && log.BreakEnd.HasValue
+                ? (log.BreakEnd.Value - log.BreakStart.Value).TotalHours
+                : 0.0;
+
+            sb.AppendLine(string.Join(",",
+                CsvEscape(log.EmployeeName),
+                CsvEscape(log.EmployeeEmail),
+                log.Date.ToString("yyyy-MM-dd"),
+                log.Date.DayOfWeek.ToString(),
+                log.StartTime.ToString(@"HH\:mm"),
+                log.EndTime.ToString(@"HH\:mm"),
+                breakHours.ToString("F2"),
+                log.TotalHours.ToString("F2"),
+                CsvEscape(log.Description ?? "")
+            ));
+        }
+
+        // ── Section 3: Vacation Days ────────────────────────────────────────
+        if (vacations.Count != 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("VACATION DAYS");
+            sb.AppendLine("Employee,Email,Date,Day,Type,Amount,Note");
+
+            foreach (var v in vacations)
+            {
+                sb.AppendLine(string.Join(",",
+                    CsvEscape(v.EmployeeName),
+                    CsvEscape(allEmployees.FirstOrDefault(e => e.UserId == v.UserId).Email ?? ""),
+                    v.Date.ToString("yyyy-MM-dd"),
+                    v.Date.DayOfWeek.ToString(),
+                    CsvEscape(v.VacationTypeName),
+                    ((double)v.Amount).ToString("F1"),
+                    CsvEscape(v.Note ?? "")
+                ));
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string CsvEscape(string value)
+    {
+        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        return value;
+    }
+
     // ─── Vacation overview ────────────────────────────────────────────────────
 
     public async Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(

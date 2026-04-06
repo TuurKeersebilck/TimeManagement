@@ -100,6 +100,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/admin/AppSettingsView.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: "/admin/export",
+    name: "admin-export",
+    component: () => import("../views/admin/ExportView.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
 
   {
     path: "/account",

@@ -74,7 +74,7 @@ watch([selectedEmployeeId, dateFrom, dateTo], fetchLogs);
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const formatDate = (dateStr: string) =>
-  new Date(dateStr).toLocaleDateString("en-GB", {
+  new Date(dateStr).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",

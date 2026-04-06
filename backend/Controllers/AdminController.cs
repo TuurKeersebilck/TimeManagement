@@ -128,6 +128,23 @@ public class AdminController(IAdminService adminService) : ControllerBase
         CancellationToken ct = default)
         => Ok(await _adminService.GetEmployeeWeeklySummaryAsync(userId, weeks, ct));
 
+    // ─── Payroll export ───────────────────────────────────────────────────────
+
+    [HttpGet("export")]
+    public async Task<IActionResult> ExportPayroll(
+        [FromQuery] int year,
+        [FromQuery] int month,
+        [FromQuery] string? userId,
+        CancellationToken ct)
+    {
+        if (year < 2000 || year > 2100 || month < 1 || month > 12)
+            return BadRequest("Invalid year or month.");
+
+        var csv = await _adminService.GeneratePayrollCsvAsync(year, month, userId, ct);
+        var filename = $"payroll_{year}_{month:D2}.csv";
+        return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", filename);
+    }
+
     // ─── Vacation overview ────────────────────────────────────────────────────
 
     [HttpGet("vacations")]
