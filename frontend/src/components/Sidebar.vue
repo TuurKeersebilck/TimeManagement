@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useTheme } from "../composables/useTheme";
 import NotificationBell from "./NotificationBell.vue";
+import AppLogo from "./AppLogo.vue";
 import {
   LayoutDashboardIcon,
   ClockIcon,
@@ -110,12 +111,7 @@ onMounted(() => fetchUser());
     <div
       class="flex items-center h-16 px-4 border-b border-slate-200 dark:border-slate-800 shrink-0"
     >
-      <span
-        v-if="isOpen"
-        class="flex-1 text-base font-semibold text-slate-900 dark:text-slate-100 truncate"
-      >
-        Time Management
-      </span>
+      <AppLogo v-if="isOpen" :show-text="true" class="flex-1 min-w-0" />
       <NotificationBell v-if="isAdmin" />
       <button
         @click="emit('toggle')"

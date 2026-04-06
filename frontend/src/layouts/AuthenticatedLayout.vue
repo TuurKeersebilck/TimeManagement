@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import Sidebar from "@/components/Sidebar.vue";
+import AppLogo from "@/components/AppLogo.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
@@ -40,9 +41,7 @@ const toggleSidebar = (): void => {
         <button @click="toggleSidebar" class="btn-ghost !px-2 !py-2" aria-label="Open menu">
           <MenuIcon class="size-5" />
         </button>
-        <span class="ml-3 flex-1 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          Time Management
-        </span>
+        <AppLogo class="ml-3 flex-1 min-w-0" />
         <NotificationBell v-if="isAdmin" />
       </header>
 
@@ -50,6 +49,12 @@ const toggleSidebar = (): void => {
       <main class="flex-1 overflow-y-auto">
         <slot />
       </main>
+
+      <!-- Footer -->
+      <footer class="shrink-0 border-t border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900">
+        <span>Time Management</span>
+        <span>&copy; {{ new Date().getFullYear() }}</span>
+      </footer>
     </div>
   </div>
 </template>
