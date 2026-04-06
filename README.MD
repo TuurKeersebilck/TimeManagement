@@ -1,5 +1,12 @@
 # Time Management
 
+![License](https://img.shields.io/github/license/TuurKeersebilck/TimeManagement)
+![Issues](https://img.shields.io/github/issues/TuurKeersebilck/TimeManagement)
+![Last Commit](https://img.shields.io/github/last-commit/TuurKeersebilck/TimeManagement)
+![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white)
+![.NET](https://img.shields.io/badge/.NET-9-512BD4?logo=dotnet&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss&logoColor=white)
+
 A full-stack time tracking and management application.
 
 - **Frontend:** Vue 3 + Vite + shadcn-vue + Tailwind CSS v4
