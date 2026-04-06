@@ -419,8 +419,8 @@ public class AdminService(AppDbContext context) : IAdminService
                 CsvEscape(log.EmployeeEmail),
                 log.Date.ToString("yyyy-MM-dd"),
                 log.Date.DayOfWeek.ToString(),
-                log.StartTime.ToString(@"HH\:mm"),
-                log.EndTime.ToString(@"HH\:mm"),
+                log.StartTime.ToString(@"hh\:mm"),
+                log.EndTime.ToString(@"hh\:mm"),
                 breakHours.ToString("F2"),
                 log.TotalHours.ToString("F2"),
                 CsvEscape(log.Description ?? "")
