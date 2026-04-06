@@ -38,7 +38,7 @@ public class ExceptionHandlingMiddleware
             case ResourceNotFoundException ex:
                 _logger.LogWarning("Resource not found: {Message}", ex.Message);
                 statusCode = HttpStatusCode.NotFound;
-                message = ex.Message;
+                message = "The requested resource was not found.";
                 break;
             case InsufficientVacationBalanceException ex:
                 _logger.LogWarning("Insufficient vacation balance: {Message}", ex.Message);

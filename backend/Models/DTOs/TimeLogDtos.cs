@@ -32,6 +32,7 @@ public class TimeLogFormDto
 
     public TimeSpan? BreakEnd { get; set; }
 
+    [StringLength(1000)]
     public string? Description { get; set; }
 }
 

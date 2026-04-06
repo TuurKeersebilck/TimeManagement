@@ -19,6 +19,7 @@ public class TimeLog
 
     public TimeSpan? BreakEnd { get; set; }
 
+    [MaxLength(1000)]
     public string? Description { get; set; }
 
     public string? UserId { get; set; }
