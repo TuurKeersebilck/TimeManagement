@@ -60,6 +60,7 @@ const adminPersonalNav: NavItem[] = [
   { name: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboardIcon },
   { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
   { name: "Team Calendar", to: "/team-calendar", icon: CalendarDaysIcon },
+  { name: "Account", to: "/account", icon: KeyRoundIcon },
 ];
 
 const adminSectionNav: NavItem[] = [
