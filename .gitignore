@@ -1,3 +1,10 @@
+# Claude Code / AI tooling
+.agents/
+skills-lock.json
+not a tty
+package.json
+package-lock.json
+
 # Logs
 logs
 *.log
