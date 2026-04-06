@@ -1,27 +1,31 @@
-# Time Management App
+# Time Management
 
-A full-stack time management application featuring:
+A full-stack time tracking and management application.
 
-- **Frontend:** Vue 3 + Vite + PrimeVue UI
-- **Backend:** .NET 9 MVC API
-- **Database:** MariaDB
+- **Frontend:** Vue 3 + Vite + shadcn-vue + Tailwind CSS v4
+- **Backend:** .NET 9 ASP.NET Core Web API
+- **Database:** MariaDB (SQLite fallback for local dev)
 
 ---
 
 ## Features
 
-- Log work hours with date, start/end time, and break
-- Responsive UI with PrimeVue components
-- RESTful API for CRUD operations
-- Secure CORS setup for local development
+- Log work hours with date, start/end time, and break duration
+- Dashboard with daily, weekly, and monthly summaries
+- Target hours tracking with progress indicators
+- Vacation requests and balance management
+- Team calendar view
+- Admin panel — manage employees, time logs, vacation types, and payroll export
+- Dark / light mode
+- Email-based password reset
 
 ---
 
 ## Project Structure
 
 ```
-frontend/   # Vue 3 + PrimeVue SPA
-backend/    # .NET 9 MVC API
+frontend/   # Vue 3 SPA
+backend/    # .NET 9 REST API
 ```
 
 ---
@@ -30,13 +34,11 @@ backend/    # .NET 9 MVC API
 
 ### Prerequisites
 
-- Node.js (v20+)
+- Node.js v20+
 - .NET 9 SDK
-- MariaDB server
+- MariaDB (optional — falls back to SQLite)
 
----
-
-### Frontend Setup
+### Frontend
 
 ```sh
 cd frontend
@@ -44,28 +46,24 @@ npm install
 npm run dev
 ```
 
-Access at [http://localhost:5173](http://localhost:5173).
+Runs at [http://localhost:5173](http://localhost:5173).
 
----
+### Backend
 
-### Backend Setup
+1. Copy the environment template and fill in your values:
 
-1. Update `backend/appsettings.json` with your MariaDB connection string:
-
-    ```json
-    "ConnectionStrings": {
-      "DefaultConnection": "Server=localhost;Database=timemanagement;User=root;Password=yourpassword;"
-    }
+    ```sh
+    cp backend/.env.template backend/.env
     ```
 
-2. Run database migrations:
+2. Apply database migrations:
 
     ```sh
     cd backend
     dotnet ef database update
     ```
 
-3. Start the API server:
+3. Start the API:
 
     ```sh
     dotnet run
@@ -73,25 +71,10 @@ Access at [http://localhost:5173](http://localhost:5173).
 
 API runs at [https://localhost:7055](https://localhost:7055).
 
----
-
-## Usage
-
-- Open the frontend in your browser.
-- Add, view, and manage time logs.
-- Data is stored in MariaDB via the .NET backend.
-
----
-
-## Tech Stack
-
-- **Vue 3** ([src/main.js](frontend/src/main.js))
-- **PrimeVue** ([primevue](https://www.primefaces.org/primevue/))
-- **.NET 9 MVC** ([Program.cs](backend/Program.cs))
-- **MariaDB**
+> See `backend/.env.template` for all available configuration options (JWT, database, SMTP, CORS).
 
 ---
 
 ## License
 
-MIT
+[MIT](LICENSE)
