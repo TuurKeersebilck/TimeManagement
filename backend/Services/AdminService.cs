@@ -432,7 +432,7 @@ public class AdminService(AppDbContext context) : IAdminService
         {
             sb.AppendLine();
             sb.AppendLine("VACATION DAYS");
-            sb.AppendLine("Employee,Email,Date,Day,Type,Amount");
+            sb.AppendLine("Employee,Email,Date,Day,Type,Amount,Note");
 
             foreach (var v in vacations)
             {
@@ -442,7 +442,8 @@ public class AdminService(AppDbContext context) : IAdminService
                     v.Date.ToString("yyyy-MM-dd"),
                     v.Date.DayOfWeek.ToString(),
                     CsvEscape(v.VacationTypeName),
-                    ((double)v.Amount).ToString("F1")
+                    ((double)v.Amount).ToString("F1"),
+                    CsvEscape(v.Note ?? "")
                 ));
             }
         }
