@@ -109,10 +109,13 @@ onMounted(() => fetchUser());
   >
     <!-- Header -->
     <div
-      class="flex items-center h-16 px-4 border-b border-slate-200 dark:border-slate-800 shrink-0"
+      :class="[
+        'flex items-center h-16 border-b border-slate-200 dark:border-slate-800 shrink-0',
+        isOpen ? 'px-4' : 'lg:justify-center lg:px-2',
+      ]"
     >
       <AppLogo v-if="isOpen" :show-text="true" class="flex-1 min-w-0" />
-      <NotificationBell v-if="isAdmin" />
+      <NotificationBell v-if="isAdmin && isOpen" />
       <button
         @click="emit('toggle')"
         class="btn-ghost !px-2 !py-2 shrink-0"
