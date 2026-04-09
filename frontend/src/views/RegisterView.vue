@@ -133,7 +133,7 @@ const handleRegister = async (): Promise<void> => {
               />
               <button
                 type="button"
-                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 @click="showPassword = !showPassword"
                 :aria-label="showPassword ? 'Hide password' : 'Show password'"
               >
@@ -191,7 +191,7 @@ const handleRegister = async (): Promise<void> => {
               />
               <button
                 type="button"
-                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                 @click="showConfirmPassword = !showConfirmPassword"
                 :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'"
               >

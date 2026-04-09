@@ -7,7 +7,7 @@ import NotificationBell from "./NotificationBell.vue";
 import AppLogo from "./AppLogo.vue";
 import {
   LayoutDashboardIcon,
-  ClockIcon,
+  TimerIcon,
   CalendarIcon,
   CalendarDaysIcon,
   TagIcon,
@@ -51,7 +51,7 @@ interface NavItem {
 
 const employeeNav: NavItem[] = [
   { name: "Dashboard", to: "/", icon: LayoutDashboardIcon },
-  { name: "My Time Logs", to: "/time-tracking", icon: ClockIcon },
+  { name: "My Time Logs", to: "/time-tracking", icon: TimerIcon },
   { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
   { name: "Team Calendar", to: "/team-calendar", icon: CalendarDaysIcon },
   { name: "Account", to: "/account", icon: KeyRoundIcon },
@@ -65,7 +65,7 @@ const adminPersonalNav: NavItem[] = [
 ];
 
 const adminSectionNav: NavItem[] = [
-  { name: "All Time Logs", to: "/admin/time-logs", icon: ClockIcon },
+  { name: "All Time Logs", to: "/admin/time-logs", icon: TimerIcon },
   { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
   { name: "Employees", to: "/admin/employees", icon: UsersIcon },
   { name: "Payroll Export", to: "/admin/export", icon: DownloadIcon },
