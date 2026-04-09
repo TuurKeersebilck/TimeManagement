@@ -1,25 +1,21 @@
 <script setup lang="ts">
-import { ref } from "vue";
 import { useRouter } from "vue-router";
 import Sidebar from "@/components/Sidebar.vue";
 import AppLogo from "@/components/AppLogo.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
+import { useSidebar } from "../composables/useSidebar";
 import { MenuIcon } from "lucide-vue-next";
 
 const router = useRouter();
-const sidebarOpen = ref<boolean>(true);
+const { sidebarOpen, toggle: toggleSidebar } = useSidebar();
 const { clearUser, isAdmin } = useAuth();
 
 const handleLogout = async (): Promise<void> => {
   clearUser();
   await authService.logout();
   router.push("/login");
-};
-
-const toggleSidebar = (): void => {
-  sidebarOpen.value = !sidebarOpen.value;
 };
 </script>
 
