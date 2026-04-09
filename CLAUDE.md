@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Full-stack time management app with a **Vue 3 + Vite** SPA frontend and a **.NET 9 ASP.NET Core** backend API, using **MariaDB** (via Pomelo EF Core) with SQLite as fallback.
+- Temporary deployment: Railway (backend) + Vercel (frontend)
 
 ## Development Commands
 
@@ -71,6 +72,9 @@ Copy `.env.template` to `.env` and populate:
 - Every bug fix or new feature MUST be implemented on a new branch created from `main`
 - Branch naming: `fix/<short-description>` for bug fixes, `feat/<short-description>` for features
 - Never commit implementation work directly to `main`
+- Always verify PR and branch status (merged/open) before taking action on them
+- When creating a new fix for an already-merged branch, always create a new branch from main
+- Never push to already-merged branches
 
 ### Security & Secrets
 - NEVER commit `.env` files, secrets, credentials, or connection strings — only `.env.template` (with placeholder values) is safe to commit
