@@ -46,11 +46,6 @@ const handleLogout = async (): Promise<void> => {
         <slot />
       </main>
 
-      <!-- Footer -->
-      <footer class="shrink-0 border-t border-slate-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-900">
-        <span>Time Management</span>
-        <span>&copy; {{ new Date().getFullYear() }}</span>
-      </footer>
     </div>
   </div>
 </template>
