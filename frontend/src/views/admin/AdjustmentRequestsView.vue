@@ -1,0 +1,161 @@
+<script setup lang="ts">
+import { ref, computed, onMounted } from "vue";
+import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
+import {
+  adjustmentRequestService,
+  type AdjustmentRequest,
+  type AdjustmentRequestStatus,
+} from "@/services/adjustmentRequestService";
+import { useAppToast } from "@/composables/useAppToast";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { ClipboardListIcon, Loader2Icon } from "lucide-vue-next";
+
+const toast = useAppToast();
+const requests = ref<AdjustmentRequest[]>([]);
+const loading = ref(false);
+const search = ref("");
+
+const STATUS_LABELS: Record<AdjustmentRequestStatus, string> = {
+  Pending: "Pending",
+  Approved: "Approved",
+  Rejected: "Rejected",
+};
+
+const STATUS_CLASSES: Record<AdjustmentRequestStatus, string> = {
+  Pending: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  Approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  Rejected: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300",
+};
+
+const filtered = computed(() => {
+  const q = search.value.toLowerCase();
+  return requests.value.filter(
+    (r) =>
+      !q ||
+      r.employeeName.toLowerCase().includes(q) ||
+      r.date.includes(q) ||
+      r.reason.toLowerCase().includes(q)
+  );
+});
+
+function fmt(t: string | null): string {
+  return t ? t.substring(0, 5) : "—";
+}
+
+function fmtDate(d: string): string {
+  return new Date(d).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+async function load() {
+  loading.value = true;
+  try {
+    requests.value = await adjustmentRequestService.getAll();
+  } catch {
+    toast.error("Failed to load adjustment requests");
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(load);
+</script>
+
+<template>
+  <AuthenticatedLayout>
+    <div class="p-6 lg:p-8">
+      <div class="max-w-6xl mx-auto">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-8">
+          <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              Adjustment Requests
+            </h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Employee time adjustment requests requiring approval
+            </p>
+          </div>
+          <div class="w-64">
+            <Input v-model="search" placeholder="Search employee, date, reason…" />
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="card overflow-hidden">
+          <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+            <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-36 animate-pulse" />
+              <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+            </div>
+          </div>
+
+          <Table v-else>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Employee</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Requested Times</TableHead>
+                <TableHead>Reason</TableHead>
+                <TableHead>Requested At</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableEmpty v-if="filtered.length === 0" :colspan="6">
+                <ClipboardListIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                <p class="text-slate-500 dark:text-slate-400">
+                  {{ search ? "No requests match your search." : "No adjustment requests yet." }}
+                </p>
+              </TableEmpty>
+              <TableRow v-for="r in filtered" :key="r.id">
+                <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                  {{ r.employeeName }}
+                </TableCell>
+                <TableCell class="text-slate-600 dark:text-slate-400">
+                  {{ fmtDate(r.date) }}
+                </TableCell>
+                <TableCell>
+                  <div class="text-xs font-mono space-y-0.5 text-slate-600 dark:text-slate-400">
+                    <div>In: {{ fmt(r.requestedClockIn) }}</div>
+                    <div>Break: {{ fmt(r.requestedBreakStart) }} – {{ fmt(r.requestedBreakEnd) }}</div>
+                    <div>Out: {{ fmt(r.requestedClockOut) }}</div>
+                  </div>
+                </TableCell>
+                <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
+                  <span :title="r.reason">
+                    {{ r.reason.length > 80 ? r.reason.substring(0, 80) + "…" : r.reason }}
+                  </span>
+                </TableCell>
+                <TableCell class="text-slate-500 dark:text-slate-400 text-sm">
+                  {{ fmtDate(r.requestedAt) }}
+                </TableCell>
+                <TableCell>
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold"
+                    :class="STATUS_CLASSES[r.status]"
+                  >
+                    {{ STATUS_LABELS[r.status] }}
+                  </span>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  </AuthenticatedLayout>
+</template>

@@ -14,14 +14,14 @@ public class AdminController(IAdminService adminService) : ControllerBase
     private readonly IAdminService _adminService = adminService;
 
     [HttpGet("timelogs")]
-    public async Task<ActionResult<IEnumerable<AdminTimeLogDto>>> GetAllTimeLogs(
+    public async Task<ActionResult<IEnumerable<AdminDaySummaryDto>>> GetAllTimeLogs(
         [FromQuery] string? userId,
         [FromQuery] DateOnly? dateFrom,
         [FromQuery] DateOnly? dateTo,
         CancellationToken ct)
     {
-        var logs = await _adminService.GetAllTimeLogsAsync(userId, dateFrom, dateTo, ct);
-        return Ok(logs);
+        var summaries = await _adminService.GetAllDaySummariesAsync(userId, dateFrom, dateTo, ct);
+        return Ok(summaries);
     }
 
     [HttpGet("employees")]

@@ -49,4 +49,101 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
 
         logger.LogInformation("Password reset email sent to {Email}", toEmail);
     }
+
+    public async Task SendAdjustmentRequestEmailAsync(
+        string toEmail,
+        string toName,
+        string requesterName,
+        DateOnly date,
+        TimeSpan? requestedClockIn,
+        TimeSpan? requestedBreakStart,
+        TimeSpan? requestedBreakEnd,
+        TimeSpan? requestedClockOut,
+        string reason,
+        string approveLink)
+    {
+        static string Fmt(TimeSpan? t) => t.HasValue ? t.Value.ToString(@"hh\:mm") : "—";
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.To.Add(new MailboxAddress(toName, toEmail));
+        message.Subject = $"Time adjustment request from {requesterName} — {date:yyyy-MM-dd}";
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+                  <h2 style="color:#1e293b">Time Adjustment Request</h2>
+                  <p style="color:#475569"><strong>{requesterName}</strong> has requested a time adjustment for <strong>{date:dddd, MMMM d yyyy}</strong>.</p>
+                  <table style="width:100%;border-collapse:collapse;margin:16px 0">
+                    <tr style="background:#f8fafc"><td style="padding:8px 12px;color:#64748b;font-size:13px">Clock In</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedClockIn)}</td></tr>
+                    <tr><td style="padding:8px 12px;color:#64748b;font-size:13px">Break Start</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedBreakStart)}</td></tr>
+                    <tr style="background:#f8fafc"><td style="padding:8px 12px;color:#64748b;font-size:13px">Break End</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedBreakEnd)}</td></tr>
+                    <tr><td style="padding:8px 12px;color:#64748b;font-size:13px">Clock Out</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedClockOut)}</td></tr>
+                  </table>
+                  <p style="color:#475569"><strong>Reason:</strong> {System.Net.WebUtility.HtmlEncode(reason)}</p>
+                  <a href="{approveLink}"
+                     style="display:inline-block;margin:16px 0;padding:12px 28px;background:#22c55e;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
+                    Approve Request
+                  </a>
+                  <p style="color:#94a3b8;font-size:12px;margin-top:8px">
+                    Clicking approve will immediately update the employee's time log. This link expires in 7 days.
+                  </p>
+                </div>
+                """
+        };
+
+        using var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(config.User, config.Password);
+            await client.SendAsync(message);
+        }
+        finally
+        {
+            await client.DisconnectAsync(true);
+        }
+
+        logger.LogInformation("Adjustment request email sent to admin {Email}", toEmail);
+    }
+
+    public async Task SendMissedClockInReminderAsync(string toEmail, string toName, DateOnly missedDate)
+    {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.To.Add(new MailboxAddress(toName, toEmail));
+        message.Subject = $"Missing time log — {missedDate:yyyy-MM-dd}";
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                  <h2 style="color:#1e293b">Missing Time Log</h2>
+                  <p style="color:#475569">Hi {toName},</p>
+                  <p style="color:#475569">
+                    No clock-in was recorded for <strong>{missedDate:dddd, MMMM d yyyy}</strong>.
+                    If this was a working day, please open the app and submit a time adjustment request with your hours and a brief reason.
+                  </p>
+                  <p style="color:#94a3b8;font-size:13px">
+                    If you were absent or on leave, you can ignore this message.
+                  </p>
+                </div>
+                """
+        };
+
+        using var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(config.User, config.Password);
+            await client.SendAsync(message);
+        }
+        finally
+        {
+            await client.DisconnectAsync(true);
+        }
+
+        logger.LogInformation("Missed clock-in reminder sent to {Email} for {Date}", toEmail, missedDate);
+    }
 }

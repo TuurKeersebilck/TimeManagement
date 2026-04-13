@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import { authService, type User } from "../services/authService";
 import { useRouter } from "vue-router";
-import { useTimeLogsStore } from "./useTimeLogsStore";
+import { useClockEventsStore } from "./useClockEventsStore";
 
 const currentUser = ref<User | null>(null);
 const isLoadingUser = ref(false);
@@ -37,7 +37,7 @@ export function useAuth() {
     currentUser.value = null;
     isUserFetched.value = false;
     storedRoles.value = [];
-    const { clearCache } = useTimeLogsStore();
+    const { clearCache } = useClockEventsStore();
     clearCache();
   };
 

@@ -50,6 +50,11 @@ public class ExceptionHandlingMiddleware
                 statusCode = HttpStatusCode.BadRequest;
                 message = ex.Message;
                 break;
+            case Exceptions.ValidationException ex:
+                _logger.LogWarning("Validation error: {Message}", ex.Message);
+                statusCode = HttpStatusCode.BadRequest;
+                message = ex.Message;
+                break;
             default:
                 _logger.LogError(exception, "Unhandled exception processing request {Method} {Path}",
                     context.Request.Method, context.Request.Path);

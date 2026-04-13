@@ -12,7 +12,8 @@ public class AppDbContext : IdentityUserContext<User>
     {
     }
 
-    public DbSet<TimeLog> TimeLogs => Set<TimeLog>();
+    public DbSet<ClockEvent> ClockEvents => Set<ClockEvent>();
+    public DbSet<TimeAdjustmentRequest> TimeAdjustmentRequests => Set<TimeAdjustmentRequest>();
     public DbSet<VacationType> VacationTypes => Set<VacationType>();
     public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
     public DbSet<VacationDay> VacationDays => Set<VacationDay>();
@@ -37,10 +38,27 @@ public class AppDbContext : IdentityUserContext<User>
             entity.Ignore(e => e.AccessFailedCount);
         });
 
-        builder.Entity<TimeLog>(entity =>
+        builder.Entity<ClockEvent>(entity =>
         {
-            entity.HasIndex(e => e.Date);
             entity.HasIndex(e => new { e.UserId, e.Date });
+            entity.HasIndex(e => new { e.UserId, e.Date, e.Type }).IsUnique();
+        });
+
+        builder.Entity<TimeAdjustmentRequest>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Date });
+            entity.HasIndex(e => e.ApprovalTokenHash);
+            entity.HasIndex(e => e.Status);
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.AdjustmentRequests)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.ReviewedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<VacationType>()
