@@ -8,8 +8,6 @@ public class AutoMapperProfile : Profile
 {
     public AutoMapperProfile()
     {
-        CreateMap<TimeLog, TimeLogDto>();
-        CreateMap<TimeLogFormDto, TimeLog>();
-        CreateMap<TimeLog, TimeLogFormDto>();
+        CreateMap<ClockEvent, ClockEventDto>();
     }
 }

@@ -230,7 +230,7 @@ onMounted(async () => {
                 <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
               </TableEmpty>
-              <TableRow v-for="log in paginatedLogs" :key="log.id">
+              <TableRow v-for="log in paginatedLogs" :key="`${log.userId}-${log.date}`">
                 <TableCell>
                   <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
                     {{ log.employeeName }}
@@ -241,7 +241,7 @@ onMounted(async () => {
                   {{ formatDate(log.date) }}
                 </TableCell>
                 <TableCell class="text-slate-600 dark:text-slate-400">
-                  {{ formatTime(log.startTime) }} – {{ formatTime(log.endTime) }}
+                  {{ formatTime(log.clockIn) }} – {{ formatTime(log.clockOut) }}
                 </TableCell>
                 <TableCell class="text-slate-500 dark:text-slate-500 text-xs">
                   {{ formatBreak(log) }}

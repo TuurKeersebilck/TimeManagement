@@ -207,7 +207,7 @@ onMounted(async () => {
               <ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
                 <li
                   v-for="log in todayLogs"
-                  :key="log.id"
+                  :key="`${log.userId}-${log.date}`"
                   class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
                   @click="
                     router.push({
@@ -228,8 +228,8 @@ onMounted(async () => {
                     </p>
                   </div>
                   <div class="text-xs text-slate-500 dark:text-slate-400 shrink-0">
-                    {{ formatTime(log.startTime) }} –
-                    {{ formatTime(log.endTime) }}
+                    {{ formatTime(log.clockIn) }} –
+                    {{ formatTime(log.clockOut) }}
                     <span v-if="log.breakStart" class="ml-1 text-slate-400 dark:text-slate-500"
                       >(brk {{ formatBreak(log) }})</span
                     >

@@ -70,11 +70,13 @@ try
     // Register application services
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
-    builder.Services.AddScoped<ITimeLogService, TimeLogService>();
+    builder.Services.AddScoped<IClockEventService, ClockEventService>();
+    builder.Services.AddScoped<ITimeAdjustmentRequestService, TimeAdjustmentRequestService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
     builder.Services.AddScoped<INotificationService, NotificationService>();
     builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();
+    builder.Services.AddHostedService<MissedClockInReminderService>();
 
     // Register email service (MailKit)
     var smtpConfig = new SmtpConfig
@@ -88,8 +90,9 @@ try
     builder.Services.AddSingleton(smtpConfig);
     builder.Services.AddScoped<IEmailService, EmailService>();
 
-    // Expose APP_URL to configuration so controllers can read it
+    // Expose APP_URL / BACKEND_URL to configuration
     builder.Configuration["AppUrl"] = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";
+    builder.Configuration["BackendUrl"] = Environment.GetEnvironmentVariable("BACKEND_URL") ?? string.Empty;
 
     var app = builder.Build();
 

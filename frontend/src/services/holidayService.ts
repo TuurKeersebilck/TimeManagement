@@ -12,6 +12,7 @@ export interface AppConfiguration {
   countryName?: string | null;
   defaultDailyHours?: number | null;
   defaultWeeklyHours?: number | null;
+  notificationEmail?: string | null;
 }
 
 export interface AvailableCountry {
@@ -63,6 +64,11 @@ export const holidayService = {
 
   async setDefaultTargets(defaultDailyHours: number | null, defaultWeeklyHours: number | null): Promise<AppConfiguration> {
     const res = await apiClient.put<AppConfiguration>("/admin/settings/targets", { defaultDailyHours, defaultWeeklyHours });
+    return res.data;
+  },
+
+  async setNotificationEmail(email: string | null): Promise<AppConfiguration> {
+    const res = await apiClient.put<AppConfiguration>("/admin/settings/notification-email", { email });
     return res.data;
   },
 };

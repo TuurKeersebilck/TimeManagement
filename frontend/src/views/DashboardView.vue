@@ -3,14 +3,14 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { useTimeCalculations } from "../composables/useTimeCalculations";
-import { useTimeLogsStore } from "../composables/useTimeLogsStore";
-import { timeLogService } from "../services/timeLogService";
+import { useClockEventsStore } from "../composables/useClockEventsStore";
+import { clockEventService } from "../services/clockEventService";
 import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
 import { ClockIcon, CheckCircleIcon, AlertCircleIcon, CalendarDaysIcon, TrendingUpIcon } from "lucide-vue-next";
 
 const router = useRouter();
-const { timeLogs, loading, fetchTimeLogs } = useTimeLogsStore();
-const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } = useTimeCalculations(timeLogs);
+const { summaries, loading, fetchSummaries } = useClockEventsStore();
+const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } = useTimeCalculations(summaries);
 
 const dailyTarget = ref<number | null>(null);
 const weeklyTarget = ref<number | null>(null);
@@ -49,9 +49,9 @@ const todayStatus = computed(() => {
 });
 
 onMounted(async () => {
-  await fetchTimeLogs();
+  await fetchSummaries();
   try {
-    const target = await timeLogService.getMyTarget();
+    const target = await clockEventService.getMyTarget();
     dailyTarget.value = target.dailyHours ?? null;
     weeklyTarget.value = target.weeklyHours ?? null;
   } catch {

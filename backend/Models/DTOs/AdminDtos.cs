@@ -1,22 +1,18 @@
-using TimeManagementBackend.Helpers;
-
 namespace TimeManagementBackend.Models.DTOs;
 
-public class AdminTimeLogDto
+public class AdminDaySummaryDto
 {
-    public int Id { get; set; }
     public string UserId { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
     public string EmployeeEmail { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
-    public TimeSpan StartTime { get; set; }
-    public TimeSpan EndTime { get; set; }
+    public TimeSpan? ClockIn { get; set; }
     public TimeSpan? BreakStart { get; set; }
     public TimeSpan? BreakEnd { get; set; }
+    public TimeSpan? ClockOut { get; set; }
+    public double TotalHours { get; set; }
     public string? Description { get; set; }
-
-    public double TotalHours =>
-        TimeCalculationHelper.CalculateWorkedHours(StartTime, EndTime, BreakStart, BreakEnd);
+    public bool IsComplete { get; set; }
 }
 
 public class EmployeeDto

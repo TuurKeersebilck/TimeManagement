@@ -21,6 +21,7 @@ import {
   KeyRoundIcon,
   SettingsIcon,
   DownloadIcon,
+  ClipboardListIcon,
 } from "lucide-vue-next";
 
 interface Props {
@@ -51,7 +52,7 @@ interface NavItem {
 
 const employeeNav: NavItem[] = [
   { name: "Dashboard", to: "/", icon: LayoutDashboardIcon },
-  { name: "My Time Logs", to: "/time-tracking", icon: TimerIcon },
+  { name: "Clock In/Out", to: "/time-tracking", icon: TimerIcon },
   { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
   { name: "Team Calendar", to: "/team-calendar", icon: CalendarDaysIcon },
   { name: "Account", to: "/account", icon: KeyRoundIcon },
@@ -66,6 +67,7 @@ const adminPersonalNav: NavItem[] = [
 
 const adminSectionNav: NavItem[] = [
   { name: "All Time Logs", to: "/admin/time-logs", icon: TimerIcon },
+  { name: "Adjustment Requests", to: "/admin/adjustment-requests", icon: ClipboardListIcon },
   { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
   { name: "Employees", to: "/admin/employees", icon: UsersIcon },
   { name: "Payroll Export", to: "/admin/export", icon: DownloadIcon },

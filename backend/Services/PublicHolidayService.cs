@@ -21,6 +21,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
             CountryCode = config?.CountryCode,
             DefaultDailyHours = config?.DefaultDailyHours,
             DefaultWeeklyHours = config?.DefaultWeeklyHours,
+            NotificationEmail = config?.NotificationEmail,
         };
     }
 
@@ -39,12 +40,26 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         }
 
         await db.SaveChangesAsync(ct);
-        return new AppConfigurationDto
+        return ToConfigDto(config);
+    }
+
+    public async Task<AppConfigurationDto> SetNotificationEmailAsync(string? email, CancellationToken ct = default)
+    {
+        var normalized = string.IsNullOrWhiteSpace(email) ? null : email.Trim().ToLowerInvariant();
+
+        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+        if (config == null)
         {
-            CountryCode = config.CountryCode,
-            DefaultDailyHours = config.DefaultDailyHours,
-            DefaultWeeklyHours = config.DefaultWeeklyHours,
-        };
+            config = new AppConfiguration { NotificationEmail = normalized };
+            db.AppConfigurations.Add(config);
+        }
+        else
+        {
+            config.NotificationEmail = normalized;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return ToConfigDto(config);
     }
 
     public async Task<AppConfigurationDto> SetCountryAsync(string countryCode, CancellationToken ct = default)
@@ -69,12 +84,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         await FetchAndStoreAsync(normalized, currentYear, ct);
         await FetchAndStoreAsync(normalized, currentYear + 1, ct);
 
-        return new AppConfigurationDto
-        {
-            CountryCode = config.CountryCode,
-            DefaultDailyHours = config.DefaultDailyHours,
-            DefaultWeeklyHours = config.DefaultWeeklyHours,
-        };
+        return ToConfigDto(config);
     }
 
     // ─── Holidays ─────────────────────────────────────────────────────────────
@@ -196,6 +206,14 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
             // Don't throw — holiday fetch failure shouldn't break the app
         }
     }
+
+    private static AppConfigurationDto ToConfigDto(AppConfiguration c) => new()
+    {
+        CountryCode = c.CountryCode,
+        DefaultDailyHours = c.DefaultDailyHours,
+        DefaultWeeklyHours = c.DefaultWeeklyHours,
+        NotificationEmail = c.NotificationEmail,
+    };
 
     private static PublicHolidayDto ToDto(PublicHoliday h) => new()
     {

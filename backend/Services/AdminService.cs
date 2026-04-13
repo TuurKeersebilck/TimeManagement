@@ -11,40 +11,55 @@ public class AdminService(AppDbContext context) : IAdminService
 {
     private readonly AppDbContext _context = context;
 
-    public async Task<IEnumerable<AdminTimeLogDto>> GetAllTimeLogsAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
+    public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
-        var query = _context.TimeLogs
+        var query = _context.ClockEvents
             .AsNoTracking()
-            .Join(
-                _context.Users,
-                log => log.UserId,
-                user => user.Id,
-                (log, user) => new { log, user }
-            );
+            .Include(e => e.User)
+            .AsQueryable();
 
         if (!string.IsNullOrEmpty(userId))
-            query = query.Where(x => x.log.UserId == userId);
+            query = query.Where(e => e.UserId == userId);
         if (dateFrom.HasValue)
-            query = query.Where(x => x.log.Date >= dateFrom.Value);
+            query = query.Where(e => e.Date >= dateFrom.Value);
         if (dateTo.HasValue)
-            query = query.Where(x => x.log.Date <= dateTo.Value);
+            query = query.Where(e => e.Date <= dateTo.Value);
 
-        return await query
-            .OrderByDescending(x => x.log.Date)
-            .Select(x => new AdminTimeLogDto
+        var events = await query.ToListAsync(ct);
+
+        return events
+            .GroupBy(e => new { e.UserId, e.Date })
+            .Select(g =>
             {
-                Id = x.log.Id,
-                UserId = x.log.UserId!,
-                EmployeeName = x.user.FullName,
-                EmployeeEmail = x.user.Email!,
-                Date = x.log.Date,
-                StartTime = x.log.StartTime,
-                EndTime = x.log.EndTime,
-                BreakStart = x.log.BreakStart,
-                BreakEnd = x.log.BreakEnd,
-                Description = x.log.Description,
+                var first = g.First();
+                var clockIn = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn);
+                var breakStart = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart);
+                var breakEnd = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd);
+                var clockOut = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut);
+                var isComplete = clockIn != null && breakStart != null && breakEnd != null && clockOut != null;
+                var totalHours = clockIn != null && clockOut != null
+                    ? TimeCalculationHelper.CalculateWorkedHours(
+                        clockIn.RecordedTime, clockOut.RecordedTime,
+                        breakStart?.RecordedTime, breakEnd?.RecordedTime)
+                    : 0.0;
+
+                return new AdminDaySummaryDto
+                {
+                    UserId = g.Key.UserId,
+                    EmployeeName = first.User.FullName,
+                    EmployeeEmail = first.User.Email ?? string.Empty,
+                    Date = g.Key.Date,
+                    ClockIn = clockIn?.RecordedTime,
+                    BreakStart = breakStart?.RecordedTime,
+                    BreakEnd = breakEnd?.RecordedTime,
+                    ClockOut = clockOut?.RecordedTime,
+                    TotalHours = totalHours,
+                    Description = clockOut?.Description,
+                    IsComplete = isComplete,
+                };
             })
-            .ToListAsync(ct);
+            .OrderByDescending(s => s.Date)
+            .ToList();
     }
 
     public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(CancellationToken ct = default)
@@ -58,9 +73,9 @@ public class AdminService(AppDbContext context) : IAdminService
             .OrderBy(u => u.FullName)
             .ToListAsync(ct);
 
-        var weekLogs = await _context.TimeLogs
+        var weekEvents = await _context.ClockEvents
             .AsNoTracking()
-            .Where(l => l.Date >= weekStart && l.Date <= weekEnd)
+            .Where(e => e.Date >= weekStart && e.Date <= weekEnd)
             .ToListAsync(ct);
 
         var targets = await _context.EmployeeTargets
@@ -69,9 +84,19 @@ public class AdminService(AppDbContext context) : IAdminService
 
         return users.Select(u =>
         {
-            var userLogs = weekLogs.Where(l => l.UserId == u.Id);
-            var weeklyLogged = (decimal)userLogs.Sum(l =>
-                TimeCalculationHelper.CalculateWorkedHours(l.StartTime, l.EndTime, l.BreakStart, l.BreakEnd));
+            var userEvents = weekEvents.Where(e => e.UserId == u.Id);
+            var weeklyLogged = (decimal)userEvents
+                .GroupBy(e => e.Date)
+                .Sum(g =>
+                {
+                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedTime;
+                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedTime;
+                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedTime;
+                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedTime;
+                    return ci.HasValue && co.HasValue
+                        ? TimeCalculationHelper.CalculateWorkedHours(ci.Value, co.Value, bs, be)
+                        : 0.0;
+                });
 
             var target = targets.FirstOrDefault(t => t.UserId == u.Id);
             var resolvedWeekly = target?.WeeklyHours ?? config?.DefaultWeeklyHours;
@@ -80,7 +105,7 @@ public class AdminService(AppDbContext context) : IAdminService
             {
                 Id = u.Id,
                 FullName = u.FullName,
-                Email = u.Email!,
+                Email = u.Email ?? string.Empty,
                 WeeklyHoursLogged = Math.Round(weeklyLogged, 2),
                 ResolvedWeeklyTarget = resolvedWeekly,
             };
@@ -279,18 +304,28 @@ public class AdminService(AppDbContext context) : IAdminService
         var from = weekRanges[0].Start;
         var to = weekRanges[^1].End;
 
-        var logs = await _context.TimeLogs
+        var events = await _context.ClockEvents
             .AsNoTracking()
-            .Where(l => l.UserId == userId && l.Date >= from && l.Date <= to)
+            .Where(e => e.UserId == userId && e.Date >= from && e.Date <= to)
             .ToListAsync(ct);
 
         var target = await GetEmployeeTargetAsync(userId, ct);
 
         return weekRanges.Select(w =>
         {
-            var weekLogs = logs.Where(l => l.Date >= w.Start && l.Date <= w.End);
-            var hoursLogged = (decimal)weekLogs.Sum(l =>
-                TimeCalculationHelper.CalculateWorkedHours(l.StartTime, l.EndTime, l.BreakStart, l.BreakEnd));
+            var weekEvents = events.Where(e => e.Date >= w.Start && e.Date <= w.End);
+            var hoursLogged = (decimal)weekEvents
+                .GroupBy(e => e.Date)
+                .Sum(g =>
+                {
+                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedTime;
+                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedTime;
+                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedTime;
+                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedTime;
+                    return ci.HasValue && co.HasValue
+                        ? TimeCalculationHelper.CalculateWorkedHours(ci.Value, co.Value, bs, be)
+                        : 0.0;
+                });
 
             // ISO week number
             var jan1 = new DateOnly(w.Start.Year, 1, 1);
@@ -313,31 +348,45 @@ public class AdminService(AppDbContext context) : IAdminService
         var dateFrom = new DateOnly(year, month, 1);
         var dateTo = dateFrom.AddMonths(1).AddDays(-1);
 
-        var logsQuery = _context.TimeLogs
+        var eventsQuery = _context.ClockEvents
             .AsNoTracking()
-            .Join(_context.Users, l => l.UserId, u => u.Id, (l, u) => new { l, u })
-            .Where(x => x.l.Date >= dateFrom && x.l.Date <= dateTo);
+            .Include(e => e.User)
+            .Where(e => e.Date >= dateFrom && e.Date <= dateTo);
 
         if (!string.IsNullOrEmpty(userId))
-            logsQuery = logsQuery.Where(x => x.l.UserId == userId);
+            eventsQuery = eventsQuery.Where(e => e.UserId == userId);
 
-        var logs = await logsQuery
-            .OrderBy(x => x.u.FullName)
-            .ThenBy(x => x.l.Date)
-            .Select(x => new AdminTimeLogDto
+        var rawEvents = await eventsQuery.ToListAsync(ct);
+
+        var logs = rawEvents
+            .GroupBy(e => new { e.UserId, e.Date })
+            .Select(g =>
             {
-                Id = x.l.Id,
-                UserId = x.l.UserId!,
-                EmployeeName = x.u.FullName,
-                EmployeeEmail = x.u.Email!,
-                Date = x.l.Date,
-                StartTime = x.l.StartTime,
-                EndTime = x.l.EndTime,
-                BreakStart = x.l.BreakStart,
-                BreakEnd = x.l.BreakEnd,
-                Description = x.l.Description,
+                var first = g.First();
+                var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn);
+                var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart);
+                var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd);
+                var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut);
+                return new AdminDaySummaryDto
+                {
+                    UserId = g.Key.UserId,
+                    EmployeeName = first.User.FullName,
+                    EmployeeEmail = first.User.Email ?? string.Empty,
+                    Date = g.Key.Date,
+                    ClockIn = ci?.RecordedTime,
+                    BreakStart = bs?.RecordedTime,
+                    BreakEnd = be?.RecordedTime,
+                    ClockOut = co?.RecordedTime,
+                    TotalHours = ci != null && co != null
+                        ? TimeCalculationHelper.CalculateWorkedHours(ci.RecordedTime, co.RecordedTime, bs?.RecordedTime, be?.RecordedTime)
+                        : 0.0,
+                    Description = co?.Description,
+                    IsComplete = ci != null && bs != null && be != null && co != null,
+                };
             })
-            .ToListAsync(ct);
+            .OrderBy(s => s.EmployeeName)
+            .ThenBy(s => s.Date)
+            .ToList();
 
         var vacationsQuery = _context.VacationDays
             .AsNoTracking()
@@ -382,7 +431,7 @@ public class AdminService(AppDbContext context) : IAdminService
             .OrderBy(e => e.Name)
             .ToList();
 
-        // Also include employees with vacations but no logs
+        // Also include employees with vacations but no clock events
         var employeesWithVacsOnly = vacations
             .GroupBy(v => v.UserId)
             .Where(g => !employeeOrder.Any(e => e.UserId == g.Key))
@@ -406,7 +455,7 @@ public class AdminService(AppDbContext context) : IAdminService
         // ── Section 2: Daily Detail ─────────────────────────────────────────
         sb.AppendLine();
         sb.AppendLine("DAILY DETAIL");
-        sb.AppendLine("Employee,Email,Date,Day,Start,End,Break Duration (h),Net Hours,Description");
+        sb.AppendLine("Employee,Email,Date,Day,Clock In,Break Start,Break End,Clock Out,Break Duration (h),Net Hours,Description");
 
         foreach (var log in logs)
         {
@@ -419,8 +468,10 @@ public class AdminService(AppDbContext context) : IAdminService
                 CsvEscape(log.EmployeeEmail),
                 log.Date.ToString("yyyy-MM-dd"),
                 log.Date.DayOfWeek.ToString(),
-                log.StartTime.ToString(@"hh\:mm"),
-                log.EndTime.ToString(@"hh\:mm"),
+                log.ClockIn?.ToString(@"hh\:mm") ?? "",
+                log.BreakStart?.ToString(@"hh\:mm") ?? "",
+                log.BreakEnd?.ToString(@"hh\:mm") ?? "",
+                log.ClockOut?.ToString(@"hh\:mm") ?? "",
                 breakHours.ToString("F2"),
                 log.TotalHours.ToString("F2"),
                 CsvEscape(log.Description ?? "")

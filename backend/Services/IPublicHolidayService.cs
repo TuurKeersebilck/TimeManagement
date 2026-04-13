@@ -12,4 +12,5 @@ public interface IPublicHolidayService
     Task<PublicHolidayDto> AddCustomHolidayAsync(CreateHolidayDto dto, CancellationToken ct = default);
     Task DeleteHolidayAsync(int id, CancellationToken ct = default);
     Task<IEnumerable<AvailableCountryDto>> GetAvailableCountriesAsync(CancellationToken ct = default);
+    Task<AppConfigurationDto> SetNotificationEmailAsync(string? email, CancellationToken ct = default);
 }
