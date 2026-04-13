@@ -34,4 +34,8 @@ export const adjustmentRequestService = {
   getAll(): Promise<AdjustmentRequest[]> {
     return api.get("/timeadjustmentrequests").then((r) => r.data);
   },
+
+  reject(id: number): Promise<void> {
+    return api.post(`/timeadjustmentrequests/${id}/reject`).then(() => undefined);
+  },
 };

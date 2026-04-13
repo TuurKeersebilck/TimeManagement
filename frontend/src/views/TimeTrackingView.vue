@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   clockEventService,
@@ -56,6 +56,7 @@ const showAdjustDialog = ref(false);
 const adjForm = ref(emptyAdjForm());
 const adjSubmitting = ref(false);
 
+
 // ─── Computed ─────────────────────────────────────────────────────────────────
 
 const completedTypes = computed<Set<ClockEventType>>(
@@ -68,14 +69,18 @@ const nextAction = computed<ClockEventType | null>(() => {
 
 const isDayComplete = computed(() => completedTypes.value.has("ClockOut"));
 
+// Live clock — ticks every 30 s so min/max window stays accurate
+const now = ref(new Date());
+let clockInterval: ReturnType<typeof setInterval> | null = null;
+
 const minTime = computed(() => {
-  const d = new Date();
+  const d = new Date(now.value);
   d.setMinutes(d.getMinutes() - 5);
   return timeToStr(d);
 });
 
 const maxTime = computed(() => {
-  const d = new Date();
+  const d = new Date(now.value);
   d.setMinutes(d.getMinutes() + 5);
   return timeToStr(d);
 });
@@ -184,7 +189,15 @@ async function submitAdjustmentRequest() {
 
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
-onMounted(loadTodayEvents);
+onMounted(() => {
+  loadTodayEvents();
+  // Refresh the live clock every 30 s so the ±5 min window stays current
+  clockInterval = setInterval(() => { now.value = new Date(); }, 30_000);
+});
+
+onUnmounted(() => {
+  if (clockInterval) clearInterval(clockInterval);
+});
 </script>
 
 <template>

@@ -17,12 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { ClipboardListIcon, Loader2Icon } from "lucide-vue-next";
+import { Button } from "@/components/ui/button";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { ClipboardListIcon, Loader2Icon, XIcon } from "lucide-vue-next";
 
 const toast = useAppToast();
+const { confirm } = useConfirmDialog();
 const requests = ref<AdjustmentRequest[]>([]);
 const loading = ref(false);
 const search = ref("");
+const rejectingId = ref<number | null>(null);
 
 const STATUS_LABELS: Record<AdjustmentRequestStatus, string> = {
   Pending: "Pending",
@@ -70,6 +74,29 @@ async function load() {
   }
 }
 
+function rejectRequest(r: AdjustmentRequest) {
+  confirm({
+    title: "Reject adjustment request",
+    message: `Reject ${r.employeeName}'s adjustment request for ${fmtDate(r.date)}? This cannot be undone.`,
+    confirmLabel: "Reject",
+    variant: "destructive",
+    onConfirm: async () => {
+      rejectingId.value = r.id;
+      try {
+        await adjustmentRequestService.reject(r.id);
+        requests.value = requests.value.map((req) =>
+          req.id === r.id ? { ...req, status: "Rejected" as AdjustmentRequestStatus } : req
+        );
+        toast.success("Request rejected");
+      } catch {
+        toast.error("Failed to reject request");
+      } finally {
+        rejectingId.value = null;
+      }
+    },
+  });
+}
+
 onMounted(load);
 </script>
 
@@ -112,10 +139,11 @@ onMounted(load);
                 <TableHead>Reason</TableHead>
                 <TableHead>Requested At</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableEmpty v-if="filtered.length === 0" :colspan="6">
+              <TableEmpty v-if="filtered.length === 0" :colspan="7">
                 <ClipboardListIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">
                   {{ search ? "No requests match your search." : "No adjustment requests yet." }}
@@ -150,6 +178,20 @@ onMounted(load);
                   >
                     {{ STATUS_LABELS[r.status] }}
                   </span>
+                </TableCell>
+                <TableCell class="text-right">
+                  <Button
+                    v-if="r.status === 'Pending'"
+                    variant="ghost"
+                    size="icon"
+                    class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                    title="Reject"
+                    :disabled="rejectingId === r.id"
+                    @click="rejectRequest(r)"
+                  >
+                    <Loader2Icon v-if="rejectingId === r.id" class="size-3.5 animate-spin" />
+                    <XIcon v-else class="size-3.5" />
+                  </Button>
                 </TableCell>
               </TableRow>
             </TableBody>

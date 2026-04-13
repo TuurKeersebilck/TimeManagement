@@ -67,18 +67,17 @@ public class TimeAdjustmentRequestService(
         var user = await userManager.FindByIdAsync(userId);
         var approveLink = $"{approvalBaseUrl.TrimEnd('/')}/api/timeadjustmentrequests/approve/{Uri.EscapeDataString(rawToken)}";
 
-        // Send approval email to all admins
-        var admins = await db.Users
-            .Where(u => u.Role == UserRole.Admin && u.Email != null)
-            .ToListAsync(ct);
+        // Send approval email to the configured notification address (if set)
+        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+        var notificationEmail = config?.NotificationEmail;
 
-        foreach (var admin in admins)
+        if (!string.IsNullOrEmpty(notificationEmail))
         {
             try
             {
                 await emailService.SendAdjustmentRequestEmailAsync(
-                    admin.Email!,
-                    admin.FullName,
+                    notificationEmail,
+                    "Admin",
                     user?.FullName ?? "Unknown",
                     dto.Date,
                     dto.RequestedClockIn,
@@ -90,8 +89,15 @@ public class TimeAdjustmentRequestService(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to send adjustment request email to admin {AdminId}", admin.Id);
+                logger.LogError(ex, "Failed to send adjustment request email to {Email}", notificationEmail);
             }
+        }
+        else
+        {
+            logger.LogWarning(
+                "Adjustment request {RequestId} created but no notification email is configured. " +
+                "Set one in App Settings → Notification Email.",
+                request.Id);
         }
 
         return MapToDto(request, user?.FullName ?? "Unknown");
@@ -160,6 +166,26 @@ public class TimeAdjustmentRequestService(
         return $"Approved. Time log for {request.User.FullName} on {request.Date:yyyy-MM-dd} has been updated.";
     }
 
+    public async Task RejectAsync(int requestId, string adminUserId, CancellationToken ct = default)
+    {
+        var request = await db.TimeAdjustmentRequests.FindAsync([requestId], ct)
+            ?? throw new Exceptions.ResourceNotFoundException("Adjustment request not found.");
+
+        if (request.Status != AdjustmentRequestStatus.Pending)
+            throw new ValidationException($"This request has already been {request.Status.ToString().ToLower()}.");
+
+        request.Status = AdjustmentRequestStatus.Rejected;
+        request.ReviewedAt = DateTime.UtcNow;
+        request.ReviewedByUserId = adminUserId;
+        request.TokenUsed = true; // invalidate the email link
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Adjustment request {RequestId} rejected by admin {AdminId}.",
+            requestId, adminUserId);
+    }
+
     private async Task UpsertClockEventAsync(
         TimeAdjustmentRequest request,
         ClockEventType type,
@@ -187,19 +213,11 @@ public class TimeAdjustmentRequestService(
                 Type = type,
                 ActualTime = requestedTime.Value,
                 RecordedTime = requestedTime.Value,
-                Description = type == ClockEventType.ClockOut
-                    ? await GetExistingDescriptionAsync(request.UserId, request.Date, ct)
-                    : null,
+                // Description is preserved when updating an existing event above;
+                // when creating a new event via approval there is no prior description to carry over.
+                Description = null,
             });
         }
-    }
-
-    private async Task<string?> GetExistingDescriptionAsync(string userId, DateOnly date, CancellationToken ct)
-    {
-        return await db.ClockEvents
-            .Where(e => e.UserId == userId && e.Date == date && e.Type == ClockEventType.ClockOut)
-            .Select(e => e.Description)
-            .FirstOrDefaultAsync(ct);
     }
 
     private static string HashToken(string rawToken)

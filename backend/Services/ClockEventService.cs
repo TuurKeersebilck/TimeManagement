@@ -6,16 +6,13 @@ using TimeManagementBackend.Exceptions;
 using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace TimeManagementBackend.Services;
 
 public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventService
 {
     private const int AllowedDeltaMinutes = 5;
-
-    // Expected order of clock event types for a day
-    private static readonly ClockEventType[] ExpectedOrder =
-        [ClockEventType.ClockIn, ClockEventType.BreakStart, ClockEventType.BreakEnd, ClockEventType.ClockOut];
 
     public async Task<IEnumerable<ClockEventDto>> GetTodayEventsAsync(string userId, CancellationToken ct = default)
     {
@@ -55,42 +52,63 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 $"Recorded time must be within {AllowedDeltaMinutes} minutes of the current time. " +
                 "Please submit an adjustment request if you need to log a different time.");
 
-        // Load existing events for today to validate ordering
-        var existingToday = await db.ClockEvents
-            .Where(e => e.UserId == userId && e.Date == today)
-            .ToListAsync(ct);
-
-        // Prevent duplicate event type for today
-        if (existingToday.Any(e => e.Type == dto.Type))
-            throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
-
-        // Enforce sequential order: can't submit step N before step N-1
-        var expectedIndex = Array.IndexOf(ExpectedOrder, dto.Type);
-        var completedTypes = existingToday.Select(e => e.Type).ToHashSet();
-        for (var i = 0; i < expectedIndex; i++)
-        {
-            if (!completedTypes.Contains(ExpectedOrder[i]))
-                throw new ValidationException(
-                    $"You must complete {ExpectedOrder[i]} before submitting {dto.Type}.");
-        }
-
         // Description only allowed on ClockOut
         var description = dto.Type == ClockEventType.ClockOut ? dto.Description : null;
 
-        var entity = new ClockEvent
+        // Wrap read-validate-insert in a serializable transaction to prevent duplicate inserts
+        // from concurrent requests. The unique index is the final safety net, but this gives
+        // a friendlier error message on collision.
+        await using var tx = await db.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable, ct);
+        try
         {
-            UserId = userId,
-            Date = today,
-            Type = dto.Type,
-            ActualTime = actualTime,
-            RecordedTime = dto.RecordedTime,
-            Description = description,
-        };
+            var existingToday = await db.ClockEvents
+                .Where(e => e.UserId == userId && e.Date == today)
+                .ToListAsync(ct);
 
-        db.ClockEvents.Add(entity);
-        await db.SaveChangesAsync(ct);
+            // Prevent duplicate event type for today
+            if (existingToday.Any(e => e.Type == dto.Type))
+                throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
 
-        return mapper.Map<ClockEventDto>(entity);
+            // Enforce ordering rules (break steps are optional but must be sequential if used)
+            ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet());
+
+            var entity = new ClockEvent
+            {
+                UserId = userId,
+                Date = today,
+                Type = dto.Type,
+                ActualTime = actualTime,
+                RecordedTime = dto.RecordedTime,
+                Description = description,
+            };
+
+            db.ClockEvents.Add(entity);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+
+            return mapper.Map<ClockEventDto>(entity);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    // Expected sequential order of clock event types for a day
+    private static readonly ClockEventType[] ExpectedOrder =
+        [ClockEventType.ClockIn, ClockEventType.BreakStart, ClockEventType.BreakEnd, ClockEventType.ClockOut];
+
+    private static void ValidateOrder(ClockEventType type, HashSet<ClockEventType> completed)
+    {
+        var expectedIndex = Array.IndexOf(ExpectedOrder, type);
+        for (var i = 0; i < expectedIndex; i++)
+        {
+            if (!completed.Contains(ExpectedOrder[i]))
+                throw new ValidationException(
+                    $"You must complete {ExpectedOrder[i]} before submitting {type}.");
+        }
     }
 
     public async Task<MyTargetDto> GetMyTargetAsync(string userId, CancellationToken ct = default)

@@ -36,6 +36,17 @@ public class TimeAdjustmentRequestsController(
         return Ok(await service.GetAllRequestsAsync(ct));
     }
 
+    [HttpPost("{id:int}/reject")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    public async Task<IActionResult> Reject(int id, CancellationToken ct)
+    {
+        var admin = await GetCurrentUserAsync();
+        if (admin == null) return Unauthorized();
+
+        await service.RejectAsync(id, admin.Id, ct);
+        return NoContent();
+    }
+
     /// <summary>
     /// One-click approve link from admin email. Returns an HTML confirmation page.
     /// No authentication required — the token itself is the credential.

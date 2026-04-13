@@ -13,4 +13,8 @@ public class AppConfiguration
 
     /// <summary>Default weekly working hours target (e.g. 40.0). Null = no target configured.</summary>
     public decimal? DefaultWeeklyHours { get; set; }
+
+    /// <summary>Email address that receives adjustment request notifications. If null, no email is sent.</summary>
+    [System.ComponentModel.DataAnnotations.MaxLength(254)]
+    public string? NotificationEmail { get; set; }
 }

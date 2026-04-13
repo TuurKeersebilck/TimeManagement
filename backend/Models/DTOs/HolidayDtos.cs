@@ -20,6 +20,12 @@ public class AppConfigurationDto
     public string? CountryName { get; set; }
     public decimal? DefaultDailyHours { get; set; }
     public decimal? DefaultWeeklyHours { get; set; }
+    public string? NotificationEmail { get; set; }
+}
+
+public class SetNotificationEmailDto
+{
+    public string? Email { get; set; }
 }
 
 public class SetDefaultTargetsDto

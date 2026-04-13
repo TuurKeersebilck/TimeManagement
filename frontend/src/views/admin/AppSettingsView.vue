@@ -35,6 +35,7 @@ import {
   Loader2Icon,
   CalendarIcon,
   ClockIcon,
+  MailIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -50,6 +51,9 @@ const holidays = ref<PublicHoliday[]>([]);
 const defaultDailyHours = ref<string>("");
 const defaultWeeklyHours = ref<string>("");
 const savingTargets = ref(false);
+
+const notificationEmail = ref<string>("");
+const savingEmail = ref(false);
 
 const loadingCountries = ref(false);
 const loadingHolidays = ref(false);
@@ -78,6 +82,7 @@ onMounted(async () => {
     if (config.countryCode) countryCode.value = config.countryCode;
     if (config.defaultDailyHours != null) defaultDailyHours.value = String(config.defaultDailyHours);
     if (config.defaultWeeklyHours != null) defaultWeeklyHours.value = String(config.defaultWeeklyHours);
+    if (config.notificationEmail) notificationEmail.value = config.notificationEmail;
   } catch {
     toast.error("Failed to load settings");
   } finally {
@@ -169,6 +174,19 @@ const saveTargets = async () => {
     toast.error("Failed to save targets");
   } finally {
     savingTargets.value = false;
+  }
+};
+
+const saveNotificationEmail = async () => {
+  savingEmail.value = true;
+  try {
+    const result = await holidayService.setNotificationEmail(notificationEmail.value.trim() || null);
+    notificationEmail.value = result.notificationEmail ?? "";
+    toast.success("Notification email saved");
+  } catch {
+    toast.error("Failed to save notification email");
+  } finally {
+    savingEmail.value = false;
   }
 };
 
@@ -287,6 +305,45 @@ const formatDate = (iso: string) =>
               </div>
               <Button :disabled="savingTargets" @click="saveTargets">
                 <Loader2Icon v-if="savingTargets" class="size-4 animate-spin" />
+                Save
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Notification email -->
+        <section class="mb-8">
+          <h2
+            class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3"
+          >
+            Notifications
+          </h2>
+
+          <div class="card p-5">
+            <div class="flex items-start gap-3 mb-5">
+              <MailIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
+              <div>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  Adjustment request notification email
+                </p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  When an employee submits a time adjustment request, the approval email is sent to
+                  this address. Leave blank to disable email notifications.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-end gap-3">
+              <div class="flex-1 space-y-1.5">
+                <Label>Email address</Label>
+                <Input
+                  v-model="notificationEmail"
+                  type="email"
+                  placeholder="admin@company.com"
+                />
+              </div>
+              <Button :disabled="savingEmail" @click="saveNotificationEmail">
+                <Loader2Icon v-if="savingEmail" class="size-4 animate-spin" />
                 Save
               </Button>
             </div>
