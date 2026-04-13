@@ -27,7 +27,9 @@ interface Props {
   closeButton?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  position: "top-right",
+});
 </script>
 
 <template>

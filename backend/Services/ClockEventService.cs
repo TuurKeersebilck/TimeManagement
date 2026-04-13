@@ -42,7 +42,9 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
 
     public async Task<ClockEventDto> SubmitEventAsync(string userId, SubmitClockEventDto dto, CancellationToken ct = default)
     {
-        var actualTime = DateTime.Now.TimeOfDay;
+        // Truncate to minute precision — client sends HH:mm:00, so seconds would inflate the delta
+        var now = DateTime.Now;
+        var actualTime = new TimeSpan(now.Hour, now.Minute, 0);
         var today = DateOnly.FromDateTime(DateTime.Now);
 
         // Server-side ±5 minute validation
