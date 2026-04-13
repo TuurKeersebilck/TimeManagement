@@ -105,7 +105,7 @@ public class AdminService(AppDbContext context) : IAdminService
             {
                 Id = u.Id,
                 FullName = u.FullName,
-                Email = u.Email!,
+                Email = u.Email ?? string.Empty,
                 WeeklyHoursLogged = Math.Round(weeklyLogged, 2),
                 ResolvedWeeklyTarget = resolvedWeekly,
             };

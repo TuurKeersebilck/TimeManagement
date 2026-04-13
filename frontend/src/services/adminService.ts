@@ -1,17 +1,17 @@
 import apiClient from "./api";
 
 export interface AdminTimeLog {
-  id: number;
   userId: string;
   employeeName: string;
   employeeEmail: string;
   date: string;
-  startTime: string;
-  endTime: string;
+  clockIn?: string;
   breakStart?: string;
   breakEnd?: string;
+  clockOut?: string;
   description?: string;
   totalHours: number;
+  isComplete: boolean;
 }
 
 export interface Employee {

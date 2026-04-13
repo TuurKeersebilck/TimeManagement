@@ -40,7 +40,7 @@ public class MissedClockInReminderService(
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
-            var yesterday = GetPreviousWorkingDay(DateOnly.FromDateTime(DateTime.Now), db, ct);
+            var yesterday = await GetPreviousWorkingDayAsync(DateOnly.FromDateTime(DateTime.Now), db, ct);
             if (yesterday == null)
             {
                 logger.LogInformation("MissedClockInReminder: skipped — no previous working day resolved.");
@@ -88,11 +88,10 @@ public class MissedClockInReminderService(
     /// <summary>
     /// Returns the most recent working day before today, skipping weekends and public holidays.
     /// </summary>
-    private static DateOnly? GetPreviousWorkingDay(DateOnly today, AppDbContext db, CancellationToken ct)
+    private static async Task<DateOnly?> GetPreviousWorkingDayAsync(DateOnly today, AppDbContext db, CancellationToken ct)
     {
         var candidate = today.AddDays(-1);
 
-        // Skip up to 10 days back to find a working day (handles long weekends)
         for (var i = 0; i < 10; i++)
         {
             if (candidate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
@@ -101,11 +100,7 @@ public class MissedClockInReminderService(
                 continue;
             }
 
-            // Check if it's a public holiday (synchronous query, acceptable here since
-            // this runs once per day and the holiday list is small)
-            var isHoliday = db.PublicHolidays
-                .Any(h => h.Date == candidate);
-
+            var isHoliday = await db.PublicHolidays.AnyAsync(h => h.Date == candidate, ct);
             if (isHoliday)
             {
                 candidate = candidate.AddDays(-1);
