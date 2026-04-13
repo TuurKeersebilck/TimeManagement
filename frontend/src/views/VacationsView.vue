@@ -426,13 +426,6 @@ onMounted(async () => {
           </p>
         </div>
 
-        <div class="flex justify-end mb-6">
-          <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
-            <Maximize2Icon class="size-3.5" />
-            Year view
-          </Button>
-        </div>
-
         <div class="max-w-4xl">
           <!-- Balance cards -->
           <VacationBalanceCards :balances="balances" :loading="loading" />
@@ -452,7 +445,13 @@ onMounted(async () => {
                   {{ monthLabel }}
                 </span>
               </div>
-              <Button variant="outline" size="sm" @click="goToday">Today</Button>
+              <div class="flex items-center gap-2">
+                <Button variant="outline" size="sm" @click="goToday">Today</Button>
+                <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
+                  <Maximize2Icon class="size-3.5" />
+                  Year view
+                </Button>
+              </div>
             </div>
 
             <div v-if="loading" class="card h-64 animate-pulse bg-slate-100 dark:bg-slate-800" />
