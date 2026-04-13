@@ -34,9 +34,10 @@ import {
 import {
   ClockIcon,
   Loader2Icon,
-  AlertCircleIcon,
   CheckCircleIcon,
   SendIcon,
+  MinusIcon,
+  PlusIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -47,8 +48,8 @@ const todayEvents = ref<ClockEvent[]>([]);
 const loadingEvents = ref(false);
 const submitting = ref(false);
 
-// Clock-in/out form
-const selectedTime = ref(nowTimeStr());
+// Clock-in/out form: offset in minutes from current time (-5 to +5)
+const minuteOffset = ref(0);
 const description = ref("");
 
 // Adjustment request dialog
@@ -69,29 +70,29 @@ const nextAction = computed<ClockEventType | null>(() => {
 
 const isDayComplete = computed(() => completedTypes.value.has("ClockOut"));
 
-// Live clock — ticks every 30 s so min/max window stays accurate
+// Live clock — ticks every 30 s to keep the displayed time accurate
 const now = ref(new Date());
 let clockInterval: ReturnType<typeof setInterval> | null = null;
 
-const minTime = computed(() => {
+// Derived selected time: now + offset
+const selectedTime = computed(() => {
   const d = new Date(now.value);
-  d.setMinutes(d.getMinutes() - 5);
+  d.setMinutes(d.getMinutes() + minuteOffset.value);
   return timeToStr(d);
 });
 
-const maxTime = computed(() => {
-  const d = new Date(now.value);
-  d.setMinutes(d.getMinutes() + 5);
-  return timeToStr(d);
+const offsetLabel = computed(() => {
+  if (minuteOffset.value === 0) return "now";
+  return minuteOffset.value > 0 ? `+${minuteOffset.value} min` : `${minuteOffset.value} min`;
 });
+
+function adjustMinutes(delta: number) {
+  minuteOffset.value = Math.max(-5, Math.min(5, minuteOffset.value + delta));
+}
 
 const showDescription = computed(() => nextAction.value === "ClockOut");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function nowTimeStr(): string {
-  return timeToStr(new Date());
-}
 
 function timeToStr(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -147,7 +148,7 @@ async function submitClock() {
         : undefined,
     });
     await loadTodayEvents();
-    selectedTime.value = nowTimeStr();
+    minuteOffset.value = 0;
     description.value = "";
     toast.success(`${CLOCK_EVENT_LABELS[nextAction.value!]} recorded`);
   } catch (err: unknown) {
@@ -244,19 +245,32 @@ onUnmounted(() => {
               </p>
             </div>
 
-            <!-- Time input -->
-            <div class="space-y-1.5">
-              <Label>Time</Label>
-              <Input
-                v-model="selectedTime"
-                type="time"
-                :min="minTime"
-                :max="maxTime"
-                class="text-center text-lg font-mono"
-              />
-              <p class="text-xs text-slate-400 dark:text-slate-500 text-center">
-                Adjustable ±5 minutes from now
-              </p>
+            <!-- Time stepper -->
+            <div class="flex items-center justify-center gap-4">
+              <Button
+                variant="outline"
+                size="icon"
+                :disabled="minuteOffset <= -5"
+                @click="adjustMinutes(-1)"
+              >
+                <MinusIcon class="size-4" />
+              </Button>
+              <div class="text-center w-28">
+                <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
+                  {{ selectedTime }}
+                </p>
+                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                  {{ offsetLabel }}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                :disabled="minuteOffset >= 5"
+                @click="adjustMinutes(1)"
+              >
+                <PlusIcon class="size-4" />
+              </Button>
             </div>
 
             <!-- Description (clock-out only) -->
@@ -331,11 +345,6 @@ onUnmounted(() => {
           </Table>
         </div>
 
-        <!-- Fraud notice -->
-        <p class="mt-4 text-xs text-center text-slate-400 dark:text-slate-500 flex items-center justify-center gap-1">
-          <AlertCircleIcon class="size-3.5 shrink-0" />
-          Times are server-validated. Adjustments beyond ±5 min require admin approval.
-        </p>
       </div>
     </div>
 
