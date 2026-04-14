@@ -226,11 +226,12 @@ onMounted(async () => {
                 <TableHead>Hours</TableHead>
                 <TableHead>Break</TableHead>
                 <TableHead>Total</TableHead>
+                <TableHead>WFH</TableHead>
                 <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableEmpty v-if="allLogs.length === 0" :colspan="6">
+              <TableEmpty v-if="allLogs.length === 0" :colspan="7">
                 <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
               </TableEmpty>
@@ -256,6 +257,12 @@ onMounted(async () => {
                   >
                     {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
                   </span>
+                </TableCell>
+                <TableCell>
+                  <span v-if="log.workedFromHome" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                    WFH
+                  </span>
+                  <span v-else class="text-slate-400 text-xs">—</span>
                 </TableCell>
                 <TableCell
                   class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px] truncate"

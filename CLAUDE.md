@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Full-stack time management app with a **Vue 3 + Vite** SPA frontend and a **.NET 9 ASP.NET Core** backend API, using **MariaDB** (via Pomelo EF Core) with SQLite as fallback.
-- Temporary deployment: Railway (backend) + Vercel (frontend)
+Full-stack time management app with a **Vue 3 + Vite** SPA frontend and a **.NET 10 ASP.NET Core** backend API, using **PostgreSQL** (via Npgsql EF Core).
+- Deployment: Railway (backend) + Vercel (frontend)
 
 ## Development Commands
 
@@ -25,11 +25,16 @@ dotnet ef database update        # Apply EF Core migrations
 dotnet ef migrations add <Name>  # Create a new migration
 ```
 
+> **dotnet PATH**: `dotnet` is installed at `~/.dotnet` and added to `PATH` via `~/.bashrc`.
+> In non-interactive shells (e.g. tool execution) it may not be on `PATH` — prefix commands with
+> `PATH=$PATH:~/.dotnet DOTNET_ROOT=~/.dotnet` if `dotnet: command not found`.
+
 ### Backend Environment Setup
-Copy `.env.template` to `.env` and populate:
-- `JWT_SECRET` — secret key for JWT signing
-- `JWT_ISSUER`, `JWT_AUDIENCE`
-- `DB_CONNECTION_STRING` — MariaDB connection string (falls back to SQLite if not set)
+A `.env` file exists at `backend/.env` with local dev credentials (PostgreSQL on localhost, dev JWT secret).
+Copy `.env.template` to `.env` if it ever needs to be recreated — required vars:
+- `CONNECTION_STRING` — PostgreSQL connection string
+- `JWT_SECRET` — at least 32 chars
+- `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRY_MINUTES`
 
 ## Architecture
 
@@ -38,7 +43,7 @@ Copy `.env.template` to `.env` and populate:
 - **Program.cs** — wires everything: DbContext, Identity, JWT auth, CORS, roles, and loads `.env`
 - **Controllers/** — thin HTTP layer; `AuthController` (register/login/profile), `TimeLogsController` (CRUD, all routes require JWT `[Authorize]`)
 - **Services/** — business logic lives here; `TimeLogService` enforces user-isolation (users only see their own logs)
-- **Data/AppDbContext.cs** — EF Core context with Identity integration and a `TimeSpan → varchar` converter for MySQL/MariaDB compatibility
+- **Data/AppDbContext.cs** — EF Core context with Identity integration
 - **Config/AutoMapperProfile.cs** — all entity↔DTO mappings in one place
 - **Middleware/ExceptionHandlingMiddleware.cs** — global error handler; wraps all unhandled exceptions
 
@@ -57,7 +62,7 @@ Copy `.env.template` to `.env` and populate:
 3. All `/api/timelogs` routes require `[Authorize]`; the service layer filters by `userId`
 
 ### Database Notes
-- `TimeSpan` fields (`StartTime`, `EndTime`, `Break`) are stored as `varchar` — account for this in migrations and queries
+- Clock event times are stored as `DateTimeOffset` (UTC) — always store UTC, convert to local only at the display layer
 - Migrations are in `/backend/Migrations/`; always run `dotnet ef database update` after pulling new migrations
 
 ## Working Conventions
