@@ -14,19 +14,20 @@ public class ClockEvent
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;
 
+    /// <summary>UTC date derived from RecordedAt — kept as a stored column for efficient date-range queries and indexes.</summary>
     [Required]
     public DateOnly Date { get; set; }
 
     [Required]
     public ClockEventType Type { get; set; }
 
-    /// <summary>Server-recorded time when the clock button was pressed.</summary>
+    /// <summary>Server-recorded UTC timestamp when the clock button was pressed.</summary>
     [Required]
-    public TimeSpan ActualTime { get; set; }
+    public DateTimeOffset ActualAt { get; set; }
 
-    /// <summary>User-adjusted time, validated to be within ±5 minutes of ActualTime.</summary>
+    /// <summary>User-adjusted UTC timestamp, validated to be within ±5 minutes of ActualAt.</summary>
     [Required]
-    public TimeSpan RecordedTime { get; set; }
+    public DateTimeOffset RecordedAt { get; set; }
 
     /// <summary>One description per day, stored on the ClockOut event.</summary>
     [MaxLength(1000)]

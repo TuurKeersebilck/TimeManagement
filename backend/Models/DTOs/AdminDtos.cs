@@ -6,10 +6,10 @@ public class AdminDaySummaryDto
     public string EmployeeName { get; set; } = string.Empty;
     public string EmployeeEmail { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
-    public TimeSpan? ClockIn { get; set; }
-    public TimeSpan? BreakStart { get; set; }
-    public TimeSpan? BreakEnd { get; set; }
-    public TimeSpan? ClockOut { get; set; }
+    public DateTimeOffset? ClockIn { get; set; }
+    public DateTimeOffset? BreakStart { get; set; }
+    public DateTimeOffset? BreakEnd { get; set; }
+    public DateTimeOffset? ClockOut { get; set; }
     public double TotalHours { get; set; }
     public string? Description { get; set; }
     public bool IsComplete { get; set; }

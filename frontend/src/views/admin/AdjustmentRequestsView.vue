@@ -52,7 +52,11 @@ const filtered = computed(() => {
 });
 
 function fmt(t: string | null): string {
-  return t ? t.substring(0, 5) : "—";
+  if (!t) return "—";
+  const [h, m] = t.split(":").map(Number);
+  const d = new Date();
+  d.setUTCHours(h, m, 0, 0);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function fmtDate(d: string): string {

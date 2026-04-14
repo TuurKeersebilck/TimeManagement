@@ -8,8 +8,9 @@ public class SubmitClockEventDto
     [Required]
     public ClockEventType Type { get; set; }
 
+    /// <summary>UTC timestamp selected by the user (ISO 8601). Must be within ±5 minutes of server UTC now.</summary>
     [Required]
-    public TimeSpan RecordedTime { get; set; }
+    public DateTimeOffset RecordedAt { get; set; }
 
     [MaxLength(1000)]
     public string? Description { get; set; }
@@ -18,9 +19,8 @@ public class SubmitClockEventDto
 public class ClockEventDto
 {
     public int Id { get; set; }
-    public DateOnly Date { get; set; }
     public ClockEventType Type { get; set; }
-    public TimeSpan RecordedTime { get; set; }
+    public DateTimeOffset RecordedAt { get; set; }
     public string? Description { get; set; }
 }
 
@@ -28,10 +28,10 @@ public class ClockEventDto
 public class DaySummaryDto
 {
     public DateOnly Date { get; set; }
-    public TimeSpan? ClockIn { get; set; }
-    public TimeSpan? BreakStart { get; set; }
-    public TimeSpan? BreakEnd { get; set; }
-    public TimeSpan? ClockOut { get; set; }
+    public DateTimeOffset? ClockIn { get; set; }
+    public DateTimeOffset? BreakStart { get; set; }
+    public DateTimeOffset? BreakEnd { get; set; }
+    public DateTimeOffset? ClockOut { get; set; }
     public double TotalHours { get; set; }
     public string? Description { get; set; }
     public bool IsComplete { get; set; }

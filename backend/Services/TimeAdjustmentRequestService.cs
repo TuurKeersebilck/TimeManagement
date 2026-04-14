@@ -199,10 +199,17 @@ public class TimeAdjustmentRequestService(
                                       e.Date == request.Date &&
                                       e.Type == type, ct);
 
+        // Adjustment request times are stored as UTC TimeSpan values.
+        // Reconstruct a UTC DateTimeOffset using the request date as the calendar date.
+        var recordedAt = new DateTimeOffset(
+            request.Date.Year, request.Date.Month, request.Date.Day,
+            requestedTime.Value.Hours, requestedTime.Value.Minutes, 0,
+            TimeSpan.Zero);
+
         if (existing != null)
         {
-            existing.RecordedTime = requestedTime.Value;
-            existing.ActualTime = requestedTime.Value; // Approved override — treat as authoritative
+            existing.RecordedAt = recordedAt;
+            existing.ActualAt = recordedAt; // Approved override — treat as authoritative
         }
         else
         {
@@ -211,8 +218,8 @@ public class TimeAdjustmentRequestService(
                 UserId = request.UserId,
                 Date = request.Date,
                 Type = type,
-                ActualTime = requestedTime.Value,
-                RecordedTime = requestedTime.Value,
+                ActualAt = recordedAt,
+                RecordedAt = recordedAt,
                 // Description is preserved when updating an existing event above;
                 // when creating a new event via approval there is no prior description to carry over.
                 Description = null,
