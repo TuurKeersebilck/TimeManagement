@@ -53,7 +53,11 @@ const employeesNotLoggedToday = computed(() => {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const formatTime = (t?: string) => (t ? t.substring(0, 5) : "—");
+const formatTime = (t?: string) => {
+  if (!t) return "—";
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 const formatBreak = (log: AdminTimeLog) =>
   log.breakStart && log.breakEnd

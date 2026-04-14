@@ -39,8 +39,8 @@ public class AdminService(AppDbContext context) : IAdminService
                 var isComplete = clockIn != null && breakStart != null && breakEnd != null && clockOut != null;
                 var totalHours = clockIn != null && clockOut != null
                     ? TimeCalculationHelper.CalculateWorkedHours(
-                        clockIn.RecordedTime, clockOut.RecordedTime,
-                        breakStart?.RecordedTime, breakEnd?.RecordedTime)
+                        clockIn.RecordedAt, clockOut.RecordedAt,
+                        breakStart?.RecordedAt, breakEnd?.RecordedAt)
                     : 0.0;
 
                 return new AdminDaySummaryDto
@@ -49,10 +49,10 @@ public class AdminService(AppDbContext context) : IAdminService
                     EmployeeName = first.User.FullName,
                     EmployeeEmail = first.User.Email ?? string.Empty,
                     Date = g.Key.Date,
-                    ClockIn = clockIn?.RecordedTime,
-                    BreakStart = breakStart?.RecordedTime,
-                    BreakEnd = breakEnd?.RecordedTime,
-                    ClockOut = clockOut?.RecordedTime,
+                    ClockIn = clockIn?.RecordedAt,
+                    BreakStart = breakStart?.RecordedAt,
+                    BreakEnd = breakEnd?.RecordedAt,
+                    ClockOut = clockOut?.RecordedAt,
                     TotalHours = totalHours,
                     Description = clockOut?.Description,
                     IsComplete = isComplete,
@@ -89,10 +89,10 @@ public class AdminService(AppDbContext context) : IAdminService
                 .GroupBy(e => e.Date)
                 .Sum(g =>
                 {
-                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedTime;
-                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedTime;
-                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedTime;
-                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedTime;
+                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedAt;
+                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedAt;
+                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedAt;
+                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedAt;
                     return ci.HasValue && co.HasValue
                         ? TimeCalculationHelper.CalculateWorkedHours(ci.Value, co.Value, bs, be)
                         : 0.0;
@@ -318,10 +318,10 @@ public class AdminService(AppDbContext context) : IAdminService
                 .GroupBy(e => e.Date)
                 .Sum(g =>
                 {
-                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedTime;
-                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedTime;
-                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedTime;
-                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedTime;
+                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedAt;
+                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedAt;
+                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedAt;
+                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedAt;
                     return ci.HasValue && co.HasValue
                         ? TimeCalculationHelper.CalculateWorkedHours(ci.Value, co.Value, bs, be)
                         : 0.0;
@@ -373,12 +373,12 @@ public class AdminService(AppDbContext context) : IAdminService
                     EmployeeName = first.User.FullName,
                     EmployeeEmail = first.User.Email ?? string.Empty,
                     Date = g.Key.Date,
-                    ClockIn = ci?.RecordedTime,
-                    BreakStart = bs?.RecordedTime,
-                    BreakEnd = be?.RecordedTime,
-                    ClockOut = co?.RecordedTime,
+                    ClockIn = ci?.RecordedAt,
+                    BreakStart = bs?.RecordedAt,
+                    BreakEnd = be?.RecordedAt,
+                    ClockOut = co?.RecordedAt,
                     TotalHours = ci != null && co != null
-                        ? TimeCalculationHelper.CalculateWorkedHours(ci.RecordedTime, co.RecordedTime, bs?.RecordedTime, be?.RecordedTime)
+                        ? TimeCalculationHelper.CalculateWorkedHours(ci.RecordedAt, co.RecordedAt, bs?.RecordedAt, be?.RecordedAt)
                         : 0.0,
                     Description = co?.Description,
                     IsComplete = ci != null && bs != null && be != null && co != null,

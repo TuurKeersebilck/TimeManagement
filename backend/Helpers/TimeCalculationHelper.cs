@@ -3,7 +3,7 @@ namespace TimeManagementBackend.Helpers;
 public static class TimeCalculationHelper
 {
     public static double CalculateWorkedHours(
-        TimeSpan start, TimeSpan end, TimeSpan? breakStart, TimeSpan? breakEnd)
+        DateTimeOffset start, DateTimeOffset end, DateTimeOffset? breakStart, DateTimeOffset? breakEnd)
     {
         var worked = end - start;
         if (breakStart.HasValue && breakEnd.HasValue)

@@ -4,15 +4,14 @@ export type ClockEventType = "ClockIn" | "BreakStart" | "BreakEnd" | "ClockOut";
 
 export interface ClockEvent {
   id: number;
-  date: string;
   type: ClockEventType;
-  recordedTime: string; // "HH:mm:ss"
+  recordedAt: string; // ISO 8601 UTC string
   description?: string;
 }
 
 export interface DaySummary {
-  date: string; // "yyyy-MM-dd"
-  clockIn: string | null;
+  date: string; // "yyyy-MM-dd" UTC date
+  clockIn: string | null; // ISO 8601 UTC string
   breakStart: string | null;
   breakEnd: string | null;
   clockOut: string | null;
@@ -23,8 +22,7 @@ export interface DaySummary {
 
 export interface SubmitClockEventPayload {
   type: number; // enum value: 0=ClockIn, 1=BreakStart, 2=BreakEnd, 3=ClockOut
-  recordedTime: string; // "HH:mm:ss"
-  timezoneOffsetMinutes: number; // JS Date.getTimezoneOffset() — negative for UTC+ zones
+  recordedAt: string; // ISO 8601 UTC string
   description?: string;
 }
 

@@ -16,7 +16,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
 
     public async Task<IEnumerable<ClockEventDto>> GetTodayEventsAsync(string userId, CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         return await db.ClockEvents
             .AsNoTracking()
             .Where(e => e.UserId == userId && e.Date == today)
@@ -42,28 +42,23 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
 
     public async Task<ClockEventDto> SubmitEventAsync(string userId, SubmitClockEventDto dto, CancellationToken ct = default)
     {
-        // Convert server UTC time to the client's local time using the supplied timezone offset.
-        // DateTime.Now is unreliable on cloud hosts (typically UTC), so we use UtcNow and shift
-        // by the client's offset. JS getTimezoneOffset() returns minutes-behind-UTC, so UTC+2
-        // gives -120 — negate it to obtain the forward offset.
-        var utcNow = DateTime.UtcNow;
-        var clientLocalNow = utcNow.AddMinutes(-dto.TimezoneOffsetMinutes);
-        var actualTime = new TimeSpan(clientLocalNow.Hour, clientLocalNow.Minute, 0);
-        var today = DateOnly.FromDateTime(clientLocalNow);
+        var now = DateTimeOffset.UtcNow;
 
-        // Server-side ±5 minute validation
-        var delta = Math.Abs((dto.RecordedTime - actualTime).TotalMinutes);
+        // Truncate to minute precision for the ±5 min check
+        var nowTruncated = new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, TimeSpan.Zero);
+        var recordedTruncated = new DateTimeOffset(
+            dto.RecordedAt.UtcDateTime.Year, dto.RecordedAt.UtcDateTime.Month, dto.RecordedAt.UtcDateTime.Day,
+            dto.RecordedAt.UtcDateTime.Hour, dto.RecordedAt.UtcDateTime.Minute, 0, TimeSpan.Zero);
+
+        var delta = Math.Abs((recordedTruncated - nowTruncated).TotalMinutes);
         if (delta > AllowedDeltaMinutes)
             throw new ValidationException(
                 $"Recorded time must be within {AllowedDeltaMinutes} minutes of the current time. " +
                 "Please submit an adjustment request if you need to log a different time.");
 
-        // Description only allowed on ClockOut
+        var today = DateOnly.FromDateTime(dto.RecordedAt.UtcDateTime);
         var description = dto.Type == ClockEventType.ClockOut ? dto.Description : null;
 
-        // Wrap read-validate-insert in a serializable transaction to prevent duplicate inserts
-        // from concurrent requests. The unique index is the final safety net, but this gives
-        // a friendlier error message on collision.
         await using var tx = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, ct);
         try
@@ -72,11 +67,9 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 .Where(e => e.UserId == userId && e.Date == today)
                 .ToListAsync(ct);
 
-            // Prevent duplicate event type for today
             if (existingToday.Any(e => e.Type == dto.Type))
                 throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
 
-            // Enforce ordering rules (break steps are optional but must be sequential if used)
             ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet());
 
             var entity = new ClockEvent
@@ -84,8 +77,8 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 UserId = userId,
                 Date = today,
                 Type = dto.Type,
-                ActualTime = actualTime,
-                RecordedTime = dto.RecordedTime,
+                ActualAt = nowTruncated,
+                RecordedAt = recordedTruncated,
                 Description = description,
             };
 
@@ -102,7 +95,6 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
         }
     }
 
-    // Expected sequential order of clock event types for a day
     private static readonly ClockEventType[] ExpectedOrder =
         [ClockEventType.ClockIn, ClockEventType.BreakStart, ClockEventType.BreakEnd, ClockEventType.ClockOut];
 
@@ -131,10 +123,10 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
 
     internal static DaySummaryDto BuildDaySummary(DateOnly date, List<ClockEvent> events)
     {
-        var clockIn = events.FirstOrDefault(e => e.Type == ClockEventType.ClockIn)?.RecordedTime;
-        var breakStart = events.FirstOrDefault(e => e.Type == ClockEventType.BreakStart)?.RecordedTime;
-        var breakEnd = events.FirstOrDefault(e => e.Type == ClockEventType.BreakEnd)?.RecordedTime;
-        var clockOut = events.FirstOrDefault(e => e.Type == ClockEventType.ClockOut)?.RecordedTime;
+        var clockIn = events.FirstOrDefault(e => e.Type == ClockEventType.ClockIn)?.RecordedAt;
+        var breakStart = events.FirstOrDefault(e => e.Type == ClockEventType.BreakStart)?.RecordedAt;
+        var breakEnd = events.FirstOrDefault(e => e.Type == ClockEventType.BreakEnd)?.RecordedAt;
+        var clockOut = events.FirstOrDefault(e => e.Type == ClockEventType.ClockOut)?.RecordedAt;
         var description = events.FirstOrDefault(e => e.Type == ClockEventType.ClockOut)?.Description;
 
         var isComplete = clockIn.HasValue && breakStart.HasValue && breakEnd.HasValue && clockOut.HasValue;

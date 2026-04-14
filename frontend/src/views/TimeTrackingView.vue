@@ -100,7 +100,9 @@ function timeToStr(d: Date): string {
 }
 
 function formatTime(t: string | undefined): string {
-  return t ? t.substring(0, 5) : "—";
+  if (!t) return "—";
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function eventLabel(type: string): string {
@@ -120,8 +122,14 @@ function emptyAdjForm() {
   };
 }
 
-function toTimeSpan(val: string): string | undefined {
-  return val ? `${val}:00` : undefined;
+// Convert a local HH:mm value (from <input type="time">) to a UTC HH:mm:ss string
+// so adjustment request times are stored in UTC alongside clock events.
+function toUtcTimeSpan(val: string): string | undefined {
+  if (!val) return undefined;
+  const [h, m] = val.split(":").map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
@@ -141,10 +149,14 @@ async function submitClock() {
   if (!nextAction.value) return;
   submitting.value = true;
   try {
+    // Build a UTC Date from the local selected time, then send as ISO 8601
+    const d = new Date(now.value);
+    d.setMinutes(d.getMinutes() + minuteOffset.value);
+    d.setSeconds(0);
+    d.setMilliseconds(0);
     await clockEventService.submit({
       type: CLOCK_EVENT_ENUM[nextAction.value],
-      recordedTime: `${selectedTime.value}:00`,
-      timezoneOffsetMinutes: new Date().getTimezoneOffset(),
+      recordedAt: d.toISOString(),
       description: showDescription.value && description.value.trim()
         ? description.value.trim()
         : undefined,
@@ -174,10 +186,10 @@ async function submitAdjustmentRequest() {
   try {
     await adjustmentRequestService.create({
       date: adjForm.value.date,
-      requestedClockIn: toTimeSpan(adjForm.value.clockIn),
-      requestedBreakStart: toTimeSpan(adjForm.value.breakStart),
-      requestedBreakEnd: toTimeSpan(adjForm.value.breakEnd),
-      requestedClockOut: toTimeSpan(adjForm.value.clockOut),
+      requestedClockIn: toUtcTimeSpan(adjForm.value.clockIn),
+      requestedBreakStart: toUtcTimeSpan(adjForm.value.breakStart),
+      requestedBreakEnd: toUtcTimeSpan(adjForm.value.breakEnd),
+      requestedClockOut: toUtcTimeSpan(adjForm.value.clockOut),
       reason: adjForm.value.reason.trim(),
     });
     showAdjustDialog.value = false;
@@ -369,7 +381,7 @@ onUnmounted(() => {
                   {{ eventLabel(event.type) }}
                 </TableCell>
                 <TableCell class="text-right font-mono text-slate-600 dark:text-slate-400">
-                  {{ formatTime(event.recordedTime) }}
+                  {{ formatTime(event.recordedAt) }}
                 </TableCell>
               </TableRow>
 
