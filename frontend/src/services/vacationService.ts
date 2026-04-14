@@ -101,4 +101,9 @@ export const vacationService = {
     const res = await apiClient.get<VacationType[]>("/vacations/types");
     return res.data;
   },
+
+  async getVacationForDate(date: string): Promise<VacationDay | null> {
+    const res = await apiClient.get<VacationDay>(`/vacations/date/${date}`);
+    return res.status === 204 ? null : res.data;
+  },
 };

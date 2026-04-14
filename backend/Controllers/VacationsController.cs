@@ -31,6 +31,17 @@ public class VacationsController(
         return Ok(balances);
     }
 
+    [HttpGet("date/{date}")]
+    public async Task<ActionResult<VacationDayDto>> GetVacationForDate(DateOnly date, CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var vacation = await _service.GetVacationForDateAsync(user.Id, date, ct);
+        if (vacation == null) return NoContent();
+        return Ok(vacation);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<VacationDayDto>>> GetVacationDays(CancellationToken ct)
     {

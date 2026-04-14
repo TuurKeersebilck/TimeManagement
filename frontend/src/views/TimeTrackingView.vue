@@ -10,6 +10,7 @@ import {
   type ClockEventType,
   type DaySummary,
 } from "@/services/clockEventService";
+import { vacationService, type VacationDay } from "@/services/vacationService";
 import { adjustmentRequestService } from "@/services/adjustmentRequestService";
 import { useClockEventsStore } from "@/composables/useClockEventsStore";
 import { useAppToast } from "@/composables/useAppToast";
@@ -47,6 +48,8 @@ import {
   HomeIcon,
   BuildingIcon,
   CoffeeIcon,
+  PlaneIcon,
+  SunIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -63,6 +66,7 @@ const submitting = ref(false);
 const minuteOffset = ref(0);
 const description = ref("");
 const wfh = ref(false);
+const todayVacation = ref<VacationDay | null>(null);
 
 // Adjustment request dialog
 const showAdjustDialog = ref(false);
@@ -80,11 +84,19 @@ const completedTypes = computed<Set<ClockEventType>>(
   () => new Set(todayEvents.value.map((e) => e.type as ClockEventType))
 );
 
+const effectiveEventOrder = computed<ClockEventType[]>(() =>
+  todayVacation.value?.amount === 0.5
+    ? ["ClockIn", "ClockOut"]
+    : CLOCK_EVENT_TYPE_ORDER
+);
+
 const nextAction = computed<ClockEventType | null>(() => {
-  return CLOCK_EVENT_TYPE_ORDER.find((t) => !completedTypes.value.has(t)) ?? null;
+  return effectiveEventOrder.value.find((t) => !completedTypes.value.has(t)) ?? null;
 });
 
-const isDayComplete = computed(() => completedTypes.value.has("ClockOut"));
+const isDayComplete = computed(() =>
+  effectiveEventOrder.value.every((t) => completedTypes.value.has(t))
+);
 
 const now = ref(new Date());
 let clockInterval: ReturnType<typeof setInterval> | null = null;
@@ -94,6 +106,7 @@ function handleVisibilityChange() {
     now.value = new Date();
     loadTodayEvents();
     loadSummaries();
+    loadTodayVacation();
   }
 }
 
@@ -165,6 +178,14 @@ function toUtcTimeSpan(val: string): string | undefined {
 }
 
 // ─── Clock actions ────────────────────────────────────────────────────────────
+
+async function loadTodayVacation() {
+  try {
+    todayVacation.value = await vacationService.getVacationForDate(localDateString(new Date()));
+  } catch {
+    // Non-critical — silently ignore if vacation check fails
+  }
+}
 
 async function loadTodayEvents() {
   try {
@@ -302,6 +323,7 @@ async function submitAdjustmentRequest() {
 onMounted(() => {
   loadTodayEvents();
   loadSummaries();
+  loadTodayVacation();
   clockInterval = setInterval(() => { now.value = new Date(); }, 10_000);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 });
@@ -359,49 +381,71 @@ onUnmounted(() => {
               </div>
 
               <div v-else class="space-y-5">
-                <!-- Step progress indicator -->
-                <div class="flex items-start justify-between">
-                  <template v-for="(type, index) in CLOCK_EVENT_TYPE_ORDER" :key="type">
-                    <div class="flex flex-col items-center gap-1.5">
-                      <div :class="['size-7 rounded-full flex items-center justify-center border-2 transition-all',
-                        completedTypes.has(type)
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : nextAction === type
-                          ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
-                          : 'border-slate-200 dark:border-slate-700 text-slate-400'
-                      ]">
-                        <CheckIcon v-if="completedTypes.has(type)" class="size-3.5" />
-                        <span v-else class="text-xs font-semibold leading-none">{{ index + 1 }}</span>
-                      </div>
-                      <span class="text-[11px] leading-tight text-center max-w-[52px]" :class="[
-                        completedTypes.has(type)
-                          ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                          : nextAction === type
-                          ? 'text-slate-900 dark:text-slate-100 font-medium'
-                          : 'text-slate-400 dark:text-slate-500'
-                      ]">{{ CLOCK_EVENT_LABELS[type] }}</span>
-                    </div>
-                    <div
-                      v-if="index < CLOCK_EVENT_TYPE_ORDER.length - 1"
-                      class="flex-1 h-px mt-3.5 mx-1 transition-colors"
-                      :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
-                    />
-                  </template>
-                </div>
-
-                <!-- Day complete -->
-                <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-2 text-center">
-                  <CheckCircleIcon class="size-10 text-emerald-500" />
+                <!-- Full vacation: block clock-in -->
+                <div v-if="todayVacation?.amount === 1.0" class="flex flex-col items-center gap-3 py-2 text-center">
+                  <div class="size-10 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center">
+                    <PlaneIcon class="size-5 text-violet-500" />
+                  </div>
                   <div>
-                    <p class="font-medium text-slate-900 dark:text-slate-100">Day complete</p>
+                    <p class="font-medium text-slate-900 dark:text-slate-100">Full vacation day</p>
                     <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      You've clocked out for today. See you tomorrow!
+                      You have a {{ todayVacation.vacationTypeName }} vacation today — no clocking needed. Enjoy!
                     </p>
                   </div>
                 </div>
 
-                <!-- Active action -->
+                <!-- Half-day vacation banner + simplified flow -->
                 <template v-else>
+                  <div v-if="todayVacation?.amount === 0.5" class="flex items-center gap-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-3">
+                    <SunIcon class="size-4 text-violet-500 shrink-0" />
+                    <p class="text-sm text-violet-800 dark:text-violet-200">
+                      Half-day {{ todayVacation.vacationTypeName }} vacation today — clock in and out only, no break required.
+                    </p>
+                  </div>
+
+                  <!-- Step progress indicator -->
+                  <div class="flex items-start justify-between">
+                    <template v-for="(type, index) in effectiveEventOrder" :key="type">
+                      <div class="flex flex-col items-center gap-1.5">
+                        <div :class="['size-7 rounded-full flex items-center justify-center border-2 transition-all',
+                          completedTypes.has(type)
+                            ? 'bg-emerald-500 border-emerald-500 text-white'
+                            : nextAction === type
+                            ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+                            : 'border-slate-200 dark:border-slate-700 text-slate-400'
+                        ]">
+                          <CheckIcon v-if="completedTypes.has(type)" class="size-3.5" />
+                          <span v-else class="text-xs font-semibold leading-none">{{ index + 1 }}</span>
+                        </div>
+                        <span class="text-[11px] leading-tight text-center max-w-[52px]" :class="[
+                          completedTypes.has(type)
+                            ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                            : nextAction === type
+                            ? 'text-slate-900 dark:text-slate-100 font-medium'
+                            : 'text-slate-400 dark:text-slate-500'
+                        ]">{{ CLOCK_EVENT_LABELS[type] }}</span>
+                      </div>
+                      <div
+                        v-if="index < effectiveEventOrder.length - 1"
+                        class="flex-1 h-px mt-3.5 mx-1 transition-colors"
+                        :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
+                      />
+                    </template>
+                  </div>
+
+                  <!-- Day complete -->
+                  <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-2 text-center">
+                    <CheckCircleIcon class="size-10 text-emerald-500" />
+                    <div>
+                      <p class="font-medium text-slate-900 dark:text-slate-100">Day complete</p>
+                      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                        You've clocked out for today. See you tomorrow!
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Active action -->
+                  <template v-else>
                   <div class="flex items-center justify-center gap-4">
                     <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
                       <MinusIcon class="size-4" />
@@ -418,7 +462,7 @@ onUnmounted(() => {
                   </div>
 
                   <div v-if="showWfh" class="flex items-center gap-3">
-                    <Switch v-model:checked="wfh" />
+                    <Switch v-model="wfh" />
                     <Label>Working from home today</Label>
                   </div>
 
@@ -436,6 +480,7 @@ onUnmounted(() => {
                     <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
                     {{ CLOCK_EVENT_LABELS[nextAction!] }}
                   </Button>
+                </template>
                 </template>
               </div>
             </div>
@@ -474,7 +519,7 @@ onUnmounted(() => {
                     </TableCell>
                   </TableRow>
                   <TableRow
-                    v-for="type in CLOCK_EVENT_TYPE_ORDER.filter(t => !completedTypes.has(t))"
+                    v-for="type in effectiveEventOrder.filter(t => !completedTypes.has(t))"
                     :key="type"
                     class="opacity-30"
                   >
@@ -508,11 +553,12 @@ onUnmounted(() => {
                     <TableHead>Hours</TableHead>
                     <TableHead>Timeline</TableHead>
                     <TableHead class="text-center">WFH</TableHead>
+                    <TableHead class="text-center">Vacation</TableHead>
                     <TableHead>Description</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableEmpty v-if="historySummaries.length === 0" :colspan="5">
+                  <TableEmpty v-if="historySummaries.length === 0" :colspan="6">
                     <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                     <p class="text-slate-500 dark:text-slate-400">No clocked days yet. Use the Today tab to clock in.</p>
                   </TableEmpty>
@@ -554,9 +600,9 @@ onUnmounted(() => {
                     <TableCell class="text-center">
                       <div class="flex items-center justify-center gap-1.5">
                         <Switch
-                          :checked="s.workedFromHome"
+                          :model-value="s.workedFromHome"
                           :disabled="savingDate === s.date"
-                          @update:checked="toggleWfh(s)"
+                          @update:model-value="toggleWfh(s)"
                         />
                         <component
                           :is="s.workedFromHome ? HomeIcon : BuildingIcon"
@@ -564,6 +610,21 @@ onUnmounted(() => {
                           :class="s.workedFromHome ? 'text-indigo-500' : 'text-slate-400'"
                         />
                       </div>
+                    </TableCell>
+
+                    <!-- Vacation badge -->
+                    <TableCell class="text-center">
+                      <span
+                        v-if="s.vacationAmount === 1.0"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
+                        :title="s.vacationTypeName ?? undefined"
+                      >Full</span>
+                      <span
+                        v-else-if="s.vacationAmount === 0.5"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
+                        :title="s.vacationTypeName ?? undefined"
+                      >Half</span>
+                      <span v-else class="text-slate-400 text-xs">—</span>
                     </TableCell>
 
                     <!-- Description (inline edit) -->

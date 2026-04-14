@@ -69,6 +69,24 @@ public class VacationService(AppDbContext db) : IVacationService
     public Task<bool> ExistsForDateAndTypeAsync(string userId, DateOnly date, int vacationTypeId, CancellationToken ct = default)
         => _db.VacationDays.AnyAsync(d => d.UserId == userId && d.Date == date && d.VacationTypeId == vacationTypeId, ct);
 
+    public async Task<VacationDayDto?> GetVacationForDateAsync(string userId, DateOnly date, CancellationToken ct = default)
+    {
+        return await _db.VacationDays
+            .AsNoTracking()
+            .Where(v => v.UserId == userId && v.Date == date)
+            .Select(v => new VacationDayDto
+            {
+                Id = v.Id,
+                VacationTypeId = v.VacationTypeId,
+                VacationTypeName = v.VacationType.Name,
+                VacationTypeColor = v.VacationType.Color,
+                Date = v.Date,
+                Amount = v.Amount,
+                Note = v.Note,
+            })
+            .FirstOrDefaultAsync(ct);
+    }
+
     public async Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, CancellationToken ct = default)
     {
         ValidateAmount(dto.Amount);
