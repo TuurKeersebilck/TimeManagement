@@ -18,6 +18,8 @@ public class SubmitClockEventDto
 
     [MaxLength(1000)]
     public string? Description { get; set; }
+
+    public bool WorkedFromHome { get; set; } = false;
 }
 
 public class UpdateDayDto
