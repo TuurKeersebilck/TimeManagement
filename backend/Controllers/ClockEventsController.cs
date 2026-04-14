@@ -25,12 +25,12 @@ public class ClockEventsController(
     }
 
     [HttpGet("today")]
-    public async Task<ActionResult<IEnumerable<ClockEventDto>>> GetToday(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<ClockEventDto>>> GetToday([FromQuery] DateOnly localDate, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        return Ok(await service.GetTodayEventsAsync(user.Id, ct));
+        return Ok(await service.GetTodayEventsAsync(user.Id, localDate, ct));
     }
 
     [HttpGet("summaries")]
@@ -50,5 +50,14 @@ public class ClockEventsController(
 
         var result = await service.SubmitEventAsync(user.Id, dto, ct);
         return CreatedAtAction(nameof(GetToday), result);
+    }
+
+    [HttpPatch("{date}")]
+    public async Task<ActionResult<DaySummaryDto>> UpdateDay(DateOnly date, [FromBody] UpdateDayDto dto, CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        return Ok(await service.UpdateDayAsync(user.Id, date, dto, ct));
     }
 }

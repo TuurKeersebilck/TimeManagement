@@ -14,12 +14,11 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
 {
     private const int AllowedDeltaMinutes = 5;
 
-    public async Task<IEnumerable<ClockEventDto>> GetTodayEventsAsync(string userId, CancellationToken ct = default)
+    public async Task<IEnumerable<ClockEventDto>> GetTodayEventsAsync(string userId, DateOnly localDate, CancellationToken ct = default)
     {
-        var today = DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime);
         return await db.ClockEvents
             .AsNoTracking()
-            .Where(e => e.UserId == userId && e.Date == today)
+            .Where(e => e.UserId == userId && e.Date == localDate)
             .OrderBy(e => e.Type)
             .ProjectTo<ClockEventDto>(mapper.ConfigurationProvider)
             .ToListAsync(ct);
@@ -56,7 +55,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 $"Recorded time must be within {AllowedDeltaMinutes} minutes of the current time. " +
                 "Please submit an adjustment request if you need to log a different time.");
 
-        var today = DateOnly.FromDateTime(dto.RecordedAt.UtcDateTime);
+        var today = dto.LocalDate;
         var description = dto.Type == ClockEventType.ClockOut ? dto.Description : null;
 
         await using var tx = await db.Database.BeginTransactionAsync(
@@ -71,6 +70,15 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
 
             ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet());
+
+            // Chronological check: new event must not be before any existing event
+            if (existingToday.Count > 0)
+            {
+                var latestExisting = existingToday.Max(e => e.RecordedAt);
+                if (recordedTruncated < latestExisting)
+                    throw new ValidationException(
+                        $"Recorded time cannot be before your previous event at {latestExisting.ToOffset(TimeSpan.Zero):HH:mm} UTC.");
+            }
 
             var entity = new ClockEvent
             {
@@ -121,13 +129,44 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
         };
     }
 
+    public async Task<DaySummaryDto> UpdateDayAsync(string userId, DateOnly date, UpdateDayDto dto, CancellationToken ct = default)
+    {
+        var events = await db.ClockEvents
+            .Where(e => e.UserId == userId && e.Date == date)
+            .ToListAsync(ct);
+
+        if (events.Count == 0)
+            throw new Exceptions.ResourceNotFoundException("No events found for this date.");
+
+        if (dto.Description != null)
+        {
+            var clockOut = events.FirstOrDefault(e => e.Type == ClockEventType.ClockOut);
+            if (clockOut == null)
+                throw new ValidationException("Cannot set a description before clocking out.");
+            clockOut.Description = dto.Description;
+        }
+
+        if (dto.WorkedFromHome.HasValue)
+        {
+            var clockIn = events.FirstOrDefault(e => e.Type == ClockEventType.ClockIn);
+            if (clockIn == null)
+                throw new ValidationException("Cannot set work from home status without a clock-in event.");
+            clockIn.WorkedFromHome = dto.WorkedFromHome.Value;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return BuildDaySummary(date, events);
+    }
+
     internal static DaySummaryDto BuildDaySummary(DateOnly date, List<ClockEvent> events)
     {
-        var clockIn = events.FirstOrDefault(e => e.Type == ClockEventType.ClockIn)?.RecordedAt;
+        var clockInEvent = events.FirstOrDefault(e => e.Type == ClockEventType.ClockIn);
+        var clockIn = clockInEvent?.RecordedAt;
         var breakStart = events.FirstOrDefault(e => e.Type == ClockEventType.BreakStart)?.RecordedAt;
         var breakEnd = events.FirstOrDefault(e => e.Type == ClockEventType.BreakEnd)?.RecordedAt;
         var clockOut = events.FirstOrDefault(e => e.Type == ClockEventType.ClockOut)?.RecordedAt;
         var description = events.FirstOrDefault(e => e.Type == ClockEventType.ClockOut)?.Description;
+        var workedFromHome = clockInEvent?.WorkedFromHome ?? false;
 
         var isComplete = clockIn.HasValue && breakStart.HasValue && breakEnd.HasValue && clockOut.HasValue;
 
@@ -145,6 +184,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             TotalHours = totalHours,
             Description = description,
             IsComplete = isComplete,
+            WorkedFromHome = workedFromHome,
         };
     }
 }

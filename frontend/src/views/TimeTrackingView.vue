@@ -8,6 +8,7 @@ import {
   CLOCK_EVENT_ENUM,
   type ClockEvent,
   type ClockEventType,
+  type DaySummary,
 } from "@/services/clockEventService";
 import { adjustmentRequestService } from "@/services/adjustmentRequestService";
 import { useAppToast } from "@/composables/useAppToast";
@@ -19,6 +20,8 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +42,9 @@ import {
   SendIcon,
   MinusIcon,
   PlusIcon,
+  PencilIcon,
+  HomeIcon,
+  BuildingIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -46,10 +52,11 @@ const toast = useAppToast();
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const todayEvents = ref<ClockEvent[]>([]);
+const summaries = ref<DaySummary[]>([]);
 const loadingEvents = ref(false);
+const loadingSummaries = ref(false);
 const submitting = ref(false);
 
-// Clock-in/out form: offset in minutes from current time (-5 to +5)
 const minuteOffset = ref(0);
 const description = ref("");
 
@@ -58,6 +65,10 @@ const showAdjustDialog = ref(false);
 const adjForm = ref(emptyAdjForm());
 const adjSubmitting = ref(false);
 
+// Inline edit state for history tab
+const editingDate = ref<string | null>(null);
+const editingDescription = ref("");
+const savingDate = ref<string | null>(null);
 
 // ─── Computed ─────────────────────────────────────────────────────────────────
 
@@ -71,11 +82,9 @@ const nextAction = computed<ClockEventType | null>(() => {
 
 const isDayComplete = computed(() => completedTypes.value.has("ClockOut"));
 
-// Live clock — ticks every 30 s to keep the displayed time accurate
 const now = ref(new Date());
 let clockInterval: ReturnType<typeof setInterval> | null = null;
 
-// Derived selected time: now + offset
 const selectedTime = computed(() => {
   const d = new Date(now.value);
   d.setMinutes(d.getMinutes() + minuteOffset.value);
@@ -93,16 +102,34 @@ function adjustMinutes(delta: number) {
 
 const showDescription = computed(() => nextAction.value === "ClockOut");
 
+// History: exclude today so it doesn't show twice
+const historySummaries = computed(() => {
+  const todayStr = localDateString(new Date());
+  return summaries.value.filter((s) => s.date !== todayStr);
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function timeToStr(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function formatTime(t: string | undefined): string {
+function formatTime(t: string | null | undefined): string {
   if (!t) return "—";
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatDate(s: string): string {
+  return new Date(s + "T00:00:00").toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function localDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function eventLabel(type: string): string {
@@ -110,10 +137,8 @@ function eventLabel(type: string): string {
 }
 
 function emptyAdjForm() {
-  const today = new Date();
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   return {
-    date: todayStr,
+    date: localDateString(new Date()),
     clockIn: "",
     breakStart: "",
     breakEnd: "",
@@ -122,8 +147,6 @@ function emptyAdjForm() {
   };
 }
 
-// Convert a local HH:mm value (from <input type="time">) to a UTC HH:mm:ss string
-// so adjustment request times are stored in UTC alongside clock events.
 function toUtcTimeSpan(val: string): string | undefined {
   if (!val) return undefined;
   const [h, m] = val.split(":").map(Number);
@@ -132,7 +155,7 @@ function toUtcTimeSpan(val: string): string | undefined {
   return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
 }
 
-// ─── Actions ──────────────────────────────────────────────────────────────────
+// ─── Clock actions ────────────────────────────────────────────────────────────
 
 async function loadTodayEvents() {
   try {
@@ -145,11 +168,21 @@ async function loadTodayEvents() {
   }
 }
 
+async function loadSummaries() {
+  try {
+    loadingSummaries.value = true;
+    summaries.value = await clockEventService.getSummaries();
+  } catch {
+    toast.error("Failed to load history");
+  } finally {
+    loadingSummaries.value = false;
+  }
+}
+
 async function submitClock() {
   if (!nextAction.value) return;
   submitting.value = true;
   try {
-    // Build a UTC Date from the local selected time, then send as ISO 8601
     const d = new Date(now.value);
     d.setMinutes(d.getMinutes() + minuteOffset.value);
     d.setSeconds(0);
@@ -157,20 +190,69 @@ async function submitClock() {
     await clockEventService.submit({
       type: CLOCK_EVENT_ENUM[nextAction.value],
       recordedAt: d.toISOString(),
+      localDate: localDateString(d),
       description: showDescription.value && description.value.trim()
         ? description.value.trim()
         : undefined,
     });
+    const label = CLOCK_EVENT_LABELS[nextAction.value!];
     await loadTodayEvents();
+    await loadSummaries();
     minuteOffset.value = 0;
     description.value = "";
-    toast.success(`${CLOCK_EVENT_LABELS[nextAction.value!]} recorded`);
+    toast.success(`${label} recorded`);
   } catch (err: unknown) {
     toast.error(extractApiError(err, "Failed to record clock event"));
   } finally {
     submitting.value = false;
   }
 }
+
+// ─── History actions ──────────────────────────────────────────────────────────
+
+function startEdit(summary: DaySummary) {
+  editingDate.value = summary.date;
+  editingDescription.value = summary.description ?? "";
+}
+
+function cancelEdit() {
+  editingDate.value = null;
+  editingDescription.value = "";
+}
+
+async function saveDescription(date: string) {
+  savingDate.value = date;
+  try {
+    const updated = await clockEventService.updateDay(date, {
+      description: editingDescription.value.trim() || undefined,
+    });
+    const idx = summaries.value.findIndex((s) => s.date === date);
+    if (idx !== -1) summaries.value[idx] = updated;
+    editingDate.value = null;
+    toast.success("Description saved");
+  } catch (err: unknown) {
+    toast.error(extractApiError(err, "Failed to save description"));
+  } finally {
+    savingDate.value = null;
+  }
+}
+
+async function toggleWfh(summary: DaySummary) {
+  savingDate.value = summary.date;
+  try {
+    const updated = await clockEventService.updateDay(summary.date, {
+      workedFromHome: !summary.workedFromHome,
+    });
+    const idx = summaries.value.findIndex((s) => s.date === summary.date);
+    if (idx !== -1) summaries.value[idx] = updated;
+  } catch (err: unknown) {
+    toast.error(extractApiError(err, "Failed to update work from home status"));
+  } finally {
+    savingDate.value = null;
+  }
+}
+
+// ─── Adjustment request ───────────────────────────────────────────────────────
 
 async function submitAdjustmentRequest() {
   if (!adjForm.value.reason.trim()) {
@@ -206,7 +288,7 @@ async function submitAdjustmentRequest() {
 
 onMounted(() => {
   loadTodayEvents();
-  // Refresh the live clock every 30 s so the ±5 min window stays current
+  loadSummaries();
   clockInterval = setInterval(() => { now.value = new Date(); }, 30_000);
 });
 
@@ -234,171 +316,275 @@ onUnmounted(() => {
           </Button>
         </div>
 
-        <!-- Clock action card -->
-        <div class="card p-6 mb-6">
+        <Tabs default-value="today">
+          <TabsList class="w-full mb-6">
+            <TabsTrigger value="today" class="flex-1">Today</TabsTrigger>
+            <TabsTrigger value="history" class="flex-1">History</TabsTrigger>
+          </TabsList>
 
-          <!-- Loading skeleton -->
-          <div v-if="loadingEvents" class="space-y-5">
-            <div class="flex items-start justify-between">
-              <div v-for="i in 4" :key="i" class="flex flex-col items-center gap-1.5 flex-1">
-                <div class="size-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                <div class="h-2.5 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              </div>
-            </div>
-            <div class="flex items-center justify-center gap-4">
-              <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div class="h-9 w-28 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-              <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
-            </div>
-            <div class="h-11 w-full rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
-          </div>
+          <!-- ── Today tab ───────────────────────────────────────────────── -->
+          <TabsContent value="today" class="space-y-6">
 
-          <!-- Loaded state -->
-          <div v-else class="space-y-5">
-
-            <!-- Step progress indicator -->
-            <div class="flex items-start justify-between">
-              <template v-for="(type, index) in CLOCK_EVENT_TYPE_ORDER" :key="type">
-                <div class="flex flex-col items-center gap-1.5">
-                  <div :class="['size-7 rounded-full flex items-center justify-center border-2 transition-all',
-                    completedTypes.has(type)
-                      ? 'bg-emerald-500 border-emerald-500 text-white'
-                      : nextAction === type
-                      ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
-                      : 'border-slate-200 dark:border-slate-700 text-slate-400'
-                  ]">
-                    <CheckIcon v-if="completedTypes.has(type)" class="size-3.5" />
-                    <span v-else class="text-xs font-semibold leading-none">{{ index + 1 }}</span>
+            <!-- Clock action card -->
+            <div class="card p-6">
+              <!-- Loading skeleton -->
+              <div v-if="loadingEvents" class="space-y-5">
+                <div class="flex items-start justify-between">
+                  <div v-for="i in 4" :key="i" class="flex flex-col items-center gap-1.5 flex-1">
+                    <div class="size-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                    <div class="h-2.5 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
                   </div>
-                  <span class="text-[11px] leading-tight text-center max-w-[52px]" :class="[
-                    completedTypes.has(type)
-                      ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                      : nextAction === type
-                      ? 'text-slate-900 dark:text-slate-100 font-medium'
-                      : 'text-slate-400 dark:text-slate-500'
-                  ]">{{ CLOCK_EVENT_LABELS[type] }}</span>
                 </div>
-                <div
-                  v-if="index < CLOCK_EVENT_TYPE_ORDER.length - 1"
-                  class="flex-1 h-px mt-3.5 mx-1 transition-colors"
-                  :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
-                />
-              </template>
-            </div>
-
-            <!-- Day complete -->
-            <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-2 text-center">
-              <CheckCircleIcon class="size-10 text-emerald-500" />
-              <div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">Day complete</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                  You've clocked out for today. See you tomorrow!
-                </p>
-              </div>
-            </div>
-
-            <!-- Active action -->
-            <template v-else>
-              <!-- Time stepper -->
-              <div class="flex items-center justify-center gap-4">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  :disabled="minuteOffset <= -5"
-                  @click="adjustMinutes(-1)"
-                >
-                  <MinusIcon class="size-4" />
-                </Button>
-                <div class="text-center w-28">
-                  <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
-                    {{ selectedTime }}
-                  </p>
-                  <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                    {{ offsetLabel }}
-                  </p>
+                <div class="flex items-center justify-center gap-4">
+                  <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  <div class="h-9 w-28 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                  <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
                 </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  :disabled="minuteOffset >= 5"
-                  @click="adjustMinutes(1)"
-                >
-                  <PlusIcon class="size-4" />
-                </Button>
+                <div class="h-11 w-full rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
               </div>
 
-              <!-- Description (clock-out only) -->
-              <div v-if="showDescription" class="space-y-1.5">
-                <Label>
-                  Description
-                  <span class="font-normal text-slate-400 ml-1">(optional)</span>
-                </Label>
-                <textarea
-                  v-model="description"
-                  rows="3"
-                  class="input-field resize-none"
-                  placeholder="What did you work on today?"
-                />
+              <div v-else class="space-y-5">
+                <!-- Step progress indicator -->
+                <div class="flex items-start justify-between">
+                  <template v-for="(type, index) in CLOCK_EVENT_TYPE_ORDER" :key="type">
+                    <div class="flex flex-col items-center gap-1.5">
+                      <div :class="['size-7 rounded-full flex items-center justify-center border-2 transition-all',
+                        completedTypes.has(type)
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : nextAction === type
+                          ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+                          : 'border-slate-200 dark:border-slate-700 text-slate-400'
+                      ]">
+                        <CheckIcon v-if="completedTypes.has(type)" class="size-3.5" />
+                        <span v-else class="text-xs font-semibold leading-none">{{ index + 1 }}</span>
+                      </div>
+                      <span class="text-[11px] leading-tight text-center max-w-[52px]" :class="[
+                        completedTypes.has(type)
+                          ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                          : nextAction === type
+                          ? 'text-slate-900 dark:text-slate-100 font-medium'
+                          : 'text-slate-400 dark:text-slate-500'
+                      ]">{{ CLOCK_EVENT_LABELS[type] }}</span>
+                    </div>
+                    <div
+                      v-if="index < CLOCK_EVENT_TYPE_ORDER.length - 1"
+                      class="flex-1 h-px mt-3.5 mx-1 transition-colors"
+                      :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
+                    />
+                  </template>
+                </div>
+
+                <!-- Day complete -->
+                <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-2 text-center">
+                  <CheckCircleIcon class="size-10 text-emerald-500" />
+                  <div>
+                    <p class="font-medium text-slate-900 dark:text-slate-100">Day complete</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                      You've clocked out for today. See you tomorrow!
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Active action -->
+                <template v-else>
+                  <div class="flex items-center justify-center gap-4">
+                    <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
+                      <MinusIcon class="size-4" />
+                    </Button>
+                    <div class="text-center w-28">
+                      <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
+                        {{ selectedTime }}
+                      </p>
+                      <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ offsetLabel }}</p>
+                    </div>
+                    <Button variant="outline" size="icon" :disabled="minuteOffset >= 5" @click="adjustMinutes(1)">
+                      <PlusIcon class="size-4" />
+                    </Button>
+                  </div>
+
+                  <div v-if="showDescription" class="space-y-1.5">
+                    <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
+                    <textarea
+                      v-model="description"
+                      rows="3"
+                      class="input-field resize-none"
+                      placeholder="What did you work on today?"
+                    />
+                  </div>
+
+                  <Button class="w-full" size="lg" :disabled="submitting" @click="submitClock">
+                    <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
+                    {{ CLOCK_EVENT_LABELS[nextAction!] }}
+                  </Button>
+                </template>
               </div>
-
-              <Button class="w-full" size="lg" :disabled="submitting" @click="submitClock">
-                <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
-                {{ CLOCK_EVENT_LABELS[nextAction!] }}
-              </Button>
-            </template>
-          </div>
-        </div>
-
-        <!-- Today's events table -->
-        <div class="card overflow-hidden">
-          <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's log</h2>
-          </div>
-
-          <div v-if="loadingEvents" class="divide-y divide-slate-100 dark:divide-slate-800">
-            <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse ml-auto" />
             </div>
-          </div>
 
-          <Table v-else>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Event</TableHead>
-                <TableHead class="text-right">Time</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableEmpty v-if="todayEvents.length === 0" :colspan="2">
-                <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                <p class="text-slate-500 dark:text-slate-400">
-                  No events yet today. Use the button above to clock in.
-                </p>
-              </TableEmpty>
-              <TableRow v-for="event in todayEvents" :key="event.id">
-                <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                  {{ eventLabel(event.type) }}
-                </TableCell>
-                <TableCell class="text-right font-mono text-slate-600 dark:text-slate-400">
-                  {{ formatTime(event.recordedAt) }}
-                </TableCell>
-              </TableRow>
+            <!-- Today's events table -->
+            <div class="card overflow-hidden">
+              <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's log</h2>
+              </div>
 
-              <!-- Placeholder rows for remaining events -->
-              <TableRow
-                v-for="type in CLOCK_EVENT_TYPE_ORDER.filter(t => !completedTypes.has(t))"
-                :key="type"
-                class="opacity-30"
-              >
-                <TableCell class="text-slate-500 dark:text-slate-400 italic">
-                  {{ CLOCK_EVENT_LABELS[type] }}
-                </TableCell>
-                <TableCell class="text-right text-slate-400">—</TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
+              <div v-if="loadingEvents" class="divide-y divide-slate-100 dark:divide-slate-800">
+                <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse ml-auto" />
+                </div>
+              </div>
+
+              <Table v-else>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Event</TableHead>
+                    <TableHead class="text-right">Time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableEmpty v-if="todayEvents.length === 0" :colspan="2">
+                    <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                    <p class="text-slate-500 dark:text-slate-400">No events yet today. Use the button above to clock in.</p>
+                  </TableEmpty>
+                  <TableRow v-for="event in todayEvents" :key="event.id">
+                    <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                      {{ eventLabel(event.type) }}
+                    </TableCell>
+                    <TableCell class="text-right font-mono text-slate-600 dark:text-slate-400">
+                      {{ formatTime(event.recordedAt) }}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow
+                    v-for="type in CLOCK_EVENT_TYPE_ORDER.filter(t => !completedTypes.has(t))"
+                    :key="type"
+                    class="opacity-30"
+                  >
+                    <TableCell class="text-slate-500 dark:text-slate-400 italic">{{ CLOCK_EVENT_LABELS[type] }}</TableCell>
+                    <TableCell class="text-right text-slate-400">—</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+
+          </TabsContent>
+
+          <!-- ── History tab ─────────────────────────────────────────────── -->
+          <TabsContent value="history">
+            <div class="card overflow-hidden">
+
+              <!-- Loading skeleton -->
+              <div v-if="loadingSummaries" class="divide-y divide-slate-100 dark:divide-slate-800">
+                <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+                  <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+                </div>
+              </div>
+
+              <Table v-else>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>In → Out</TableHead>
+                    <TableHead class="text-center">WFH</TableHead>
+                    <TableHead>Description</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableEmpty v-if="historySummaries.length === 0" :colspan="5">
+                    <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                    <p class="text-slate-500 dark:text-slate-400">No history yet.</p>
+                  </TableEmpty>
+
+                  <TableRow v-for="s in historySummaries" :key="s.date">
+                    <!-- Date -->
+                    <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      {{ formatDate(s.date) }}
+                    </TableCell>
+
+                    <!-- Hours badge -->
+                    <TableCell>
+                      <span
+                        v-if="s.totalHours > 0"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                      >
+                        {{ s.totalHours.toFixed(2) }}h
+                      </span>
+                      <span v-else class="text-slate-400 text-xs">—</span>
+                    </TableCell>
+
+                    <!-- Clock in → out -->
+                    <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                      {{ formatTime(s.clockIn) }} → {{ formatTime(s.clockOut) }}
+                    </TableCell>
+
+                    <!-- WFH toggle -->
+                    <TableCell class="text-center">
+                      <div class="flex items-center justify-center gap-1.5">
+                        <Switch
+                          :checked="s.workedFromHome"
+                          :disabled="savingDate === s.date"
+                          @update:checked="toggleWfh(s)"
+                        />
+                        <component
+                          :is="s.workedFromHome ? HomeIcon : BuildingIcon"
+                          class="size-3.5"
+                          :class="s.workedFromHome ? 'text-indigo-500' : 'text-slate-400'"
+                        />
+                      </div>
+                    </TableCell>
+
+                    <!-- Description (inline edit) -->
+                    <TableCell class="max-w-[200px]">
+                      <div v-if="editingDate === s.date" class="flex items-start gap-1.5">
+                        <textarea
+                          v-model="editingDescription"
+                          rows="2"
+                          class="input-field resize-none text-xs py-1 px-2 flex-1"
+                          placeholder="Add a description…"
+                          @keydown.enter.exact.prevent="saveDescription(s.date)"
+                          @keydown.escape="cancelEdit"
+                        />
+                        <div class="flex flex-col gap-1">
+                          <Button
+                            size="icon"
+                            class="size-6"
+                            :disabled="savingDate === s.date"
+                            @click="saveDescription(s.date)"
+                          >
+                            <Loader2Icon v-if="savingDate === s.date" class="size-3 animate-spin" />
+                            <CheckIcon v-else class="size-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" class="size-6" @click="cancelEdit">
+                            <MinusIcon class="size-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      <button
+                        v-else
+                        class="group flex items-center gap-1.5 text-left w-full"
+                        @click="s.clockOut ? startEdit(s) : undefined"
+                        :disabled="!s.clockOut"
+                      >
+                        <span
+                          class="text-xs text-slate-600 dark:text-slate-400 truncate"
+                          :title="s.description ?? undefined"
+                        >
+                          {{ s.description || (s.clockOut ? "Add description…" : "—") }}
+                        </span>
+                        <PencilIcon
+                          v-if="s.clockOut"
+                          class="size-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 shrink-0"
+                        />
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
+        </Tabs>
 
       </div>
     </div>
@@ -415,13 +601,11 @@ onUnmounted(() => {
             Fill in the times you need corrected and provide a reason. An admin will receive an email and can approve with one click.
           </p>
 
-          <!-- Date -->
           <div class="space-y-1.5">
             <Label>Date</Label>
             <Input v-model="adjForm.date" type="date" />
           </div>
 
-          <!-- Times grid -->
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
               <Label class="text-xs text-slate-500">Clock In</Label>
@@ -442,7 +626,6 @@ onUnmounted(() => {
           </div>
           <p class="text-xs text-slate-400">Leave blank any times that don't need changing.</p>
 
-          <!-- Reason -->
           <div class="space-y-1.5">
             <Label>Reason <span class="text-destructive">*</span></Label>
             <textarea

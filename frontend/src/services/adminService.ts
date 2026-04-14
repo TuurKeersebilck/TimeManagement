@@ -12,6 +12,7 @@ export interface AdminTimeLog {
   description?: string;
   totalHours: number;
   isComplete: boolean;
+  workedFromHome: boolean;
 }
 
 export interface Employee {

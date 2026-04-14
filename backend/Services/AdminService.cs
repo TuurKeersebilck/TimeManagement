@@ -56,6 +56,7 @@ public class AdminService(AppDbContext context) : IAdminService
                     TotalHours = totalHours,
                     Description = clockOut?.Description,
                     IsComplete = isComplete,
+                    WorkedFromHome = clockIn?.WorkedFromHome ?? false,
                 };
             })
             .OrderByDescending(s => s.Date)
@@ -382,6 +383,7 @@ public class AdminService(AppDbContext context) : IAdminService
                         : 0.0,
                     Description = co?.Description,
                     IsComplete = ci != null && bs != null && be != null && co != null,
+                    WorkedFromHome = ci?.WorkedFromHome ?? false,
                 };
             })
             .OrderBy(s => s.EmployeeName)
@@ -455,7 +457,7 @@ public class AdminService(AppDbContext context) : IAdminService
         // ── Section 2: Daily Detail ─────────────────────────────────────────
         sb.AppendLine();
         sb.AppendLine("DAILY DETAIL");
-        sb.AppendLine("Employee,Email,Date,Day,Clock In,Break Start,Break End,Clock Out,Break Duration (h),Net Hours,Description");
+        sb.AppendLine("Employee,Email,Date,Day,Clock In,Break Start,Break End,Clock Out,Break Duration (h),Net Hours,WFH,Description");
 
         foreach (var log in logs)
         {
@@ -474,6 +476,7 @@ public class AdminService(AppDbContext context) : IAdminService
                 FormatExportTime(log.ClockOut, timezoneOffsetMinutes),
                 breakHours.ToString("F2"),
                 log.TotalHours.ToString("F2"),
+                log.WorkedFromHome ? "Yes" : "No",
                 CsvEscape(log.Description ?? "")
             ));
         }

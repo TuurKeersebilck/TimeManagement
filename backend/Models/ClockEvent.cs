@@ -32,4 +32,7 @@ public class ClockEvent
     /// <summary>One description per day, stored on the ClockOut event.</summary>
     [MaxLength(1000)]
     public string? Description { get; set; }
+
+    /// <summary>Whether the employee worked from home this day. Editable anytime, stored on the ClockIn event.</summary>
+    public bool WorkedFromHome { get; set; }
 }

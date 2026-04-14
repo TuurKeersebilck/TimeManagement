@@ -12,8 +12,18 @@ public class SubmitClockEventDto
     [Required]
     public DateTimeOffset RecordedAt { get; set; }
 
+    /// <summary>The user's local calendar date (yyyy-MM-dd). Used for day grouping so midnight shifts don't land on the wrong UTC date.</summary>
+    [Required]
+    public DateOnly LocalDate { get; set; }
+
     [MaxLength(1000)]
     public string? Description { get; set; }
+}
+
+public class UpdateDayDto
+{
+    public string? Description { get; set; }
+    public bool? WorkedFromHome { get; set; }
 }
 
 public class ClockEventDto
@@ -35,4 +45,5 @@ public class DaySummaryDto
     public double TotalHours { get; set; }
     public string? Description { get; set; }
     public bool IsComplete { get; set; }
+    public bool WorkedFromHome { get; set; }
 }
