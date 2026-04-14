@@ -105,15 +105,15 @@ onMounted(() => fetchUser());
   <!-- Sidebar -->
   <aside
     :class="[
-      'fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-out overflow-hidden',
+      'fixed inset-y-0 left-0 z-50 flex flex-col bg-card border-r border-border transition-all duration-300 ease-out overflow-hidden',
       isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-16 lg:translate-x-0',
     ]"
   >
     <!-- Header -->
     <div
       :class="[
-        'flex items-center h-16 border-b border-slate-200 dark:border-slate-800 shrink-0',
-        isOpen ? 'px-4' : 'lg:justify-center lg:px-2',
+        'flex items-center h-16 shrink-0',
+        isOpen ? 'px-4 border-b border-border' : 'lg:justify-center lg:px-2 border-b border-border',
       ]"
     >
       <AppLogo v-if="isOpen" :show-text="true" class="flex-1 min-w-0" />
@@ -177,7 +177,7 @@ onMounted(() => fetchUser());
         <!-- Collapsed sidebar: just show icons with a faint divider -->
         <div
           v-if="!isOpen"
-          class="hidden lg:block mt-3 mb-1 mx-3 border-t border-slate-200 dark:border-slate-700"
+          class="hidden lg:block mt-3 mb-1 mx-3 border-t border-border"
         />
 
         <div v-show="adminSectionOpen || !isOpen" class="space-y-0.5">
@@ -201,7 +201,7 @@ onMounted(() => fetchUser());
     </nav>
 
     <!-- Bottom section -->
-    <div class="shrink-0 border-t border-slate-200 dark:border-slate-800">
+    <div class="shrink-0 border-t border-border">
       <!-- Theme toggle -->
       <div class="px-2 pt-3 pb-1">
         <button

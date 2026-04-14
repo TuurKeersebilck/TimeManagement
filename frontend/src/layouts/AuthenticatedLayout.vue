@@ -20,7 +20,7 @@ const handleLogout = async (): Promise<void> => {
 </script>
 
 <template>
-  <div class="flex h-screen bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-screen bg-background">
     <Sidebar :is-open="sidebarOpen" @toggle="toggleSidebar" @logout="handleLogout" />
 
     <!-- Main content -->
@@ -32,7 +32,7 @@ const handleLogout = async (): Promise<void> => {
     >
       <!-- Mobile top bar -->
       <header
-        class="lg:hidden flex items-center h-14 px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0"
+        class="lg:hidden flex items-center h-14 px-4 bg-card border-b border-border shrink-0"
       >
         <button @click="toggleSidebar" class="btn-ghost !px-2 !py-2" aria-label="Open menu">
           <MenuIcon class="size-5" />

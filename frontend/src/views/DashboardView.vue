@@ -86,8 +86,8 @@ onMounted(async () => {
     <div class="p-6 lg:p-8">
       <div class="max-w-6xl mx-auto">
         <div class="mb-8">
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Your day at a glance</p>
+          <h1 class="text-2xl font-semibold text-foreground">Dashboard</h1>
+          <p class="text-sm text-muted-foreground mt-0.5">Your day at a glance</p>
         </div>
 
         <!-- Today's status banner -->
@@ -195,25 +195,25 @@ onMounted(async () => {
           <div class="stat-card">
             <div class="flex items-center gap-2 mb-1">
               <ClockIcon class="size-3.5 text-slate-400" />
-              <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Today
               </p>
             </div>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <p class="text-3xl font-bold text-foreground">
+              <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursToday }}h</span>
             </p>
             <template v-if="!loading && dailyTarget != null">
-              <div class="mt-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+              <div class="mt-2 w-full bg-muted rounded-full h-1.5">
                 <div
                   :class="[
                     'h-1.5 rounded-full transition-all',
-                    todayProgress === 100 ? 'bg-emerald-500' : 'bg-indigo-500',
+                    todayProgress === 100 ? 'bg-emerald-500' : 'bg-primary',
                   ]"
                   :style="{ width: `${todayProgress}%` }"
                 />
               </div>
-              <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              <p class="text-xs text-muted-foreground mt-1">
                 / {{ dailyTarget }}h target
               </p>
             </template>
@@ -223,25 +223,25 @@ onMounted(async () => {
           <div class="stat-card">
             <div class="flex items-center gap-2 mb-1">
               <ClockIcon class="size-3.5 text-slate-400" />
-              <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 This week
               </p>
             </div>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <p class="text-3xl font-bold text-foreground">
+              <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisWeek }}h</span>
             </p>
             <template v-if="!loading && weeklyTarget != null">
-              <div class="mt-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+              <div class="mt-2 w-full bg-muted rounded-full h-1.5">
                 <div
                   :class="[
                     'h-1.5 rounded-full transition-all',
-                    weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-indigo-500',
+                    weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary',
                   ]"
                   :style="{ width: `${weeklyProgress}%` }"
                 />
               </div>
-              <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+              <p class="text-xs text-muted-foreground mt-1">
                 / {{ weeklyTarget }}h target
               </p>
             </template>
@@ -251,12 +251,12 @@ onMounted(async () => {
           <div class="stat-card">
             <div class="flex items-center gap-2 mb-1">
               <ClockIcon class="size-3.5 text-slate-400" />
-              <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 This month
               </p>
             </div>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <p class="text-3xl font-bold text-foreground">
+              <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisMonth }}h</span>
             </p>
           </div>
