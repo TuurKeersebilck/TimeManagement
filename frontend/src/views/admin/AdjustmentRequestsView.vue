@@ -183,12 +183,8 @@ onMounted(load);
                 <TableCell class="text-slate-600 dark:text-slate-400">
                   {{ fmtDate(r.date) }}
                 </TableCell>
-                <TableCell>
-                  <div class="text-xs font-mono space-y-0.5 text-slate-600 dark:text-slate-400">
-                    <div>In: {{ fmt(r.requestedClockIn) }}</div>
-                    <div>Break: {{ fmt(r.requestedBreakStart) }} – {{ fmt(r.requestedBreakEnd) }}</div>
-                    <div>Out: {{ fmt(r.requestedClockOut) }}</div>
-                  </div>
+                <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                  {{ fmt(r.requestedClockIn) }} / {{ fmt(r.requestedBreakStart) }} / {{ fmt(r.requestedBreakEnd) }} / {{ fmt(r.requestedClockOut) }}
                 </TableCell>
                 <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
                   <span :title="r.reason">
