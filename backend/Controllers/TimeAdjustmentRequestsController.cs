@@ -36,6 +36,17 @@ public class TimeAdjustmentRequestsController(
         return Ok(await service.GetAllRequestsAsync(ct));
     }
 
+    [HttpPost("{id:int}/approve")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    public async Task<IActionResult> ApproveById(int id, CancellationToken ct)
+    {
+        var admin = await GetCurrentUserAsync();
+        if (admin == null) return Unauthorized();
+
+        await service.ApproveByIdAsync(id, admin.Id, ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:int}/reject")]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<IActionResult> Reject(int id, CancellationToken ct)

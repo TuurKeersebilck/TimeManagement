@@ -19,13 +19,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
-import { ClipboardListIcon, Loader2Icon, XIcon } from "lucide-vue-next";
+import { ClipboardListIcon, Loader2Icon, XIcon, CheckIcon } from "lucide-vue-next";
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
 const requests = ref<AdjustmentRequest[]>([]);
 const loading = ref(false);
 const search = ref("");
+const approvingId = ref<number | null>(null);
 const rejectingId = ref<number | null>(null);
 
 const STATUS_LABELS: Record<AdjustmentRequestStatus, string> = {
@@ -76,6 +77,28 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+function approveRequest(r: AdjustmentRequest) {
+  confirm({
+    title: "Approve adjustment request",
+    message: `Approve ${r.employeeName}'s adjustment request for ${fmtDate(r.date)}? This will update their time log and cannot be undone.`,
+    confirmLabel: "Approve",
+    onConfirm: async () => {
+      approvingId.value = r.id;
+      try {
+        await adjustmentRequestService.approve(r.id);
+        requests.value = requests.value.map((req) =>
+          req.id === r.id ? { ...req, status: "Approved" as AdjustmentRequestStatus } : req
+        );
+        toast.success("Request approved");
+      } catch {
+        toast.error("Failed to approve request");
+      } finally {
+        approvingId.value = null;
+      }
+    },
+  });
 }
 
 function rejectRequest(r: AdjustmentRequest) {
@@ -184,18 +207,30 @@ onMounted(load);
                   </span>
                 </TableCell>
                 <TableCell class="text-right">
-                  <Button
-                    v-if="r.status === 'Pending'"
-                    variant="ghost"
-                    size="icon"
-                    class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-                    title="Reject"
-                    :disabled="rejectingId === r.id"
-                    @click="rejectRequest(r)"
-                  >
-                    <Loader2Icon v-if="rejectingId === r.id" class="size-3.5 animate-spin" />
-                    <XIcon v-else class="size-3.5" />
-                  </Button>
+                  <div v-if="r.status === 'Pending'" class="flex items-center justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="size-7 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+                      title="Approve"
+                      :disabled="approvingId === r.id || rejectingId === r.id"
+                      @click="approveRequest(r)"
+                    >
+                      <Loader2Icon v-if="approvingId === r.id" class="size-3.5 animate-spin" />
+                      <CheckIcon v-else class="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                      title="Reject"
+                      :disabled="rejectingId === r.id || approvingId === r.id"
+                      @click="rejectRequest(r)"
+                    >
+                      <Loader2Icon v-if="rejectingId === r.id" class="size-3.5 animate-spin" />
+                      <XIcon v-else class="size-3.5" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
