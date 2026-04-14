@@ -315,7 +315,7 @@ onUnmounted(() => {
 <template>
   <AuthenticatedLayout>
     <div class="p-6 lg:p-8">
-      <div class="max-w-2xl mx-auto">
+      <div class="max-w-4xl mx-auto">
 
         <!-- Header -->
         <div class="flex items-center justify-between mb-8">
