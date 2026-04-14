@@ -46,6 +46,7 @@ import {
   PencilIcon,
   HomeIcon,
   BuildingIcon,
+  CoffeeIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -505,7 +506,7 @@ onUnmounted(() => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Hours</TableHead>
-                    <TableHead>In → Out</TableHead>
+                    <TableHead>Timeline</TableHead>
                     <TableHead class="text-center">WFH</TableHead>
                     <TableHead>Description</TableHead>
                   </TableRow>
@@ -537,9 +538,16 @@ onUnmounted(() => {
                       <span v-else class="text-slate-400 text-xs">—</span>
                     </TableCell>
 
-                    <!-- Clock in → out -->
+                    <!-- Timeline -->
                     <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                      {{ formatTime(s.clockIn) }} → {{ formatTime(s.clockOut) }}
+                      <template v-if="s.breakStart && s.breakEnd">
+                        {{ formatTime(s.clockIn) }} → {{ formatTime(s.breakStart) }}
+                        <CoffeeIcon class="inline size-3 mx-1 text-amber-400" />
+                        {{ formatTime(s.breakEnd) }} → {{ formatTime(s.clockOut) }}
+                      </template>
+                      <template v-else>
+                        {{ formatTime(s.clockIn) }} → {{ formatTime(s.clockOut) }}
+                      </template>
                     </TableCell>
 
                     <!-- WFH toggle -->
