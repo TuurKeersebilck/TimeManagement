@@ -343,7 +343,7 @@ public class AdminService(AppDbContext context) : IAdminService
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 
-    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, int timezoneOffsetMinutes = 0, CancellationToken ct = default)
     {
         var dateFrom = new DateOnly(year, month, 1);
         var dateTo = dateFrom.AddMonths(1).AddDays(-1);
@@ -468,10 +468,10 @@ public class AdminService(AppDbContext context) : IAdminService
                 CsvEscape(log.EmployeeEmail),
                 log.Date.ToString("yyyy-MM-dd"),
                 log.Date.DayOfWeek.ToString(),
-                log.ClockIn?.ToString(@"hh\:mm") ?? "",
-                log.BreakStart?.ToString(@"hh\:mm") ?? "",
-                log.BreakEnd?.ToString(@"hh\:mm") ?? "",
-                log.ClockOut?.ToString(@"hh\:mm") ?? "",
+                FormatExportTime(log.ClockIn, timezoneOffsetMinutes),
+                FormatExportTime(log.BreakStart, timezoneOffsetMinutes),
+                FormatExportTime(log.BreakEnd, timezoneOffsetMinutes),
+                FormatExportTime(log.ClockOut, timezoneOffsetMinutes),
                 breakHours.ToString("F2"),
                 log.TotalHours.ToString("F2"),
                 CsvEscape(log.Description ?? "")
@@ -500,6 +500,13 @@ public class AdminService(AppDbContext context) : IAdminService
         }
 
         return sb.ToString();
+    }
+
+    private static string FormatExportTime(DateTimeOffset? utcTime, int timezoneOffsetMinutes)
+    {
+        if (utcTime == null) return "";
+        var local = utcTime.Value.ToOffset(TimeSpan.FromMinutes(timezoneOffsetMinutes));
+        return local.ToString("HH:mm");
     }
 
     private static string CsvEscape(string value)

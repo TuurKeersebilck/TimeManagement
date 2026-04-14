@@ -135,12 +135,13 @@ public class AdminController(IAdminService adminService) : ControllerBase
         [FromQuery] int year,
         [FromQuery] int month,
         [FromQuery] string? userId,
-        CancellationToken ct)
+        [FromQuery] int timezoneOffsetMinutes = 0,
+        CancellationToken ct = default)
     {
         if (year < 2000 || year > 2100 || month < 1 || month > 12)
             return BadRequest("Invalid year or month.");
 
-        var csv = await _adminService.GeneratePayrollCsvAsync(year, month, userId, ct);
+        var csv = await _adminService.GeneratePayrollCsvAsync(year, month, userId, timezoneOffsetMinutes, ct);
         var filename = $"payroll_{year}_{month:D2}.csv";
         return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", filename);
     }

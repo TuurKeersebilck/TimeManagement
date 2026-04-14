@@ -85,8 +85,9 @@ export const adminService = {
   },
 
   async downloadPayrollExport(year: number, month: number, userId?: string): Promise<void> {
+    const timezoneOffsetMinutes = -new Date().getTimezoneOffset();
     const response = await apiClient.get("/admin/export", {
-      params: { year, month, userId: userId || undefined },
+      params: { year, month, userId: userId || undefined, timezoneOffsetMinutes },
       responseType: "blob",
     });
     const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
