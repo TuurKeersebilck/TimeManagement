@@ -11,6 +11,7 @@ import {
   type DaySummary,
 } from "@/services/clockEventService";
 import { adjustmentRequestService } from "@/services/adjustmentRequestService";
+import { useClockEventsStore } from "@/composables/useClockEventsStore";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
 import {
@@ -48,6 +49,7 @@ import {
 } from "lucide-vue-next";
 
 const toast = useAppToast();
+const { clearCache: clearSummariesCache } = useClockEventsStore();
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -85,6 +87,14 @@ const isDayComplete = computed(() => completedTypes.value.has("ClockOut"));
 const now = ref(new Date());
 let clockInterval: ReturnType<typeof setInterval> | null = null;
 
+function handleVisibilityChange() {
+  if (!document.hidden) {
+    now.value = new Date();
+    loadTodayEvents();
+    loadSummaries();
+  }
+}
+
 const selectedTime = computed(() => {
   const d = new Date(now.value);
   d.setMinutes(d.getMinutes() + minuteOffset.value);
@@ -102,11 +112,7 @@ function adjustMinutes(delta: number) {
 
 const showDescription = computed(() => nextAction.value === "ClockOut");
 
-// History: exclude today so it doesn't show twice
-const historySummaries = computed(() => {
-  const todayStr = localDateString(new Date());
-  return summaries.value.filter((s) => s.date !== todayStr);
-});
+const historySummaries = computed(() => summaries.value);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -198,6 +204,7 @@ async function submitClock() {
     const label = CLOCK_EVENT_LABELS[nextAction.value!];
     await loadTodayEvents();
     await loadSummaries();
+    clearSummariesCache(); // force Dashboard to refetch on next visit
     minuteOffset.value = 0;
     description.value = "";
     toast.success(`${label} recorded`);
@@ -289,11 +296,13 @@ async function submitAdjustmentRequest() {
 onMounted(() => {
   loadTodayEvents();
   loadSummaries();
-  clockInterval = setInterval(() => { now.value = new Date(); }, 30_000);
+  clockInterval = setInterval(() => { now.value = new Date(); }, 10_000);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
 onUnmounted(() => {
   if (clockInterval) clearInterval(clockInterval);
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 </script>
 
@@ -494,13 +503,17 @@ onUnmounted(() => {
                 <TableBody>
                   <TableEmpty v-if="historySummaries.length === 0" :colspan="5">
                     <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                    <p class="text-slate-500 dark:text-slate-400">No history yet.</p>
+                    <p class="text-slate-500 dark:text-slate-400">No clocked days yet. Use the Today tab to clock in.</p>
                   </TableEmpty>
 
                   <TableRow v-for="s in historySummaries" :key="s.date">
                     <!-- Date -->
                     <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
                       {{ formatDate(s.date) }}
+                      <span
+                        v-if="s.date === localDateString(new Date())"
+                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
+                      >Today</span>
                     </TableCell>
 
                     <!-- Hours badge -->

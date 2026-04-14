@@ -21,6 +21,8 @@ export function useAuth() {
       currentUser.value = await authService.getCurrentUser();
       isUserFetched.value = true;
       storedRoles.value = currentUser.value.roles ?? [];
+      // Keep localStorage in sync so getRoles() / isAuthenticated() don't read stale data
+      authService.setUserInfo(currentUser.value.email, currentUser.value.fullName, currentUser.value.roles);
       return currentUser.value;
     } catch (error) {
       console.error("Failed to fetch user:", error);

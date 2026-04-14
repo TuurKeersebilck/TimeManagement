@@ -18,21 +18,23 @@ export function useTimeCalculations(summaries: Ref<DaySummary[]>) {
     const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - daysFromMonday);
-    weekStart.setHours(0, 0, 0, 0);
+    // Use string comparison to avoid UTC-vs-local timezone mismatch when parsing
+    // date-only ISO strings ("yyyy-MM-dd") with new Date(), which treats them as UTC midnight.
+    const weekStartStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, "0")}-${String(weekStart.getDate()).padStart(2, "0")}`;
 
     return summaries.value
-      .filter((s) => new Date(s.date) >= weekStart)
+      .filter((s) => s.date >= weekStartStr)
       .reduce((sum, s) => sum + (s.totalHours ?? 0), 0)
       .toFixed(2);
   });
 
   const totalHoursThisMonth = computed(() => {
     const today = new Date();
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    monthStart.setHours(0, 0, 0, 0);
+    // Use string comparison for the same UTC/local reason as above.
+    const monthStartStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-01`;
 
     return summaries.value
-      .filter((s) => new Date(s.date) >= monthStart)
+      .filter((s) => s.date >= monthStartStr)
       .reduce((sum, s) => sum + (s.totalHours ?? 0), 0)
       .toFixed(2);
   });
