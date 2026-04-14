@@ -32,11 +32,17 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             .OrderByDescending(e => e.Date)
             .ToListAsync(ct);
 
-        var vacationByDate = await db.VacationDays
+        var vacationList = await db.VacationDays
             .AsNoTracking()
             .Include(v => v.VacationType)
             .Where(v => v.UserId == userId)
-            .ToDictionaryAsync(v => v.Date, ct);
+            .ToListAsync(ct);
+
+        // A user can have multiple vacation entries per date (different types, e.g. two half-days).
+        // Group them and keep the one with the highest amount for display purposes.
+        var vacationByDate = vacationList
+            .GroupBy(v => v.Date)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.Amount).First());
 
         return events
             .GroupBy(e => e.Date)
@@ -79,14 +85,16 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             if (existingToday.Any(e => e.Type == dto.Type))
                 throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
 
-            var vacation = await db.VacationDays
+            // Sum all vacation amounts for the day — a user can have multiple entries
+            // (e.g. two half-days of different types) that together equal a full day.
+            var vacationTotal = await db.VacationDays
                 .Where(v => v.UserId == userId && v.Date == today)
-                .FirstOrDefaultAsync(ct);
+                .SumAsync(v => (decimal?)v.Amount, ct) ?? 0m;
 
-            if (vacation != null && vacation.Amount == 1.0m && dto.Type == ClockEventType.ClockIn)
+            if (vacationTotal >= 1.0m && dto.Type == ClockEventType.ClockIn)
                 throw new ValidationException("You have a full-day vacation scheduled today and cannot clock in.");
 
-            var isHalfDay = vacation?.Amount == 0.5m;
+            var isHalfDay = vacationTotal == 0.5m;
             ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet(), isHalfDay);
 
             // Chronological check: new event must not be before any existing event

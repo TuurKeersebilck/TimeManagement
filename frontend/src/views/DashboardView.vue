@@ -7,7 +7,7 @@ import { useClockEventsStore } from "../composables/useClockEventsStore";
 import { clockEventService } from "../services/clockEventService";
 import { vacationService } from "../services/vacationService";
 import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
-import { ClockIcon, CheckCircleIcon, AlertCircleIcon, CalendarDaysIcon, TrendingUpIcon, PlaneIcon } from "lucide-vue-next";
+import { ClockIcon, CheckCircleIcon, AlertCircleIcon, CalendarDaysIcon, TrendingUpIcon, PlaneIcon, SunIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const { summaries, loading, fetchSummaries } = useClockEventsStore();
@@ -50,6 +50,7 @@ const weeklyProgress = computed(() =>
 const todayStatus = computed(() => {
   if (loading.value) return null;
   if (todayVacationAmount.value === 1.0) return "vacation";
+  if (todayVacationAmount.value === 0.5 && !hasLoggedToday.value) return "half-vacation";
   if (isWeekend.value) return "weekend";
   if (!hasLoggedToday.value) return "not-logged";
   if (dailyTarget.value != null && todayHours.value >= dailyTarget.value) return "target-reached";
@@ -100,7 +101,7 @@ onMounted(async () => {
                 ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800'
                 : todayStatus === 'not-logged'
                   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
-                  : todayStatus === 'vacation'
+                  : todayStatus === 'vacation' || todayStatus === 'half-vacation'
                     ? 'bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800'
                     : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800',
           ]"
@@ -122,6 +123,10 @@ onMounted(async () => {
               v-else-if="todayStatus === 'vacation'"
               class="size-5 text-violet-500 shrink-0"
             />
+            <SunIcon
+              v-else-if="todayStatus === 'half-vacation'"
+              class="size-5 text-violet-500 shrink-0"
+            />
             <CalendarDaysIcon v-else class="size-5 text-slate-400 shrink-0" />
 
             <div>
@@ -134,7 +139,7 @@ onMounted(async () => {
                       ? 'text-indigo-800 dark:text-indigo-200'
                       : todayStatus === 'not-logged'
                         ? 'text-amber-800 dark:text-amber-200'
-                        : todayStatus === 'vacation'
+                        : todayStatus === 'vacation' || todayStatus === 'half-vacation'
                           ? 'text-violet-800 dark:text-violet-200'
                           : 'text-slate-600 dark:text-slate-400',
                 ]"
@@ -142,6 +147,9 @@ onMounted(async () => {
                 <template v-if="todayStatus === 'vacation'">
                   You're on vacation today
                   <span class="font-normal opacity-75" v-if="todayVacationTypeName"> — {{ todayVacationTypeName }}</span>
+                </template>
+                <template v-else-if="todayStatus === 'half-vacation'">
+                  Half-day {{ todayVacationTypeName ?? 'vacation' }} today — clock in and out when ready
                 </template>
                 <template v-else-if="todayStatus === 'target-reached'">
                   Target reached! {{ totalHoursToday }}h logged today
@@ -158,10 +166,7 @@ onMounted(async () => {
                   </template>
                 </template>
                 <template v-else-if="todayStatus === 'not-logged'">
-                  <template v-if="todayVacationAmount === 0.5">
-                    Half-day {{ todayVacationTypeName }} vacation — clock in and out when ready
-                  </template>
-                  <template v-else>No hours logged yet today</template>
+                  No hours logged yet today
                 </template>
                 <template v-else>Enjoy your weekend!</template>
               </p>
@@ -176,11 +181,11 @@ onMounted(async () => {
                 ? 'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100'
                 : todayStatus === 'logged'
                   ? 'text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-100'
-                  : 'text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100'
+                  : 'text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100'
             "
             @click="router.push({ name: 'time-tracking' })"
           >
-            {{ todayStatus === "not-logged" ? "Log now →" : "View logs →" }}
+            {{ todayStatus === "not-logged" || todayStatus === "half-vacation" ? "Log now →" : "View logs →" }}
           </button>
         </div>
 
