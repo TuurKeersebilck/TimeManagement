@@ -13,6 +13,7 @@ public class TimeAdjustmentRequestService(
     AppDbContext db,
     UserManager<User> userManager,
     IEmailService emailService,
+    INotificationService notificationService,
     ILogger<TimeAdjustmentRequestService> logger) : ITimeAdjustmentRequestService
 {
     private const int TokenExpiryDays = 7;
@@ -98,6 +99,19 @@ public class TimeAdjustmentRequestService(
                 "Adjustment request {RequestId} created but no notification email is configured. " +
                 "Set one in App Settings → Notification Email.",
                 request.Id);
+        }
+
+        // In-app notification for admins (bell icon) — fire-and-forget style so a
+        // notification failure never blocks the employee's request from being saved.
+        try
+        {
+            await notificationService.NotifyAdminsAsync(
+                $"{user?.FullName ?? "An employee"} submitted a time adjustment request for {dto.Date:d MMM yyyy}.",
+                ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to create in-app notification for adjustment request {RequestId}", request.Id);
         }
 
         return MapToDto(request, user?.FullName ?? "Unknown");
