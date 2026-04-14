@@ -26,6 +26,7 @@ export interface SubmitClockEventPayload {
   recordedAt: string; // ISO 8601 UTC string
   localDate: string; // "yyyy-MM-dd" — user's local calendar date
   description?: string;
+  workedFromHome?: boolean;
 }
 
 export interface UpdateDayPayload {

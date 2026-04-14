@@ -61,6 +61,7 @@ const submitting = ref(false);
 
 const minuteOffset = ref(0);
 const description = ref("");
+const wfh = ref(false);
 
 // Adjustment request dialog
 const showAdjustDialog = ref(false);
@@ -111,6 +112,7 @@ function adjustMinutes(delta: number) {
 }
 
 const showDescription = computed(() => nextAction.value === "ClockOut");
+const showWfh = computed(() => nextAction.value === "ClockIn");
 
 const historySummaries = computed(() => summaries.value);
 
@@ -200,6 +202,7 @@ async function submitClock() {
       description: showDescription.value && description.value.trim()
         ? description.value.trim()
         : undefined,
+      workedFromHome: showWfh.value ? wfh.value : undefined,
     });
     const label = CLOCK_EVENT_LABELS[nextAction.value!];
     await loadTodayEvents();
@@ -207,6 +210,7 @@ async function submitClock() {
     clearSummariesCache(); // force Dashboard to refetch on next visit
     minuteOffset.value = 0;
     description.value = "";
+    wfh.value = false;
     toast.success(`${label} recorded`);
   } catch (err: unknown) {
     toast.error(extractApiError(err, "Failed to record clock event"));
@@ -252,6 +256,7 @@ async function toggleWfh(summary: DaySummary) {
     });
     const idx = summaries.value.findIndex((s) => s.date === summary.date);
     if (idx !== -1) summaries.value[idx] = updated;
+    toast.success(updated.workedFromHome ? "Marked as working from home" : "Marked as office");
   } catch (err: unknown) {
     toast.error(extractApiError(err, "Failed to update work from home status"));
   } finally {
@@ -409,6 +414,11 @@ onUnmounted(() => {
                     <Button variant="outline" size="icon" :disabled="minuteOffset >= 5" @click="adjustMinutes(1)">
                       <PlusIcon class="size-4" />
                     </Button>
+                  </div>
+
+                  <div v-if="showWfh" class="flex items-center gap-3">
+                    <Switch v-model:checked="wfh" />
+                    <Label>Working from home today</Label>
                   </div>
 
                   <div v-if="showDescription" class="space-y-1.5">

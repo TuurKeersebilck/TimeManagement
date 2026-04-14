@@ -88,6 +88,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 ActualAt = nowTruncated,
                 RecordedAt = recordedTruncated,
                 Description = description,
+                WorkedFromHome = dto.Type == ClockEventType.ClockIn && dto.WorkedFromHome,
             };
 
             db.ClockEvents.Add(entity);
