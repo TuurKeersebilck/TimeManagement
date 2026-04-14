@@ -144,6 +144,7 @@ async function submitClock() {
     await clockEventService.submit({
       type: CLOCK_EVENT_ENUM[nextAction.value],
       recordedTime: `${selectedTime.value}:00`,
+      timezoneOffsetMinutes: new Date().getTimezoneOffset(),
       description: showDescription.value && description.value.trim()
         ? description.value.trim()
         : undefined,

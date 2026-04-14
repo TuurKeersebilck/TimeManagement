@@ -42,10 +42,14 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
 
     public async Task<ClockEventDto> SubmitEventAsync(string userId, SubmitClockEventDto dto, CancellationToken ct = default)
     {
-        // Truncate to minute precision — client sends HH:mm:00, so seconds would inflate the delta
-        var now = DateTime.Now;
-        var actualTime = new TimeSpan(now.Hour, now.Minute, 0);
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        // Convert server UTC time to the client's local time using the supplied timezone offset.
+        // DateTime.Now is unreliable on cloud hosts (typically UTC), so we use UtcNow and shift
+        // by the client's offset. JS getTimezoneOffset() returns minutes-behind-UTC, so UTC+2
+        // gives -120 — negate it to obtain the forward offset.
+        var utcNow = DateTime.UtcNow;
+        var clientLocalNow = utcNow.AddMinutes(-dto.TimezoneOffsetMinutes);
+        var actualTime = new TimeSpan(clientLocalNow.Hour, clientLocalNow.Minute, 0);
+        var today = DateOnly.FromDateTime(clientLocalNow);
 
         // Server-side ±5 minute validation
         var delta = Math.Abs((dto.RecordedTime - actualTime).TotalMinutes);

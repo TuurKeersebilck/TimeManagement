@@ -24,6 +24,7 @@ export interface DaySummary {
 export interface SubmitClockEventPayload {
   type: number; // enum value: 0=ClockIn, 1=BreakStart, 2=BreakEnd, 3=ClockOut
   recordedTime: string; // "HH:mm:ss"
+  timezoneOffsetMinutes: number; // JS Date.getTimezoneOffset() — negative for UTC+ zones
   description?: string;
 }
 
