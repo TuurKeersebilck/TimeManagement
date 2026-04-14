@@ -1,13 +1,13 @@
 # TimeManagement API
 
-Backend API for the Time Management application built with .NET 9.
+ASP.NET Core 10 Web API for the Time Management application.
 
 ## Getting Started
 
 ### Prerequisites
 
-- .NET 9 SDK
-- SQLite (default) or MariaDB
+- .NET 10 SDK
+- PostgreSQL database (Supabase or local)
 
 ### Setup
 
@@ -17,30 +17,15 @@ Backend API for the Time Management application built with .NET 9.
    cd TimeManagement/backend
    ```
 
-2. **Configure Environment Variables:**
-
-   Copy `.env.template` to `.env` and update the values:
+2. **Configure environment variables:**
 
    ```bash
    cp .env.template .env
    ```
 
-   Edit the `.env` file with your database connection and JWT settings:
+   Edit `.env` with your credentials (see `.env.template` for all variables and descriptions).
 
-   ```
-   CONNECTION_STRING=Data Source=timemanagement.db
-   JWT_SECRET=your_very_secure_random_string_here
-   JWT_ISSUER=TimeManagementAPI
-   JWT_AUDIENCE=TimeManagementAPI
-   JWT_EXPIRY_MINUTES=60
-   ```
-
-   For MariaDB, use a connection string like:
-   ```
-   CONNECTION_STRING=Server=localhost;Database=timemanagement;User=root;Password=yourpassword;
-   ```
-
-3. **Run Migrations:**
+3. **Run migrations:**
    ```bash
    dotnet ef database update
    ```
@@ -50,54 +35,103 @@ Backend API for the Time Management application built with .NET 9.
    dotnet run
    ```
 
-   The API will be available at https://localhost:7055 (or the port specified in your configuration).
+   Available at `https://localhost:7055`.
 
 ## API Endpoints
 
-### Authentication
+All routes require a valid JWT token in the `Authorization: Bearer <token>` header, except auth endpoints.
 
-- **POST /api/auth/register** - Register a new user
-  ```json
-  {
-    "username": "testuser",
-    "email": "test@example.com",
-    "password": "Password123",
-    "confirmPassword": "Password123"
-  }
-  ```
+### Authentication — `/api/auth`
 
-- **POST /api/auth/login** - Login and get JWT token
-  ```json
-  {
-    "email": "test@example.com",
-    "password": "Password123"
-  }
-  ```
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/register` | Register a new user |
+| POST | `/login` | Login, returns JWT |
+| POST | `/logout` | Invalidate token |
+| GET | `/profile` | Get current user profile |
+| POST | `/forgot-password` | Request password reset email |
+| POST | `/reset-password` | Reset password via token |
 
-### Time Logs (Requires Authentication)
+### Clock Events — `/api/clockevents`
 
-All time log endpoints require a valid JWT token passed in the Authorization header:
-`Authorization: Bearer {your_token}`
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/today` | Get today's clock events for current user |
+| GET | `/summaries` | Get daily summaries (hours worked per day) |
+| POST | `/` | Submit a clock event (Clock In / Break Start / Break End / Clock Out) |
+| GET | `/target` | Get the current user's daily/weekly target hours |
 
-- **GET /api/timelogs** - Get all time logs for current user
-- **GET /api/timelogs/{id}** - Get a specific time log
-- **POST /api/timelogs** - Create a new time log
-  ```json
-  {
-    "date": "2023-10-25",
-    "startTime": "09:00:00",
-    "endTime": "17:00:00",
-    "break": "00:30:00"
-  }
-  ```
-- **PUT /api/timelogs/{id}** - Update an existing time log
-- **DELETE /api/timelogs/{id}** - Delete a time log
+### Vacations — `/api/vacations`
 
-## Security Features
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List vacation requests for current user |
+| POST | `/` | Submit a vacation request |
+| DELETE | `/{id}` | Cancel a vacation request |
+| GET | `/balance` | Get vacation balance per type |
+| GET | `/team` | Get team vacation calendar |
 
-- **Password Security**: Secure hashing using ASP.NET Core Identity
-- **JWT Authentication**: Tokens expire after the configured time period
-- **Input Validation**: All inputs are validated to prevent injection attacks
-- **User Isolation**: Users can only access their own time logs
-- **Environment Variables**: Sensitive configuration is loaded from environment variables
-- **HTTPS Support**: The API enforces HTTPS in production environments
+### Time Adjustment Requests — `/api/timeadjustmentrequests`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/` | Submit a time correction request |
+| GET | `/` | List own adjustment requests |
+
+### Public Holidays — `/api/publicholidays`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | List all public holidays |
+
+### Notifications — `/api/notifications`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Get notifications for current user |
+| PUT | `/{id}/read` | Mark notification as read |
+
+### Admin — `/api/admin` _(admin role required)_
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/employees` | List all employees |
+| GET | `/employees/{id}` | Get employee detail + time logs |
+| POST | `/employees` | Create employee account |
+| PUT | `/employees/{id}` | Update employee |
+| DELETE | `/employees/{id}` | Delete employee |
+| GET | `/timelogs` | Filter time logs across all employees |
+| GET | `/vacations` | List pending vacation requests |
+| PUT | `/vacations/{id}/approve` | Approve vacation request |
+| PUT | `/vacations/{id}/reject` | Reject vacation request |
+| GET | `/adjustment-requests` | List pending time adjustment requests |
+| PUT | `/adjustment-requests/{id}/approve` | Approve adjustment |
+| PUT | `/adjustment-requests/{id}/reject` | Reject adjustment |
+| GET | `/dashboard` | Dashboard summary (who's clocked in, upcoming vacations) |
+| GET | `/export` | Export time/vacation data |
+| GET | `/vacation-types` | List vacation types |
+| POST | `/vacation-types` | Create vacation type |
+| PUT | `/vacation-types/{id}` | Update vacation type |
+| DELETE | `/vacation-types/{id}` | Delete vacation type |
+| GET | `/public-holidays` | List public holidays |
+| POST | `/public-holidays` | Create public holiday |
+| DELETE | `/public-holidays/{id}` | Delete public holiday |
+| GET | `/targets` | List employee hour targets |
+| PUT | `/targets/{userId}` | Update employee hour target |
+
+### App Settings — `/api/admin/settings` _(admin role required)_
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/` | Get global app configuration |
+| PUT | `/` | Update global app configuration |
+
+## Security
+
+- **Passwords** hashed via ASP.NET Core Identity
+- **JWT** tokens with configurable expiry; revocation via token blacklist
+- **Role-based auth** — `Admin` and `User` roles on all sensitive endpoints
+- **CORS** restricted to configured origins
+- **Rate limiting** on auth endpoints
+- **Input validation** on all request bodies
+- **User isolation** — service layer enforces users only access their own data

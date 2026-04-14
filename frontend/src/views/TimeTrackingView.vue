@@ -35,6 +35,7 @@ import {
   ClockIcon,
   Loader2Icon,
   CheckCircleIcon,
+  CheckIcon,
   SendIcon,
   MinusIcon,
   PlusIcon,
@@ -222,75 +223,116 @@ onUnmounted(() => {
 
         <!-- Clock action card -->
         <div class="card p-6 mb-6">
-          <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-4 text-center">
-            <CheckCircleIcon class="size-12 text-emerald-500" />
-            <p class="text-lg font-medium text-slate-900 dark:text-slate-100">Day complete</p>
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-              You've clocked out for today. See you tomorrow!
-            </p>
+
+          <!-- Loading skeleton -->
+          <div v-if="loadingEvents" class="space-y-5">
+            <div class="flex items-start justify-between">
+              <div v-for="i in 4" :key="i" class="flex flex-col items-center gap-1.5 flex-1">
+                <div class="size-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+                <div class="h-2.5 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              </div>
+            </div>
+            <div class="flex items-center justify-center gap-4">
+              <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div class="h-9 w-28 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
+              <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
+            </div>
+            <div class="h-11 w-full rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
           </div>
 
-          <div v-else-if="!nextAction" class="flex flex-col items-center gap-3 py-4 text-center">
-            <ClockIcon class="size-12 text-slate-300 dark:text-slate-600" />
-            <p class="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
-          </div>
-
+          <!-- Loaded state -->
           <div v-else class="space-y-5">
-            <div class="text-center">
-              <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                Next action
-              </p>
-              <p class="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                {{ CLOCK_EVENT_LABELS[nextAction] }}
-              </p>
+
+            <!-- Step progress indicator -->
+            <div class="flex items-start justify-between">
+              <template v-for="(type, index) in CLOCK_EVENT_TYPE_ORDER" :key="type">
+                <div class="flex flex-col items-center gap-1.5">
+                  <div :class="['size-7 rounded-full flex items-center justify-center border-2 transition-all',
+                    completedTypes.has(type)
+                      ? 'bg-emerald-500 border-emerald-500 text-white'
+                      : nextAction === type
+                      ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
+                      : 'border-slate-200 dark:border-slate-700 text-slate-400'
+                  ]">
+                    <CheckIcon v-if="completedTypes.has(type)" class="size-3.5" />
+                    <span v-else class="text-xs font-semibold leading-none">{{ index + 1 }}</span>
+                  </div>
+                  <span class="text-[11px] leading-tight text-center max-w-[52px]" :class="[
+                    completedTypes.has(type)
+                      ? 'text-emerald-600 dark:text-emerald-400 font-medium'
+                      : nextAction === type
+                      ? 'text-slate-900 dark:text-slate-100 font-medium'
+                      : 'text-slate-400 dark:text-slate-500'
+                  ]">{{ CLOCK_EVENT_LABELS[type] }}</span>
+                </div>
+                <div
+                  v-if="index < CLOCK_EVENT_TYPE_ORDER.length - 1"
+                  class="flex-1 h-px mt-3.5 mx-1 transition-colors"
+                  :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
+                />
+              </template>
             </div>
 
-            <!-- Time stepper -->
-            <div class="flex items-center justify-center gap-4">
-              <Button
-                variant="outline"
-                size="icon"
-                :disabled="minuteOffset <= -5"
-                @click="adjustMinutes(-1)"
-              >
-                <MinusIcon class="size-4" />
-              </Button>
-              <div class="text-center w-28">
-                <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
-                  {{ selectedTime }}
-                </p>
-                <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
-                  {{ offsetLabel }}
+            <!-- Day complete -->
+            <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-2 text-center">
+              <CheckCircleIcon class="size-10 text-emerald-500" />
+              <div>
+                <p class="font-medium text-slate-900 dark:text-slate-100">Day complete</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  You've clocked out for today. See you tomorrow!
                 </p>
               </div>
-              <Button
-                variant="outline"
-                size="icon"
-                :disabled="minuteOffset >= 5"
-                @click="adjustMinutes(1)"
-              >
-                <PlusIcon class="size-4" />
+            </div>
+
+            <!-- Active action -->
+            <template v-else>
+              <!-- Time stepper -->
+              <div class="flex items-center justify-center gap-4">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  :disabled="minuteOffset <= -5"
+                  @click="adjustMinutes(-1)"
+                >
+                  <MinusIcon class="size-4" />
+                </Button>
+                <div class="text-center w-28">
+                  <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
+                    {{ selectedTime }}
+                  </p>
+                  <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+                    {{ offsetLabel }}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  :disabled="minuteOffset >= 5"
+                  @click="adjustMinutes(1)"
+                >
+                  <PlusIcon class="size-4" />
+                </Button>
+              </div>
+
+              <!-- Description (clock-out only) -->
+              <div v-if="showDescription" class="space-y-1.5">
+                <Label>
+                  Description
+                  <span class="font-normal text-slate-400 ml-1">(optional)</span>
+                </Label>
+                <textarea
+                  v-model="description"
+                  rows="3"
+                  class="input-field resize-none"
+                  placeholder="What did you work on today?"
+                />
+              </div>
+
+              <Button class="w-full" size="lg" :disabled="submitting" @click="submitClock">
+                <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
+                {{ CLOCK_EVENT_LABELS[nextAction!] }}
               </Button>
-            </div>
-
-            <!-- Description (clock-out only) -->
-            <div v-if="showDescription" class="space-y-1.5">
-              <Label>
-                Description
-                <span class="font-normal text-slate-400 ml-1">(optional)</span>
-              </Label>
-              <textarea
-                v-model="description"
-                rows="3"
-                class="input-field resize-none"
-                placeholder="What did you work on today?"
-              />
-            </div>
-
-            <Button class="w-full" size="lg" :disabled="submitting" @click="submitClock">
-              <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
-              {{ CLOCK_EVENT_LABELS[nextAction] }}
-            </Button>
+            </template>
           </div>
         </div>
 
