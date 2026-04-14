@@ -48,4 +48,6 @@ public class DaySummaryDto
     public string? Description { get; set; }
     public bool IsComplete { get; set; }
     public bool WorkedFromHome { get; set; }
+    public decimal? VacationAmount { get; set; }
+    public string? VacationTypeName { get; set; }
 }

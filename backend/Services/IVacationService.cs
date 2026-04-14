@@ -11,4 +11,5 @@ public interface IVacationService
     Task<VacationDayDto> UpdateVacationDayAsync(string userId, int id, CreateVacationDayDto dto, CancellationToken ct = default);
     Task DeleteVacationDayAsync(string userId, int id, CancellationToken ct = default);
     Task<VacationRangeResultDto> CreateVacationRangeAsync(string userId, CreateVacationRangeDto dto, CancellationToken ct = default);
+    Task<VacationDayDto?> GetVacationForDateAsync(string userId, DateOnly date, CancellationToken ct = default);
 }

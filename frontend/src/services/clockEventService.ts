@@ -19,6 +19,8 @@ export interface DaySummary {
   description: string | null;
   isComplete: boolean;
   workedFromHome: boolean;
+  vacationAmount: number | null;
+  vacationTypeName: string | null;
 }
 
 export interface SubmitClockEventPayload {

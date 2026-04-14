@@ -32,9 +32,19 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             .OrderByDescending(e => e.Date)
             .ToListAsync(ct);
 
+        var vacationByDate = await db.VacationDays
+            .AsNoTracking()
+            .Include(v => v.VacationType)
+            .Where(v => v.UserId == userId)
+            .ToDictionaryAsync(v => v.Date, ct);
+
         return events
             .GroupBy(e => e.Date)
-            .Select(g => BuildDaySummary(g.Key, g.ToList()))
+            .Select(g =>
+            {
+                vacationByDate.TryGetValue(g.Key, out var vacation);
+                return BuildDaySummary(g.Key, g.ToList(), vacation);
+            })
             .OrderByDescending(s => s.Date)
             .ToList();
     }
@@ -69,7 +79,15 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             if (existingToday.Any(e => e.Type == dto.Type))
                 throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
 
-            ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet());
+            var vacation = await db.VacationDays
+                .Where(v => v.UserId == userId && v.Date == today)
+                .FirstOrDefaultAsync(ct);
+
+            if (vacation != null && vacation.Amount == 1.0m && dto.Type == ClockEventType.ClockIn)
+                throw new ValidationException("You have a full-day vacation scheduled today and cannot clock in.");
+
+            var isHalfDay = vacation?.Amount == 0.5m;
+            ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet(), isHalfDay);
 
             // Chronological check: new event must not be before any existing event
             if (existingToday.Count > 0)
@@ -107,8 +125,17 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
     private static readonly ClockEventType[] ExpectedOrder =
         [ClockEventType.ClockIn, ClockEventType.BreakStart, ClockEventType.BreakEnd, ClockEventType.ClockOut];
 
-    private static void ValidateOrder(ClockEventType type, HashSet<ClockEventType> completed)
+    private static void ValidateOrder(ClockEventType type, HashSet<ClockEventType> completed, bool isHalfDay = false)
     {
+        if (isHalfDay)
+        {
+            if (type is ClockEventType.BreakStart or ClockEventType.BreakEnd)
+                throw new ValidationException("Break events are not permitted on half-day vacation days.");
+            if (type == ClockEventType.ClockOut && !completed.Contains(ClockEventType.ClockIn))
+                throw new ValidationException("You must complete ClockIn before submitting ClockOut.");
+            return;
+        }
+
         var expectedIndex = Array.IndexOf(ExpectedOrder, type);
         for (var i = 0; i < expectedIndex; i++)
         {
@@ -155,11 +182,17 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             clockIn.WorkedFromHome = dto.WorkedFromHome.Value;
         }
 
+        var vacation = await db.VacationDays
+            .AsNoTracking()
+            .Include(v => v.VacationType)
+            .Where(v => v.UserId == userId && v.Date == date)
+            .FirstOrDefaultAsync(ct);
+
         await db.SaveChangesAsync(ct);
-        return BuildDaySummary(date, events);
+        return BuildDaySummary(date, events, vacation);
     }
 
-    internal static DaySummaryDto BuildDaySummary(DateOnly date, List<ClockEvent> events)
+    internal static DaySummaryDto BuildDaySummary(DateOnly date, List<ClockEvent> events, VacationDay? vacation = null)
     {
         var clockInEvent = events.FirstOrDefault(e => e.Type == ClockEventType.ClockIn);
         var clockIn = clockInEvent?.RecordedAt;
@@ -186,6 +219,8 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             Description = description,
             IsComplete = isComplete,
             WorkedFromHome = workedFromHome,
+            VacationAmount = vacation?.Amount,
+            VacationTypeName = vacation?.VacationType?.Name,
         };
     }
 }

@@ -455,15 +455,24 @@ public class AdminService(AppDbContext context) : IAdminService
         }
 
         // ── Section 2: Daily Detail ─────────────────────────────────────────
+        var vacationLookup = vacations
+            .GroupBy(v => (v.UserId, v.Date))
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         sb.AppendLine();
         sb.AppendLine("DAILY DETAIL");
-        sb.AppendLine("Employee,Email,Date,Day,Clock In,Break Start,Break End,Clock Out,Break Duration (h),Net Hours,WFH,Description");
+        sb.AppendLine("Employee,Email,Date,Day,Clock In,Break Start,Break End,Clock Out,Break Duration (h),Net Hours,WFH,Vacation,Description");
 
         foreach (var log in logs)
         {
             var breakHours = log.BreakStart.HasValue && log.BreakEnd.HasValue
                 ? (log.BreakEnd.Value - log.BreakStart.Value).TotalHours
                 : 0.0;
+
+            var dayVacs = vacationLookup.TryGetValue((log.UserId, log.Date), out var vl) ? vl : null;
+            var vacationCell = dayVacs != null
+                ? string.Join("; ", dayVacs.Select(v => $"{(v.Amount == 1.0m ? "Full" : "Half")} ({v.VacationTypeName})"))
+                : "";
 
             sb.AppendLine(string.Join(",",
                 CsvEscape(log.EmployeeName),
@@ -477,6 +486,7 @@ public class AdminService(AppDbContext context) : IAdminService
                 breakHours.ToString("F2"),
                 log.TotalHours.ToString("F2"),
                 log.WorkedFromHome ? "Yes" : "No",
+                CsvEscape(vacationCell),
                 CsvEscape(log.Description ?? "")
             ));
         }
