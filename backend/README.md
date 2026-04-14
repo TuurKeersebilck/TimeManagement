@@ -49,7 +49,9 @@ All routes require a valid JWT token in the `Authorization: Bearer <token>` head
 | POST | `/login` | Login, returns JWT |
 | POST | `/logout` | Invalidate token |
 | GET | `/profile` | Get current user profile |
-| POST | `/forgot-password` | Request password reset email |
+| PUT | `/profile` | Update profile |
+| PUT | `/change-password` | Change password |
+| POST | `/forgot-password` | Send password reset email |
 | POST | `/reset-password` | Reset password via token |
 
 ### Clock Events — `/api/clockevents`
@@ -65,11 +67,14 @@ All routes require a valid JWT token in the `Authorization: Bearer <token>` head
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | List vacation requests for current user |
-| POST | `/` | Submit a vacation request |
+| GET | `/` | List own vacation requests |
+| POST | `/` | Submit a single vacation day request |
+| POST | `/range` | Submit a date-range vacation request |
+| PUT | `/{id}` | Update a vacation request |
 | DELETE | `/{id}` | Cancel a vacation request |
-| GET | `/balance` | Get vacation balance per type |
+| GET | `/balances` | Get vacation balance per type |
 | GET | `/team` | Get team vacation calendar |
+| GET | `/types` | List vacation types |
 
 ### Time Adjustment Requests — `/api/timeadjustmentrequests`
 
@@ -77,54 +82,57 @@ All routes require a valid JWT token in the `Authorization: Bearer <token>` head
 |--------|------|-------------|
 | POST | `/` | Submit a time correction request |
 | GET | `/` | List own adjustment requests |
+| POST | `/{id}/reject` | Reject a request (admin) |
+| GET | `/approve/{token}` | Approve via email link token (admin) |
 
 ### Public Holidays — `/api/publicholidays`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | List all public holidays |
+| GET | `/{year}` | List public holidays for a given year |
 
 ### Notifications — `/api/notifications`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/` | Get notifications for current user |
-| PUT | `/{id}/read` | Mark notification as read |
+| GET | `/` | List notifications for current user |
+| GET | `/unread-count` | Count of unread notifications |
+| PUT | `/{id}/read` | Mark a notification as read |
+| PUT | `/read-all` | Mark all notifications as read |
 
 ### Admin — `/api/admin` _(admin role required)_
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/employees` | List all employees |
-| GET | `/employees/{id}` | Get employee detail + time logs |
-| POST | `/employees` | Create employee account |
-| PUT | `/employees/{id}` | Update employee |
-| DELETE | `/employees/{id}` | Delete employee |
 | GET | `/timelogs` | Filter time logs across all employees |
-| GET | `/vacations` | List pending vacation requests |
-| PUT | `/vacations/{id}/approve` | Approve vacation request |
-| PUT | `/vacations/{id}/reject` | Reject vacation request |
-| GET | `/adjustment-requests` | List pending time adjustment requests |
-| PUT | `/adjustment-requests/{id}/approve` | Approve adjustment |
-| PUT | `/adjustment-requests/{id}/reject` | Reject adjustment |
-| GET | `/dashboard` | Dashboard summary (who's clocked in, upcoming vacations) |
-| GET | `/export` | Export time/vacation data |
+| GET | `/vacations` | List vacation requests |
 | GET | `/vacation-types` | List vacation types |
 | POST | `/vacation-types` | Create vacation type |
 | PUT | `/vacation-types/{id}` | Update vacation type |
 | DELETE | `/vacation-types/{id}` | Delete vacation type |
-| GET | `/public-holidays` | List public holidays |
-| POST | `/public-holidays` | Create public holiday |
-| DELETE | `/public-holidays/{id}` | Delete public holiday |
-| GET | `/targets` | List employee hour targets |
-| PUT | `/targets/{userId}` | Update employee hour target |
+| GET | `/employees/{userId}/vacation-balances` | Get employee vacation balances |
+| POST | `/employees/{userId}/vacation-balances` | Add vacation balance |
+| PUT | `/employees/{userId}/vacation-balances/{balanceId}` | Update vacation balance |
+| DELETE | `/employees/{userId}/vacation-balances/{balanceId}` | Delete vacation balance |
+| GET | `/employees/{userId}/target` | Get employee hour target |
+| PUT | `/employees/{userId}/target` | Update employee hour target |
+| GET | `/employees/{userId}/weekly-summary` | Get employee weekly summary |
+| GET | `/export` | Export time/vacation data |
 
 ### App Settings — `/api/admin/settings` _(admin role required)_
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/` | Get global app configuration |
-| PUT | `/` | Update global app configuration |
+| PUT | `/country` | Update country setting |
+| PUT | `/targets` | Update default hour targets |
+| PUT | `/notification-email` | Update notification email address |
+| GET | `/available-countries` | List available countries |
+| GET | `/holidays/{year}` | List holidays for year |
+| POST | `/holidays` | Add a public holiday |
+| POST | `/holidays/refresh/{year}` | Refresh holidays from external source |
+| DELETE | `/holidays/{id}` | Delete a public holiday |
 
 ## Security
 
