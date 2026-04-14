@@ -23,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ClockIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-vue-next";
+import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, CoffeeIcon } from "lucide-vue-next";
 
 const toast = useAppToast();
 const route = useRoute();
@@ -86,10 +86,6 @@ const formatTime = (t?: string) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-const formatBreak = (log: AdminTimeLog) =>
-  log.breakStart && log.breakEnd
-    ? `${formatTime(log.breakStart)} – ${formatTime(log.breakEnd)}`
-    : "—";
 
 const clearFilters = () => {
   selectedEmployeeId.value = "all";
@@ -223,15 +219,14 @@ onMounted(async () => {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Date</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Break</TableHead>
+                <TableHead>Timeline</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>WFH</TableHead>
                 <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableEmpty v-if="allLogs.length === 0" :colspan="7">
+              <TableEmpty v-if="allLogs.length === 0" :colspan="6">
                 <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
               </TableEmpty>
@@ -245,11 +240,15 @@ onMounted(async () => {
                 <TableCell class="font-medium text-slate-900 dark:text-slate-100">
                   {{ formatDate(log.date) }}
                 </TableCell>
-                <TableCell class="text-slate-600 dark:text-slate-400">
-                  {{ formatTime(log.clockIn) }} – {{ formatTime(log.clockOut) }}
-                </TableCell>
-                <TableCell class="text-slate-500 dark:text-slate-500 text-xs">
-                  {{ formatBreak(log) }}
+                <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                  <template v-if="log.breakStart && log.breakEnd">
+                    {{ formatTime(log.clockIn) }} → {{ formatTime(log.breakStart) }}
+                    <CoffeeIcon class="inline size-3 mx-1 text-amber-400" />
+                    {{ formatTime(log.breakEnd) }} → {{ formatTime(log.clockOut) }}
+                  </template>
+                  <template v-else>
+                    {{ formatTime(log.clockIn) }} → {{ formatTime(log.clockOut) }}
+                  </template>
                 </TableCell>
                 <TableCell>
                   <span
