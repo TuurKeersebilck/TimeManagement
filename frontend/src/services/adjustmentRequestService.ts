@@ -35,6 +35,10 @@ export const adjustmentRequestService = {
     return api.get("/timeadjustmentrequests").then((r) => r.data);
   },
 
+  approve(id: number): Promise<void> {
+    return api.post(`/timeadjustmentrequests/${id}/approve`).then(() => undefined);
+  },
+
   reject(id: number): Promise<void> {
     return api.post(`/timeadjustmentrequests/${id}/reject`).then(() => undefined);
   },

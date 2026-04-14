@@ -16,7 +16,7 @@ public class TimeAdjustmentRequestService(
     INotificationService notificationService,
     ILogger<TimeAdjustmentRequestService> logger) : ITimeAdjustmentRequestService
 {
-    private const int TokenExpiryDays = 7;
+    private const int TokenExpiryDays = 30;
 
     public async Task<AdjustmentRequestDto> CreateRequestAsync(
         string userId,
@@ -178,6 +178,33 @@ public class TimeAdjustmentRequestService(
             request.Id, request.UserId, request.Date);
 
         return $"Approved. Time log for {request.User.FullName} on {request.Date:yyyy-MM-dd} has been updated.";
+    }
+
+    public async Task ApproveByIdAsync(int requestId, string adminUserId, CancellationToken ct = default)
+    {
+        var request = await db.TimeAdjustmentRequests
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == requestId, ct)
+            ?? throw new Exceptions.ResourceNotFoundException("Adjustment request not found.");
+
+        if (request.Status != AdjustmentRequestStatus.Pending)
+            throw new ValidationException($"This request has already been {request.Status.ToString().ToLower()}.");
+
+        await UpsertClockEventAsync(request, ClockEventType.ClockIn, request.RequestedClockIn, ct);
+        await UpsertClockEventAsync(request, ClockEventType.BreakStart, request.RequestedBreakStart, ct);
+        await UpsertClockEventAsync(request, ClockEventType.BreakEnd, request.RequestedBreakEnd, ct);
+        await UpsertClockEventAsync(request, ClockEventType.ClockOut, request.RequestedClockOut, ct);
+
+        request.Status = AdjustmentRequestStatus.Approved;
+        request.TokenUsed = true; // invalidate the email link
+        request.ReviewedAt = DateTime.UtcNow;
+        request.ReviewedByUserId = adminUserId;
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Adjustment request {RequestId} approved by admin {AdminId}.",
+            requestId, adminUserId);
     }
 
     public async Task RejectAsync(int requestId, string adminUserId, CancellationToken ct = default)
