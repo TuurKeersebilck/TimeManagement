@@ -98,6 +98,13 @@ try
 
     var app = builder.Build();
 
+    // Auto-migrate on startup
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        db.Database.Migrate();
+    }
+
     // Use global exception handling middleware
     app.UseMiddleware<ExceptionHandlingMiddleware>();
 
