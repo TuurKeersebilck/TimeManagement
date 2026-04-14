@@ -1,38 +1,70 @@
-# time-management-frontend
+# TimeManagement Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 + Vite SPA for the Time Management application.
 
-## Recommended IDE Setup
+## Setup
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Recommended Browser Setup
-
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd) 
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
 npm install
+npm run dev      # dev server at http://localhost:5173
+npm run build    # production build
+npm run preview  # preview production build
 ```
 
-### Compile and Hot-Reload for Development
+## Environment
 
-```sh
-npm run dev
+| File | Used for |
+|------|----------|
+| `.env.development` | Local dev (points to `https://localhost:7055`) |
+| `.env.production` | Production build (points to Railway backend via Vercel rewrite) |
+
+`VITE_API_BASE_URL` is the only env variable — set it to your backend URL.
+
+## Tech Stack
+
+- **Vue 3** (Composition API, `<script setup>`)
+- **Vite** — build tool
+- **Vue Router** — client-side routing with navigation guards
+- **Axios** — HTTP client with JWT interceptor
+- **Tailwind CSS v4** — utility-first styling
+- **shadcn-vue** — accessible UI components
+- **vue-sonner** — toast notifications
+- **Chart.js** — weekly hours chart
+- **lucide-vue-next** — icons
+
+## Structure
+
 ```
-
-### Compile and Minify for Production
-
-```sh
-npm run build
+src/
+├── views/              # Page components
+│   ├── admin/          # Admin-only pages
+│   ├── LoginView.vue
+│   ├── DashboardView.vue
+│   ├── TimeTrackingView.vue
+│   ├── VacationsView.vue
+│   └── ...
+├── components/
+│   ├── ui/             # shadcn-vue components
+│   ├── Sidebar.vue
+│   ├── AppConfirmDialog.vue
+│   └── ...
+├── composables/        # Shared Vue composition logic
+│   ├── useAuth.ts
+│   ├── useAppToast.ts
+│   ├── useConfirmDialog.ts
+│   └── ...
+├── services/           # API modules (one per backend domain)
+│   ├── api.ts          # Axios instance + JWT interceptor
+│   ├── authService.ts
+│   ├── clockEventService.ts
+│   ├── vacationService.ts
+│   └── ...
+├── layouts/
+│   └── AuthenticatedLayout.vue
+├── router/
+│   └── index.ts        # Routes + auth guards
+├── utils/
+│   └── apiError.ts     # Extract human-readable error from Axios errors
+└── styles/
+    └── theme.css       # Design system CSS utilities
 ```

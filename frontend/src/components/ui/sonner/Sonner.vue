@@ -8,6 +8,7 @@ import {
   XIcon,
 } from "lucide-vue-next";
 import { Toaster as Sonner } from "vue-sonner";
+import "vue-sonner/style.css";
 import { cn } from "@/lib/utils";
 
 interface Props {
