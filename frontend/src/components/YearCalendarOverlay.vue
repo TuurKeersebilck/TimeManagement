@@ -149,21 +149,21 @@ const vacationTypes = computed(() => {
         class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col"
         @click.self="emit('update:open', false)"
       >
-        <div class="flex flex-col flex-1 overflow-hidden bg-white dark:bg-slate-900 m-4 lg:m-8 rounded-2xl shadow-2xl">
+        <div class="flex flex-col flex-1 overflow-hidden bg-card m-4 lg:m-8 rounded-2xl shadow-2xl">
           <!-- Header -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
             <div class="flex items-center gap-3">
               <Button variant="ghost" size="icon" class="size-8" @click="overlayYear--">
                 <ChevronLeftIcon class="size-4" />
               </Button>
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">{{ overlayYear }}</h2>
+              <h2 class="text-lg font-semibold text-card-foreground">{{ overlayYear }}</h2>
               <Button variant="ghost" size="icon" class="size-8" @click="overlayYear++">
                 <ChevronRightIcon class="size-4" />
               </Button>
             </div>
             <div class="flex items-center gap-4">
               <!-- Legend -->
-              <div class="hidden sm:flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+              <div class="hidden sm:flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 <span v-for="type in vacationTypes" :key="type.name" class="flex items-center gap-2">
                   <span class="flex items-center gap-1">
                     <span
@@ -198,14 +198,14 @@ const vacationTypes = computed(() => {
           <div class="flex-1 overflow-y-auto p-4 lg:p-6">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               <div v-for="miniMonth in overlayMonths" :key="miniMonth.month" class="card p-3">
-                <p class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 capitalize">
+                <p class="text-sm font-semibold text-card-foreground mb-2 capitalize">
                   {{ miniMonth.label }}
                 </p>
                 <div class="grid grid-cols-7 mb-1">
                   <div
                     v-for="wd in ['M', 'T', 'W', 'T', 'F', 'S', 'S']"
                     :key="wd"
-                    class="text-center text-[10px] font-semibold text-slate-400 dark:text-slate-500"
+                    class="text-center text-[10px] font-semibold text-muted-foreground"
                   >
                     {{ wd }}
                   </div>
@@ -222,11 +222,11 @@ const vacationTypes = computed(() => {
                           :class="[
                             'relative text-[11px] h-6 flex items-center justify-center rounded cursor-default',
                             !cell.isCurrentMonth && 'opacity-20',
-                            cell.isToday && 'bg-indigo-600 text-white font-bold',
+                            cell.isToday && 'bg-primary text-primary-foreground font-bold',
                             !cell.isToday && holidaysByDate.has(cell.iso) && !vacationsByDate.has(cell.iso) && 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
-                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && cell.isWeekend && 'text-slate-400 dark:text-slate-600',
-                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && !cell.isWeekend && cell.isCurrentMonth && 'text-slate-700 dark:text-slate-300',
-                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && props.teamVacationsByDate?.has(cell.iso) && 'bg-slate-100 dark:bg-slate-800/60',
+                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && cell.isWeekend && 'text-muted-foreground',
+                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && !cell.isWeekend && cell.isCurrentMonth && 'text-card-foreground',
+                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && props.teamVacationsByDate?.has(cell.iso) && 'bg-muted',
                           ]"
                           :style="!cell.isToday && vacationsByDate.has(cell.iso) ? vacationCellStyle(cell.iso) : undefined"
                         >
@@ -234,7 +234,7 @@ const vacationTypes = computed(() => {
                           <!-- Team-vacation dot when others are off but I'm not -->
                           <span
                             v-if="!cell.isToday && !vacationsByDate.has(cell.iso) && props.teamVacationsByDate?.has(cell.iso)"
-                            class="absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full bg-slate-400 dark:bg-slate-500"
+                            class="absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full bg-muted-foreground"
                           />
                         </div>
                       </TooltipTrigger>

@@ -28,7 +28,7 @@ const handleLogin = async (): Promise<void> => {
     });
 
     authService.setUserInfo(response.email, response.fullName, response.roles);
-    router.push("/");
+    router.push(response.roles.includes("Admin") ? "/admin/dashboard" : "/");
   } catch (err) {
     error.value = extractApiError(err, "Invalid email or password");
   } finally {
