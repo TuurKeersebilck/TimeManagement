@@ -341,7 +341,7 @@ const savePopover = async () => {
         note: note.trim() || undefined,
       });
       vacationDays.value.unshift(...result.created);
-      const skipped = result.skippedWeekends + result.skippedExisting;
+      const skipped = result.skippedWeekends + result.skippedHolidays + result.skippedExisting;
       toast.success(
         skipped > 0
           ? `${result.created.length} day(s) planned (${skipped} skipped)`
@@ -680,7 +680,7 @@ onMounted(async () => {
                         class="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2"
                       >
                         {{ workingDaysInRange }} working day{{ workingDaysInRange !== 1 ? "s" : "" }} selected
-                        <span class="text-slate-400 dark:text-slate-500">(weekends skipped)</span>
+                        <span class="text-slate-400 dark:text-slate-500">(weekends &amp; holidays skipped)</span>
                       </div>
 
                       <div

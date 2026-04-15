@@ -58,5 +58,6 @@ public class VacationRangeResultDto
 {
     public IEnumerable<VacationDayDto> Created { get; set; } = [];
     public int SkippedWeekends { get; set; }
+    public int SkippedHolidays { get; set; }
     public int SkippedExisting { get; set; }
 }

@@ -182,11 +182,21 @@ public class VacationService(AppDbContext db) : IVacationService
         for (var d = dto.StartDate; d <= dto.EndDate; d = d.AddDays(1))
             allDays.Add(d);
 
+        // Fetch public holidays that fall within the range so they are treated as non-working days
+        var holidayDates = (await _db.PublicHolidays
+            .Where(h => h.Date >= dto.StartDate && h.Date <= dto.EndDate)
+            .Select(h => h.Date)
+            .ToListAsync(ct))
+            .ToHashSet();
+
         var workingDays = allDays
-            .Where(d => d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday)
+            .Where(d => d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday
+                     && !holidayDates.Contains(d))
             .ToList();
 
-        int skippedWeekends = allDays.Count - workingDays.Count;
+        int skippedWeekends = allDays.Count(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
+        int skippedHolidays = allDays.Count(d => holidayDates.Contains(d)
+            && d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday);
 
         // Filter out dates that already have an entry for this type
         var existingDates = await _db.VacationDays
@@ -203,6 +213,7 @@ public class VacationService(AppDbContext db) : IVacationService
             {
                 Created = [],
                 SkippedWeekends = skippedWeekends,
+                SkippedHolidays = skippedHolidays,
                 SkippedExisting = skippedExisting,
             };
 
@@ -245,6 +256,7 @@ public class VacationService(AppDbContext db) : IVacationService
                 Note = e.Note,
             }).ToList(),
             SkippedWeekends = skippedWeekends,
+            SkippedHolidays = skippedHolidays,
             SkippedExisting = skippedExisting,
         };
     }
