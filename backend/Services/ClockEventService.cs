@@ -118,7 +118,16 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             };
 
             db.ClockEvents.Add(entity);
-            await db.SaveChangesAsync(ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // The DB unique constraint on (UserId, Date, Type) fired — a concurrent
+                // request raced past the application-level duplicate check above.
+                throw new ValidationException($"You have already submitted a {dto.Type} event for today.");
+            }
             await tx.CommitAsync(ct);
 
             return mapper.Map<ClockEventDto>(entity);
