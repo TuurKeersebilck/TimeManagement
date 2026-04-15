@@ -8,7 +8,11 @@ import { useApiCall } from "@/composables/useApiCall";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon } from "lucide-vue-next";
+import { Switch } from "@/components/ui/switch";
+import { useTheme } from "@/composables/useTheme";
+import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon, SwatchBookIcon } from "lucide-vue-next";
+
+const { isDark, toggleTheme, palette, togglePalette } = useTheme();
 
 const router = useRouter();
 const { currentUser, fetchUser } = useAuth();
@@ -250,6 +254,41 @@ const {
             Change password
           </Button>
         </div>
+        <!-- Appearance section -->
+        <div class="card p-6 space-y-5 mt-6">
+          <div class="flex items-center gap-3 pb-1">
+            <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <SwatchBookIcon class="size-4 text-primary" />
+            </div>
+            <div>
+              <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Appearance</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Customise how the app looks</p>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-foreground">Dark mode</p>
+                <p class="text-xs text-muted-foreground mt-0.5">Switch between light and dark</p>
+              </div>
+              <Switch :model-value="isDark" @update:model-value="toggleTheme" />
+            </div>
+
+            <div class="border-t border-border" />
+
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-foreground">Palette</p>
+                <p class="text-xs text-muted-foreground mt-0.5">
+                  {{ palette === 'warm' ? 'Warm — amber & beige' : 'Slate — indigo & grey' }}
+                </p>
+              </div>
+              <Switch :model-value="palette === 'slate'" @update:model-value="togglePalette" />
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </AuthenticatedLayout>

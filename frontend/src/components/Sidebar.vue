@@ -1,28 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, type Component } from "vue";
+import { ref, computed, onMounted } from "vue";
+
+declare const __APP_VERSION__: string;
+const appVersion = __APP_VERSION__;
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
-import { useTheme } from "../composables/useTheme";
 import NotificationBell from "./NotificationBell.vue";
-import AppLogo from "./AppLogo.vue";
-import {
-  LayoutDashboardIcon,
-  TimerIcon,
-  CalendarIcon,
-  CalendarDaysIcon,
-  TagIcon,
-  UsersIcon,
-  SunIcon,
-  MoonIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronDownIcon,
-  LogOutIcon,
-  KeyRoundIcon,
-  SettingsIcon,
-  DownloadIcon,
-  ClipboardListIcon,
-} from "lucide-vue-next";
+import { LogOutIcon, ChevronDownIcon } from "lucide-vue-next";
 
 interface Props {
   isOpen?: boolean;
@@ -39,7 +23,6 @@ const emit = defineEmits<{
 
 const route = useRoute();
 const { currentUser, isLoadingUser, isAdmin, userInitials, fetchUser } = useAuth();
-const { isDark, toggleTheme } = useTheme();
 
 const isActive = (path: string) =>
   path === "/" ? route.path === "/" : route.path.startsWith(path);
@@ -47,31 +30,30 @@ const isActive = (path: string) =>
 interface NavItem {
   name: string;
   to: string;
-  icon: Component;
 }
 
 const employeeNav: NavItem[] = [
-  { name: "Dashboard", to: "/", icon: LayoutDashboardIcon },
-  { name: "Clock In/Out", to: "/time-tracking", icon: TimerIcon },
-  { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
-  { name: "Team Calendar", to: "/team-calendar", icon: CalendarDaysIcon },
-  { name: "Account", to: "/account", icon: KeyRoundIcon },
+  { name: "Dashboard", to: "/" },
+  { name: "Clock In/Out", to: "/time-tracking" },
+  { name: "My Vacations", to: "/vacations" },
+  { name: "Team Calendar", to: "/team-calendar" },
+  { name: "Account", to: "/account" },
 ];
 
 const adminPersonalNav: NavItem[] = [
-  { name: "Dashboard", to: "/admin/dashboard", icon: LayoutDashboardIcon },
-  { name: "My Vacations", to: "/vacations", icon: CalendarIcon },
-  { name: "Team Calendar", to: "/team-calendar", icon: CalendarDaysIcon },
-  { name: "Account", to: "/account", icon: KeyRoundIcon },
+  { name: "Dashboard", to: "/admin/dashboard" },
+  { name: "My Vacations", to: "/vacations" },
+  { name: "Team Calendar", to: "/team-calendar" },
+  { name: "Account", to: "/account" },
 ];
 
 const adminSectionNav: NavItem[] = [
-  { name: "All Time Logs", to: "/admin/time-logs", icon: TimerIcon },
-  { name: "Adjustment Requests", to: "/admin/adjustment-requests", icon: ClipboardListIcon },
-  { name: "Vacation Types", to: "/admin/vacation-types", icon: TagIcon },
-  { name: "Employees", to: "/admin/employees", icon: UsersIcon },
-  { name: "Payroll Export", to: "/admin/export", icon: DownloadIcon },
-  { name: "App Settings", to: "/admin/settings", icon: SettingsIcon },
+  { name: "All Time Logs", to: "/admin/time-logs" },
+  { name: "Adjustment Requests", to: "/admin/adjustment-requests" },
+  { name: "Vacation Types", to: "/admin/vacation-types" },
+  { name: "Employees", to: "/admin/employees" },
+  { name: "Payroll Export", to: "/admin/export" },
+  { name: "App Settings", to: "/admin/settings" },
 ];
 
 const navigationItems = computed(() => (isAdmin.value ? adminPersonalNav : employeeNav));
@@ -95,179 +77,140 @@ onMounted(() => fetchUser());
     leave-from-class="opacity-100"
     leave-to-class="opacity-0"
   >
-    <div
-      v-if="isOpen"
-      class="fixed inset-0 z-40 lg:hidden bg-black/40 backdrop-blur-sm"
-      @click="emit('toggle')"
-    />
+    <div v-if="isOpen" class="fixed inset-0 z-40 lg:hidden bg-black/30" @click="emit('toggle')" />
   </Transition>
 
   <!-- Sidebar -->
   <aside
     :class="[
-      'fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-out overflow-hidden',
-      isOpen ? 'w-64 translate-x-0' : 'w-0 -translate-x-full lg:w-16 lg:translate-x-0',
+      'fixed inset-y-0 left-0 z-50 flex flex-col bg-background border-r border-border transition-all duration-300 ease-out overflow-hidden',
+      isOpen ? 'w-52 translate-x-0' : 'w-0 -translate-x-full lg:w-0 lg:-translate-x-full',
     ]"
   >
-    <!-- Header -->
-    <div
-      :class="[
-        'flex items-center h-16 border-b border-slate-200 dark:border-slate-800 shrink-0',
-        isOpen ? 'px-4' : 'lg:justify-center lg:px-2',
-      ]"
-    >
-      <AppLogo v-if="isOpen" :show-text="true" class="flex-1 min-w-0" />
-      <NotificationBell v-if="isAdmin && isOpen" />
-      <button
-        @click="emit('toggle')"
-        class="btn-ghost !px-2 !py-2 shrink-0"
-        :title="isOpen ? 'Collapse sidebar' : 'Expand sidebar'"
-      >
-        <ChevronLeftIcon v-if="isOpen" class="size-5" />
-        <ChevronRightIcon v-else class="size-5" />
-      </button>
+    <!-- App name -->
+    <div class="shrink-0 px-6 pt-8 pb-2">
+      <span class="sidebar-wordmark">TEMPO</span>
+      <span class="sidebar-version">v.{{ appVersion }}</span>
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto py-4 px-2">
-      <!-- Role label -->
-      <p
-        v-if="isOpen"
-        class="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
-      >
-        {{ isAdmin ? "Admin" : "Employee" }}
-      </p>
-
-      <!-- Personal nav links (all roles) -->
-      <div class="space-y-0.5">
-        <router-link
-          v-for="item in navigationItems"
-          :key="item.name"
-          :to="item.to"
-          @click="handleNavClick"
-          :class="[
-            'nav-link',
-            !isOpen && 'lg:justify-center lg:!px-0',
-            isActive(item.to) && 'nav-link-active',
-          ]"
-          :title="!isOpen ? item.name : undefined"
-        >
-          <component :is="item.icon" class="size-[18px] shrink-0" />
-          <span v-if="isOpen" class="truncate">{{ item.name }}</span>
-        </router-link>
-      </div>
+    <nav class="flex-1 overflow-y-auto py-8 px-6">
+      <!-- Personal nav links -->
+      <ul class="space-y-1">
+        <li v-for="item in navigationItems" :key="item.name">
+          <router-link
+            :to="item.to"
+            @click="handleNavClick"
+            :class="['sidebar-nav-link', isActive(item.to) && 'sidebar-nav-link-active']"
+          >
+            {{ item.name }}
+          </router-link>
+        </li>
+      </ul>
 
       <!-- Administration section (admin only) -->
       <template v-if="isAdmin">
-        <!-- Section divider + toggle -->
-        <div :class="['mt-4 mb-1', !isOpen && 'lg:hidden']">
+        <div class="mt-8 mb-3">
           <button
-            class="w-full flex items-center justify-between px-3 py-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
+            class="w-full flex items-center justify-between text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             @click="adminSectionOpen = !adminSectionOpen"
           >
             <span>Manage</span>
             <ChevronDownIcon
               :class="[
-                'size-3.5 transition-transform duration-200',
+                'size-3 transition-transform duration-200',
                 adminSectionOpen && 'rotate-180',
               ]"
             />
           </button>
         </div>
-        <!-- Collapsed sidebar: just show icons with a faint divider -->
-        <div
-          v-if="!isOpen"
-          class="hidden lg:block mt-3 mb-1 mx-3 border-t border-slate-200 dark:border-slate-700"
-        />
 
-        <div v-show="adminSectionOpen || !isOpen" class="space-y-0.5">
-          <router-link
-            v-for="item in adminSectionNav"
-            :key="item.name"
-            :to="item.to"
-            @click="handleNavClick"
-            :class="[
-              'nav-link',
-              !isOpen && 'lg:justify-center lg:!px-0',
-              isActive(item.to) && 'nav-link-active',
-            ]"
-            :title="!isOpen ? item.name : undefined"
-          >
-            <component :is="item.icon" class="size-[18px] shrink-0" />
-            <span v-if="isOpen" class="truncate">{{ item.name }}</span>
-          </router-link>
-        </div>
+        <ul v-show="adminSectionOpen" class="space-y-1">
+          <li v-for="item in adminSectionNav" :key="item.name">
+            <router-link
+              :to="item.to"
+              @click="handleNavClick"
+              :class="['sidebar-nav-link', isActive(item.to) && 'sidebar-nav-link-active']"
+            >
+              {{ item.name }}
+            </router-link>
+          </li>
+        </ul>
       </template>
     </nav>
 
     <!-- Bottom section -->
-    <div class="shrink-0 border-t border-slate-200 dark:border-slate-800">
-      <!-- Theme toggle -->
-      <div class="px-2 pt-3 pb-1">
-        <button
-          @click="toggleTheme"
-          :class="['nav-link w-full', !isOpen && 'lg:justify-center lg:!px-0']"
-          :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-        >
-          <SunIcon v-if="isDark" class="size-[18px] shrink-0" />
-          <MoonIcon v-else class="size-[18px] shrink-0" />
-          <span v-if="isOpen">{{ isDark ? "Light mode" : "Dark mode" }}</span>
-        </button>
+    <div class="shrink-0 px-6 pt-4 pb-6 border-t border-border space-y-4">
+      <div v-if="isAdmin">
+        <NotificationBell />
       </div>
 
       <!-- User profile -->
-      <div class="px-2 pb-2">
-        <!-- Loading skeleton -->
-        <div v-if="isLoadingUser" class="flex items-center gap-3 px-3 py-2">
-          <div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse shrink-0" />
-          <div v-if="isOpen" class="flex-1 space-y-1.5">
-            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div class="h-2.5 bg-slate-200 dark:bg-slate-700 rounded w-3/4 animate-pulse" />
+      <div v-if="isLoadingUser" class="h-4 w-3/4 bg-muted rounded animate-pulse" />
+      <div v-else-if="currentUser" class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-6 h-6 user-avatar shrink-0">
+            <span class="text-[10px] font-bold text-white">{{ userInitials }}</span>
           </div>
+          <span class="text-xs text-muted-foreground truncate">{{ currentUser.fullName }}</span>
         </div>
-
-        <!-- User info + logout -->
-        <div v-else-if="currentUser">
-          <div
-            :class="[
-              'flex items-center gap-3 px-3 py-2 rounded-lg',
-              isOpen ? '' : 'lg:justify-center',
-            ]"
-          >
-            <div
-              class="w-8 h-8 user-avatar shrink-0"
-              :title="!isOpen ? currentUser.fullName : undefined"
-            >
-              <span class="text-xs font-bold text-white">{{ userInitials }}</span>
-            </div>
-            <div v-if="isOpen" class="flex-1 min-w-0">
-              <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                {{ currentUser.fullName }}
-              </p>
-              <p class="text-xs text-slate-500 dark:text-slate-400 truncate">
-                {{ currentUser.email }}
-              </p>
-            </div>
-            <button
-              v-if="isOpen"
-              @click="emit('logout')"
-              class="btn-ghost !px-2 !py-1.5 shrink-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-              title="Sign out"
-            >
-              <LogOutIcon class="size-4" />
-            </button>
-          </div>
-          <!-- Logout when collapsed -->
-          <button
-            v-if="!isOpen"
-            @click="emit('logout')"
-            class="nav-link w-full lg:justify-center lg:!px-0 text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
-            title="Sign out"
-          >
-            <LogOutIcon class="size-[18px]" />
-          </button>
-        </div>
+        <button
+          @click="emit('logout')"
+          class="text-muted-foreground hover:text-destructive transition-colors cursor-pointer shrink-0"
+          title="Sign out"
+        >
+          <LogOutIcon class="size-3.5" />
+        </button>
       </div>
     </div>
   </aside>
 </template>
+
+<style scoped>
+.sidebar-wordmark {
+  display: block;
+  font-family: var(--font-logo);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  color: var(--foreground);
+}
+
+.sidebar-version {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  margin-top: 0.1rem;
+}
+
+.sidebar-nav-link {
+  display: block;
+  font-family: var(--font-data);
+  font-size: 1.0625rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+  padding: 0.35rem 0;
+  border-left: 2px solid transparent;
+  padding-left: 0.75rem;
+  margin-left: -0.75rem;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+  cursor: pointer;
+}
+
+.sidebar-nav-link:hover {
+  color: var(--foreground);
+}
+
+.sidebar-nav-link-active {
+  color: var(--primary);
+  border-left-color: var(--primary);
+  font-weight: 600;
+}
+</style>

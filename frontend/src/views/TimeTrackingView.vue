@@ -577,7 +577,7 @@ onUnmounted(() => {
                     <TableCell>
                       <span
                         v-if="s.totalHours > 0"
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
                       >
                         {{ s.totalHours.toFixed(2) }}h
                       </span>
