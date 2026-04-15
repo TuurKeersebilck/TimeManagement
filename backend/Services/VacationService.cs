@@ -10,9 +10,11 @@ public class VacationService(AppDbContext db) : IVacationService
 {
     private readonly AppDbContext _db = db;
 
-    public async Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, CancellationToken ct = default)
+    public async Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, int? year = null, CancellationToken ct = default)
     {
-        var currentYear = DateTime.UtcNow.Year;
+        // Use the caller-supplied year (the user's local year from the frontend) so that
+        // users in UTC+13/UTC-12 don't see wrong balances around the Jan 1 boundary.
+        var currentYear = year ?? DateTime.UtcNow.Year;
 
         var balances = await _db.EmployeeVacationBalances
             .AsNoTracking()
@@ -97,7 +99,9 @@ public class VacationService(AppDbContext db) : IVacationService
             .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
             ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
 
-        var currentYear = DateTime.UtcNow.Year;
+        // Use the year of the submitted date — not the server's UTC year — so that
+        // balance checks are always scoped to the correct year for the vacation being planned.
+        var currentYear = dto.Date.Year;
         var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
 
         if (used + dto.Amount > balance.YearlyBalance)
@@ -134,7 +138,7 @@ public class VacationService(AppDbContext db) : IVacationService
             .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
             ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
 
-        var currentYear = DateTime.UtcNow.Year;
+        var currentYear = dto.Date.Year;
         var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, excludeId: id, ct: ct);
 
         if (used + dto.Amount > balance.YearlyBalance)
@@ -217,8 +221,10 @@ public class VacationService(AppDbContext db) : IVacationService
                 SkippedExisting = skippedExisting,
             };
 
-        // Validate balance (only count days in the current year)
-        var currentYear = DateTime.UtcNow.Year;
+        // Validate balance — scope to the start date's year. Ranges that straddle a
+        // year boundary are unusual; the balance check uses the start year as the
+        // reference so the user isn't blocked by the following year's (empty) balance.
+        var currentYear = dto.StartDate.Year;
         var alreadyUsed = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
 
         decimal totalNewAmount = newDays.Count(d => d.Year == currentYear) * dto.Amount;

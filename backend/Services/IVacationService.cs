@@ -4,7 +4,7 @@ namespace TimeManagementBackend.Services;
 
 public interface IVacationService
 {
-    Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, CancellationToken ct = default);
+    Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, int? year = null, CancellationToken ct = default);
     Task<IEnumerable<VacationDayDto>> GetMyVacationDaysAsync(string userId, CancellationToken ct = default);
     Task<bool> ExistsForDateAndTypeAsync(string userId, DateOnly date, int vacationTypeId, CancellationToken ct = default);
     Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, CancellationToken ct = default);

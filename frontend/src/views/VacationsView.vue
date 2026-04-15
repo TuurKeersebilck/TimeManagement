@@ -349,7 +349,7 @@ const savePopover = async () => {
       );
     }
 
-    balances.value = await vacationService.getBalances();
+    balances.value = await vacationService.getBalances(new Date().getFullYear());
     closePopover();
   } catch (err: unknown) {
     toast.error(extractApiError(err, "Failed to save vacation"));
@@ -380,7 +380,7 @@ const deleteDay = (day: VacationDay) => {
       try {
         await vacationService.delete(day.id);
         vacationDays.value = vacationDays.value.filter((d) => d.id !== day.id);
-        balances.value = await vacationService.getBalances();
+        balances.value = await vacationService.getBalances(new Date().getFullYear());
         toast.success("Vacation day removed");
       } catch {
         toast.error("Failed to delete");
@@ -397,7 +397,7 @@ onMounted(async () => {
     const year = new Date().getFullYear();
     const month = new Date().getMonth() + 1;
     const [b, d, h, t] = await Promise.all([
-      vacationService.getBalances(),
+      vacationService.getBalances(new Date().getFullYear()),
       vacationService.getVacationDays(),
       holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
       vacationService.getTeamVacationDays({ year, month }).catch(() => [] as TeamVacationDay[]),
