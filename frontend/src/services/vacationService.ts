@@ -55,6 +55,7 @@ export interface CreateVacationRangeDto {
 export interface VacationRangeResult {
   created: VacationDay[];
   skippedWeekends: number;
+  skippedHolidays: number;
   skippedExisting: number;
 }
 

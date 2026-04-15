@@ -29,6 +29,23 @@ public class TimeAdjustmentRequestService(
             dto.RequestedBreakEnd == null && dto.RequestedClockOut == null)
             throw new ValidationException("At least one time field must be specified in the adjustment request.");
 
+        // Times must be in logical order when multiple are provided
+        if (dto.RequestedClockIn.HasValue && dto.RequestedBreakStart.HasValue &&
+            dto.RequestedClockIn >= dto.RequestedBreakStart)
+            throw new ValidationException("Clock-in must be before break start.");
+
+        if (dto.RequestedBreakStart.HasValue && dto.RequestedBreakEnd.HasValue &&
+            dto.RequestedBreakStart >= dto.RequestedBreakEnd)
+            throw new ValidationException("Break start must be before break end.");
+
+        if (dto.RequestedBreakEnd.HasValue && dto.RequestedClockOut.HasValue &&
+            dto.RequestedBreakEnd >= dto.RequestedClockOut)
+            throw new ValidationException("Break end must be before clock-out.");
+
+        if (dto.RequestedClockIn.HasValue && dto.RequestedClockOut.HasValue &&
+            dto.RequestedClockIn >= dto.RequestedClockOut)
+            throw new ValidationException("Clock-in must be before clock-out.");
+
         // Can't request future dates
         if (dto.Date > DateOnly.FromDateTime(DateTime.Now))
             throw new ValidationException("Cannot submit an adjustment request for a future date.");
