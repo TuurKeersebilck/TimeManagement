@@ -199,7 +199,7 @@ onMounted(async () => {
                 Today
               </p>
             </div>
-            <p class="text-3xl font-bold text-foreground">
+            <p class="text-3xl font-bold font-mono text-foreground">
               <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursToday }}h</span>
             </p>
@@ -213,7 +213,7 @@ onMounted(async () => {
                   :style="{ width: `${todayProgress}%` }"
                 />
               </div>
-              <p class="text-xs text-muted-foreground mt-1">
+              <p class="text-xs font-mono text-muted-foreground mt-1">
                 / {{ dailyTarget }}h target
               </p>
             </template>
@@ -227,7 +227,7 @@ onMounted(async () => {
                 This week
               </p>
             </div>
-            <p class="text-3xl font-bold text-foreground">
+            <p class="text-3xl font-bold font-mono text-foreground">
               <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisWeek }}h</span>
             </p>
@@ -241,7 +241,7 @@ onMounted(async () => {
                   :style="{ width: `${weeklyProgress}%` }"
                 />
               </div>
-              <p class="text-xs text-muted-foreground mt-1">
+              <p class="text-xs font-mono text-muted-foreground mt-1">
                 / {{ weeklyTarget }}h target
               </p>
             </template>
@@ -255,7 +255,7 @@ onMounted(async () => {
                 This month
               </p>
             </div>
-            <p class="text-3xl font-bold text-foreground">
+            <p class="text-3xl font-bold font-mono text-foreground">
               <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisMonth }}h</span>
             </p>

@@ -8,9 +8,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3, h4, .font-display {
-  font-family: var(--font-display, ui-serif, Georgia, serif);
-}
+/* headings inherit the body font (Inter) */
 
 /* Layout */
 .page-background {
