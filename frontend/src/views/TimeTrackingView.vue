@@ -169,12 +169,23 @@ function emptyAdjForm() {
   };
 }
 
-function toUtcTimeSpan(val: string): string | undefined {
-  if (!val) return undefined;
-  const [h, m] = val.split(":").map(Number);
-  const d = new Date();
-  d.setHours(h, m, 0, 0);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}:00`;
+// Build a full ISO 8601 DateTimeOffset string (e.g. "2026-04-15T09:00:00+02:00") from a
+// date string and a local time string. Using the specific date (not today) ensures DST
+// transitions are handled correctly for historical adjustment requests.
+function toLocalDateTimeOffset(date: string, time: string): string | undefined {
+  if (!time) return undefined;
+  const dt = new Date(`${date}T${time}:00`);
+  const offsetMin = -dt.getTimezoneOffset(); // getTimezoneOffset() returns UTC − local, so negate
+  const sign = offsetMin >= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMin);
+  const offsetH = String(Math.floor(absOffset / 60)).padStart(2, "0");
+  const offsetM = String(absOffset % 60).padStart(2, "0");
+  const y = dt.getFullYear();
+  const mo = String(dt.getMonth() + 1).padStart(2, "0");
+  const d = String(dt.getDate()).padStart(2, "0");
+  const h = String(dt.getHours()).padStart(2, "0");
+  const m = String(dt.getMinutes()).padStart(2, "0");
+  return `${y}-${mo}-${d}T${h}:${m}:00${sign}${offsetH}:${offsetM}`;
 }
 
 // ─── Clock actions ────────────────────────────────────────────────────────────
@@ -302,10 +313,10 @@ async function submitAdjustmentRequest() {
   try {
     await adjustmentRequestService.create({
       date: adjForm.value.date,
-      requestedClockIn: toUtcTimeSpan(adjForm.value.clockIn),
-      requestedBreakStart: toUtcTimeSpan(adjForm.value.breakStart),
-      requestedBreakEnd: toUtcTimeSpan(adjForm.value.breakEnd),
-      requestedClockOut: toUtcTimeSpan(adjForm.value.clockOut),
+      requestedClockIn: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.clockIn),
+      requestedBreakStart: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.breakStart),
+      requestedBreakEnd: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.breakEnd),
+      requestedClockOut: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.clockOut),
       reason: adjForm.value.reason.trim(),
     });
     showAdjustDialog.value = false;

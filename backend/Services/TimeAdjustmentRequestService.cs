@@ -247,7 +247,7 @@ public class TimeAdjustmentRequestService(
     private async Task UpsertClockEventAsync(
         TimeAdjustmentRequest request,
         ClockEventType type,
-        TimeSpan? requestedTime,
+        DateTimeOffset? requestedTime,
         CancellationToken ct)
     {
         if (requestedTime == null) return;
@@ -257,12 +257,9 @@ public class TimeAdjustmentRequestService(
                                       e.Date == request.Date &&
                                       e.Type == type, ct);
 
-        // Adjustment request times are stored as UTC TimeSpan values.
-        // Reconstruct a UTC DateTimeOffset using the request date as the calendar date.
-        var recordedAt = new DateTimeOffset(
-            request.Date.Year, request.Date.Month, request.Date.Day,
-            requestedTime.Value.Hours, requestedTime.Value.Minutes, 0,
-            TimeSpan.Zero);
+        // Normalise to UTC — the client sent a full ISO 8601 offset string so we
+        // preserve the user's intended moment in time regardless of their timezone.
+        var recordedAt = requestedTime.Value.ToUniversalTime();
 
         if (existing != null)
         {
@@ -278,8 +275,6 @@ public class TimeAdjustmentRequestService(
                 Type = type,
                 ActualAt = recordedAt,
                 RecordedAt = recordedAt,
-                // Description is preserved when updating an existing event above;
-                // when creating a new event via approval there is no prior description to carry over.
                 Description = null,
             });
         }

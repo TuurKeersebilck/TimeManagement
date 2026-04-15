@@ -54,9 +54,8 @@ const filtered = computed(() => {
 
 function fmt(t: string | null): string {
   if (!t) return "—";
-  const [h, m] = t.split(":").map(Number);
-  const d = new Date();
-  d.setUTCHours(h, m, 0, 0);
+  // Backend now sends a full ISO 8601 DateTimeOffset string; parse and display in local time.
+  const d = new Date(t);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 

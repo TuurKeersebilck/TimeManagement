@@ -8,10 +8,10 @@ public class CreateAdjustmentRequestDto
     [Required]
     public DateOnly Date { get; set; }
 
-    public TimeSpan? RequestedClockIn { get; set; }
-    public TimeSpan? RequestedBreakStart { get; set; }
-    public TimeSpan? RequestedBreakEnd { get; set; }
-    public TimeSpan? RequestedClockOut { get; set; }
+    public DateTimeOffset? RequestedClockIn { get; set; }
+    public DateTimeOffset? RequestedBreakStart { get; set; }
+    public DateTimeOffset? RequestedBreakEnd { get; set; }
+    public DateTimeOffset? RequestedClockOut { get; set; }
 
     [Required]
     [MaxLength(2000)]
@@ -24,10 +24,10 @@ public class AdjustmentRequestDto
     public string UserId { get; set; } = string.Empty;
     public string EmployeeName { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
-    public TimeSpan? RequestedClockIn { get; set; }
-    public TimeSpan? RequestedBreakStart { get; set; }
-    public TimeSpan? RequestedBreakEnd { get; set; }
-    public TimeSpan? RequestedClockOut { get; set; }
+    public DateTimeOffset? RequestedClockIn { get; set; }
+    public DateTimeOffset? RequestedBreakStart { get; set; }
+    public DateTimeOffset? RequestedBreakEnd { get; set; }
+    public DateTimeOffset? RequestedClockOut { get; set; }
     public string Reason { get; set; } = string.Empty;
     public AdjustmentRequestStatus Status { get; set; }
     public DateTime RequestedAt { get; set; }

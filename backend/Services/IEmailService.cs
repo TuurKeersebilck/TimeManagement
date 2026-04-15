@@ -9,10 +9,10 @@ public interface IEmailService
         string toName,
         string requesterName,
         DateOnly date,
-        TimeSpan? requestedClockIn,
-        TimeSpan? requestedBreakStart,
-        TimeSpan? requestedBreakEnd,
-        TimeSpan? requestedClockOut,
+        DateTimeOffset? requestedClockIn,
+        DateTimeOffset? requestedBreakStart,
+        DateTimeOffset? requestedBreakEnd,
+        DateTimeOffset? requestedClockOut,
         string reason,
         string approveLink);
 
