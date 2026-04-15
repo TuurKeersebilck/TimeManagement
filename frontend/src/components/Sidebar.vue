@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+
+declare const __APP_VERSION__: string;
+const appVersion = __APP_VERSION__;
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import NotificationBell from "./NotificationBell.vue";
@@ -86,7 +89,8 @@ onMounted(() => fetchUser());
   >
     <!-- App name -->
     <div class="shrink-0 px-6 pt-8 pb-2">
-      <span class="sidebar-wordmark">Time<br>Management</span>
+      <span class="sidebar-wordmark">TEMPO</span>
+      <span class="sidebar-version">v.{{ appVersion }}</span>
     </div>
 
     <!-- Navigation -->
@@ -165,13 +169,22 @@ onMounted(() => fetchUser());
 <style scoped>
 .sidebar-wordmark {
   display: block;
-  font-family: var(--font-data);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  line-height: 1.5;
+  font-family: var(--font-logo);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
   color: var(--foreground);
+}
+
+.sidebar-version {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  margin-top: 0.1rem;
 }
 
 .sidebar-nav-link {

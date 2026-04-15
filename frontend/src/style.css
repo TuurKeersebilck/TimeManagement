@@ -9,6 +9,7 @@
 :root {
   --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-data: 'JetBrains Mono', 'Courier New', monospace;
+  --font-logo: 'Playfair Display', Georgia, serif;
 }
 
 /* ── shadcn-vue CSS variables ─────────────────────────────────────────────── */
