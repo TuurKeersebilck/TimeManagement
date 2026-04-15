@@ -60,8 +60,10 @@ export interface VacationRangeResult {
 }
 
 export const vacationService = {
-  async getBalances(): Promise<VacationBalance[]> {
-    const res = await apiClient.get<VacationBalance[]>("/vacations/balances");
+  async getBalances(year?: number): Promise<VacationBalance[]> {
+    const res = await apiClient.get<VacationBalance[]>("/vacations/balances", {
+      params: year !== undefined ? { year } : undefined,
+    });
     return res.data;
   },
 

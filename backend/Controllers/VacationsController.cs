@@ -22,12 +22,14 @@ public class VacationsController(
     private readonly INotificationService _notificationService = notificationService;
 
     [HttpGet("balances")]
-    public async Task<ActionResult<IEnumerable<VacationBalanceDto>>> GetBalances(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<VacationBalanceDto>>> GetBalances(
+        [FromQuery] int? year,
+        CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var balances = await _service.GetMyBalancesAsync(user.Id, ct);
+        var balances = await _service.GetMyBalancesAsync(user.Id, year, ct);
         return Ok(balances);
     }
 
