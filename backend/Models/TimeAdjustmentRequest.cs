@@ -17,10 +17,10 @@ public class TimeAdjustmentRequest
     [Required]
     public DateOnly Date { get; set; }
 
-    public TimeSpan? RequestedClockIn { get; set; }
-    public TimeSpan? RequestedBreakStart { get; set; }
-    public TimeSpan? RequestedBreakEnd { get; set; }
-    public TimeSpan? RequestedClockOut { get; set; }
+    public DateTimeOffset? RequestedClockIn { get; set; }
+    public DateTimeOffset? RequestedBreakStart { get; set; }
+    public DateTimeOffset? RequestedBreakEnd { get; set; }
+    public DateTimeOffset? RequestedClockOut { get; set; }
 
     [Required]
     [MaxLength(2000)]

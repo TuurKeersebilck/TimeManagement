@@ -55,14 +55,15 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         string toName,
         string requesterName,
         DateOnly date,
-        TimeSpan? requestedClockIn,
-        TimeSpan? requestedBreakStart,
-        TimeSpan? requestedBreakEnd,
-        TimeSpan? requestedClockOut,
+        DateTimeOffset? requestedClockIn,
+        DateTimeOffset? requestedBreakStart,
+        DateTimeOffset? requestedBreakEnd,
+        DateTimeOffset? requestedClockOut,
         string reason,
         string approveLink)
     {
-        static string Fmt(TimeSpan? t) => t.HasValue ? t.Value.ToString(@"hh\:mm") : "—";
+        // Show the employee's local time (the time they actually entered, not UTC)
+        static string Fmt(DateTimeOffset? t) => t.HasValue ? t.Value.ToString("HH:mm") : "—";
 
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("Time Management", config.From));
