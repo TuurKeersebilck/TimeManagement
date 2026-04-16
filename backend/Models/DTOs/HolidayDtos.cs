@@ -6,6 +6,13 @@ public class PublicHolidayDto
     public string Date { get; set; } = string.Empty; // "YYYY-MM-DD"
     public string Name { get; set; } = string.Empty;
     public bool IsCustom { get; set; }
+    /// <summary>True when the company works this day despite it being a public holiday.</summary>
+    public bool IsWorkingDay { get; set; }
+}
+
+public class SetIsWorkingDayDto
+{
+    public bool IsWorkingDay { get; set; }
 }
 
 public class CreateHolidayDto
@@ -51,6 +58,8 @@ public class NagerHolidayDto
     public string Date { get; set; } = string.Empty;
     public string LocalName { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    /// <summary>e.g. ["Public"], ["Optional"], ["Bank"], etc.</summary>
+    public List<string> Types { get; set; } = [];
 }
 
 public class NagerCountryDto

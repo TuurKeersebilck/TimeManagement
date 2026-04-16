@@ -43,6 +43,10 @@ public class AdminSettingsController(IPublicHolidayService service) : Controller
     public async Task<ActionResult<PublicHolidayDto>> AddHoliday([FromBody] CreateHolidayDto dto, CancellationToken ct)
         => Ok(await service.AddCustomHolidayAsync(dto, ct));
 
+    [HttpPatch("holidays/{id:int}/is-working-day")]
+    public async Task<ActionResult<PublicHolidayDto>> SetIsWorkingDay(int id, [FromBody] SetIsWorkingDayDto dto, CancellationToken ct)
+        => Ok(await service.SetIsWorkingDayAsync(id, dto.IsWorkingDay, ct));
+
     [HttpDelete("holidays/{id:int}")]
     public async Task<IActionResult> DeleteHoliday(int id, CancellationToken ct)
     {

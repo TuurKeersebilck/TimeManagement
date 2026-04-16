@@ -186,9 +186,9 @@ public class VacationService(AppDbContext db) : IVacationService
         for (var d = dto.StartDate; d <= dto.EndDate; d = d.AddDays(1))
             allDays.Add(d);
 
-        // Fetch public holidays that fall within the range so they are treated as non-working days
+        // Fetch public holidays that fall within the range and are actual days off for the company
         var holidayDates = (await _db.PublicHolidays
-            .Where(h => h.Date >= dto.StartDate && h.Date <= dto.EndDate)
+            .Where(h => h.Date >= dto.StartDate && h.Date <= dto.EndDate && !h.IsWorkingDay)
             .Select(h => h.Date)
             .ToListAsync(ct))
             .ToHashSet();
