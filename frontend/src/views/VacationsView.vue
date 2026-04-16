@@ -556,9 +556,9 @@ onMounted(async () => {
                     </div>
                   </PopoverTrigger>
 
-                  <PopoverContent class="w-72 p-0 shadow-lg max-h-[min(600px,80svh)] overflow-y-auto" :collision-padding="12">
-                    <!-- Popover header -->
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                  <PopoverContent class="w-72 p-0 shadow-lg flex flex-col max-h-[min(520px,70svh)]" :collision-padding="12">
+                    <!-- Popover header — pinned, never scrolls away -->
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
                       <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
                         {{ popoverDateLabel }}
                       </span>
@@ -571,6 +571,9 @@ onMounted(async () => {
                         </svg>
                       </button>
                     </div>
+
+                    <!-- Scrollable body (min-h-0 lets flex child shrink below content size) -->
+                    <div class="overflow-y-auto min-h-0">
 
                     <!-- Holiday notice -->
                     <div
@@ -722,6 +725,7 @@ onMounted(async () => {
                         Delete
                       </Button>
                     </div>
+                    </div><!-- end scrollable body -->
                   </PopoverContent>
                 </Popover>
               </div>
