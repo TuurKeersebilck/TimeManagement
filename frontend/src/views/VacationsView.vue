@@ -199,7 +199,8 @@ const workingDaysInRange = computed(() => {
   while (d <= end) {
     const dow = d.getDay();
     const iso = toIso(d);
-    if (dow !== 0 && dow !== 6 && !holidaysByDate.value.has(iso)) count++;
+    const holiday = holidaysByDate.value.get(iso);
+    if (dow !== 0 && dow !== 6 && (!holiday || holiday.isWorkingDay)) count++;
     d.setDate(d.getDate() + 1);
   }
   return count;
@@ -476,7 +477,7 @@ onMounted(async () => {
                   :open="openPopoverIso === cell.iso"
                   @update:open="
                     (v) => {
-                      if (v && cell.isCurrentMonth && (!cell.isWeekend && balances.length > 0 || vacationsByDate.has(cell.iso)))
+                      if (v && cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay))))
                         openPopover(cell.iso);
                       else if (!v) closePopover();
                     }
@@ -491,7 +492,7 @@ onMounted(async () => {
                         cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
                         openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500' : '',
                         highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-indigo-50 dark:bg-indigo-950/30' : '',
-                        cell.isCurrentMonth && (!cell.isWeekend && balances.length > 0 || vacationsByDate.has(cell.iso))
+                        cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
                           ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
                           : 'cursor-default pointer-events-none',
                       ]"
