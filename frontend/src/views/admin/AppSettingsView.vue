@@ -148,12 +148,18 @@ const addCustom = async () => {
 };
 
 const toggleWorkingDay = async (holiday: PublicHoliday) => {
+  const idx = holidays.value.findIndex((h) => h.id === holiday.id);
+  if (idx === -1) return;
+  const newValue = !holiday.isWorkingDay;
+  // Optimistic update so the switch reflects the change immediately
+  holidays.value[idx] = { ...holidays.value[idx], isWorkingDay: newValue };
   togglingId.value = holiday.id;
   try {
-    const updated = await holidayService.setIsWorkingDay(holiday.id, !holiday.isWorkingDay);
-    const idx = holidays.value.findIndex((h) => h.id === holiday.id);
-    if (idx !== -1) holidays.value[idx] = updated;
+    const updated = await holidayService.setIsWorkingDay(holiday.id, newValue);
+    holidays.value[idx] = updated;
   } catch {
+    // Revert on failure
+    holidays.value[idx] = { ...holidays.value[idx], isWorkingDay: !newValue };
     toast.error("Failed to update holiday");
   } finally {
     togglingId.value = null;
