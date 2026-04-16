@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { UsersIcon } from "lucide-vue-next";
+import { UsersIcon, ChevronRightIcon } from "lucide-vue-next";
 
 const toast = useAppToast();
 const router = useRouter();
@@ -43,7 +43,7 @@ onMounted(async () => {
       <div class="max-w-4xl mx-auto">
         <div class="mb-8">
           <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Employees</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">All registered employees</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Click an employee to manage their vacation types, balance and hours targets</p>
         </div>
 
         <div class="card overflow-hidden">
@@ -61,17 +61,18 @@ onMounted(async () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>This week</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableEmpty v-if="employees.length === 0" :colspan="3">
+              <TableEmpty v-if="employees.length === 0" :colspan="4">
                 <UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">No employees found.</p>
               </TableEmpty>
               <TableRow
                 v-for="employee in employees"
                 :key="employee.id"
-                class="cursor-pointer"
+                class="cursor-pointer hover:bg-muted/50 transition-colors"
                 @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
               >
                 <TableCell class="font-medium text-slate-900 dark:text-slate-100">
@@ -100,6 +101,9 @@ onMounted(async () => {
                       {{ weekStatus(employee) === "on-track" ? "On track" : "Behind" }}
                     </span>
                   </div>
+                </TableCell>
+                <TableCell class="text-right w-8">
+                  <ChevronRightIcon class="size-4 text-slate-400 dark:text-slate-500 ml-auto" />
                 </TableCell>
               </TableRow>
             </TableBody>
