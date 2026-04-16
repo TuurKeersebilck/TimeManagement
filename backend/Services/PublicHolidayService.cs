@@ -193,18 +193,20 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
 
             if (nagerHolidays == null) return;
 
-            // Capture any IsWorkingDay overrides the admin set so they survive the refresh
+            // Preserve existing IsWorkingDay values so admin changes survive a refresh.
+            // Only holidays not yet in the DB will receive the API-derived default.
             var existing = await db.PublicHolidays
                 .Where(h => h.CountryCode == countryCode && h.Year == year && !h.IsCustom)
                 .ToListAsync(ct);
-            var overrides = existing
-                .Where(h => h.IsWorkingDay)
-                .ToDictionary(h => h.Date, h => true);
+            var overrides = existing.ToDictionary(h => h.Date, h => h.IsWorkingDay);
             db.PublicHolidays.RemoveRange(existing);
 
             var entities = nagerHolidays.Select(h =>
             {
                 var date = DateOnly.Parse(h.Date);
+                // Non-public holidays (Optional, Bank, Observance, etc.) default to working days.
+                // Admin overrides take precedence over the API-derived default.
+                var apiDefault = !h.Types.Contains("Public", StringComparer.OrdinalIgnoreCase);
                 return new PublicHoliday
                 {
                     Date = date,
@@ -212,7 +214,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
                     CountryCode = countryCode,
                     Year = year,
                     IsCustom = false,
-                    IsWorkingDay = overrides.ContainsKey(date),
+                    IsWorkingDay = overrides.TryGetValue(date, out var ov) ? ov : apiDefault,
                 };
             });
 

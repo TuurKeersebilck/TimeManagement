@@ -58,6 +58,8 @@ public class NagerHolidayDto
     public string Date { get; set; } = string.Empty;
     public string LocalName { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    /// <summary>e.g. ["Public"], ["Optional"], ["Bank"], etc.</summary>
+    public List<string> Types { get; set; } = [];
 }
 
 public class NagerCountryDto
