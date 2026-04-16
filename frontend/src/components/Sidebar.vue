@@ -89,8 +89,13 @@ onMounted(() => fetchUser());
   >
     <!-- App name -->
     <div class="shrink-0 px-6 pt-8 pb-2">
-      <span class="sidebar-wordmark">TEMPO</span>
-      <span class="sidebar-version">v.{{ appVersion }}</span>
+      <div class="flex items-start justify-between">
+        <div>
+          <span class="sidebar-wordmark">TEMPO</span>
+          <span class="sidebar-version">v.{{ appVersion }}</span>
+        </div>
+        <NotificationBell v-if="isAdmin" class="mt-1" />
+      </div>
     </div>
 
     <!-- Navigation -->
@@ -141,10 +146,6 @@ onMounted(() => fetchUser());
 
     <!-- Bottom section -->
     <div class="shrink-0 px-6 pt-4 pb-6 border-t border-border space-y-4">
-      <div v-if="isAdmin">
-        <NotificationBell />
-      </div>
-
       <!-- User profile -->
       <div v-if="isLoadingUser" class="h-4 w-3/4 bg-muted rounded animate-pulse" />
       <div v-else-if="currentUser" class="flex items-center justify-between gap-2">

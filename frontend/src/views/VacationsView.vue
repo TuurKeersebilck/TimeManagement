@@ -556,7 +556,7 @@ onMounted(async () => {
                     </div>
                   </PopoverTrigger>
 
-                  <PopoverContent class="w-72 p-0 shadow-lg" side="bottom" :collision-padding="12">
+                  <PopoverContent class="w-72 p-0 shadow-lg max-h-[min(600px,80svh)] overflow-y-auto" :collision-padding="12">
                     <!-- Popover header -->
                     <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
                       <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
