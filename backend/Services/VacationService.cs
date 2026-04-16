@@ -93,6 +93,11 @@ public class VacationService(AppDbContext db) : IVacationService
     {
         ValidateAmount(dto.Amount);
 
+        var isHoliday = await _db.PublicHolidays
+            .AnyAsync(h => h.Date == dto.Date && !h.IsWorkingDay, ct);
+        if (isHoliday)
+            throw new ArgumentException("Cannot plan vacation on a public holiday.");
+
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
         var balance = await _db.EmployeeVacationBalances
