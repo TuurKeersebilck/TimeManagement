@@ -485,9 +485,9 @@ const formatDate = (iso: string) =>
                   </TableCell>
                   <TableCell>
                     <Switch
-                      :checked="!holiday.isWorkingDay"
+                      :model-value="!holiday.isWorkingDay"
                       :disabled="togglingId === holiday.id"
-                      @update:checked="toggleWorkingDay(holiday)"
+                      @update:model-value="() => toggleWorkingDay(holiday)"
                     />
                   </TableCell>
                   <TableCell class="text-right">
