@@ -12,7 +12,7 @@ const { isDark } = useTheme();
 <template>
   <div class="min-h-screen bg-slate-50 dark:bg-slate-950">
     <RouterView />
-    <Sonner :theme="isDark ? 'dark' : 'light'" position="bottom-right" rich-colors />
+    <Sonner :theme="isDark ? 'dark' : 'light'" position="bottom-center" rich-colors />
     <AppConfirmDialog />
   </div>
 </template>
