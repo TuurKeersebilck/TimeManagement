@@ -5,6 +5,8 @@ export interface PublicHoliday {
   date: string; // "YYYY-MM-DD"
   name: string;
   isCustom: boolean;
+  /** True when the company works this day — it shows on the calendar but counts as a working day for vacation planning. */
+  isWorkingDay: boolean;
 }
 
 export interface AppConfiguration {
@@ -55,6 +57,11 @@ export const holidayService = {
 
   async addCustomHoliday(date: string, name: string): Promise<PublicHoliday> {
     const res = await apiClient.post<PublicHoliday>("/admin/settings/holidays", { date, name });
+    return res.data;
+  },
+
+  async setIsWorkingDay(id: number, isWorkingDay: boolean): Promise<PublicHoliday> {
+    const res = await apiClient.patch<PublicHoliday>(`/admin/settings/holidays/${id}/is-working-day`, { isWorkingDay });
     return res.data;
   },
 

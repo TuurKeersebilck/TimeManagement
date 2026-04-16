@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
 import {
   GlobeIcon,
   RefreshCwIcon,
@@ -64,6 +65,7 @@ const refreshing = ref(false);
 const newDate = ref("");
 const newName = ref("");
 const addingCustom = ref(false);
+const togglingId = ref<number | null>(null);
 
 const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
@@ -142,6 +144,19 @@ const addCustom = async () => {
     toast.error("Failed to add holiday");
   } finally {
     addingCustom.value = false;
+  }
+};
+
+const toggleWorkingDay = async (holiday: PublicHoliday) => {
+  togglingId.value = holiday.id;
+  try {
+    const updated = await holidayService.setIsWorkingDay(holiday.id, !holiday.isWorkingDay);
+    const idx = holidays.value.findIndex((h) => h.id === holiday.id);
+    if (idx !== -1) holidays.value[idx] = updated;
+  } catch {
+    toast.error("Failed to update holiday");
+  } finally {
+    togglingId.value = null;
   }
 };
 
@@ -226,7 +241,8 @@ const formatDate = (iso: string) =>
                 </p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Selecting a country automatically fetches its public holidays for this year and
-                  next. Holidays are skipped when employees plan vacation ranges.
+                  next. Holidays marked as "Day off" are skipped when employees plan vacation ranges.
+                  Toggle off any holidays your company still works on.
                 </p>
               </div>
             </div>
@@ -427,11 +443,12 @@ const formatDate = (iso: string) =>
                   <TableHead>Date</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Day off</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableEmpty v-if="holidays.length === 0" :colspan="4">
+                <TableEmpty v-if="holidays.length === 0" :colspan="5">
                   <CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                   <p class="text-slate-500 dark:text-slate-400">
                     {{
@@ -459,6 +476,13 @@ const formatDate = (iso: string) =>
                     >
                       {{ holiday.isCustom ? "Custom" : "Official" }}
                     </span>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      :checked="!holiday.isWorkingDay"
+                      :disabled="togglingId === holiday.id"
+                      @update:checked="toggleWorkingDay(holiday)"
+                    />
                   </TableCell>
                   <TableCell class="text-right">
                     <Button

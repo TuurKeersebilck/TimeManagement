@@ -141,6 +141,16 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         return ToDto(holiday);
     }
 
+    public async Task<PublicHolidayDto> SetIsWorkingDayAsync(int id, bool isWorkingDay, CancellationToken ct = default)
+    {
+        var holiday = await db.PublicHolidays.FindAsync([id], ct)
+            ?? throw new ResourceNotFoundException("Holiday not found.");
+
+        holiday.IsWorkingDay = isWorkingDay;
+        await db.SaveChangesAsync(ct);
+        return ToDto(holiday);
+    }
+
     public async Task DeleteHolidayAsync(int id, CancellationToken ct = default)
     {
         var holiday = await db.PublicHolidays.FindAsync([id], ct)
@@ -183,19 +193,27 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
 
             if (nagerHolidays == null) return;
 
-            // Remove existing non-custom entries for this country+year before re-inserting
+            // Capture any IsWorkingDay overrides the admin set so they survive the refresh
             var existing = await db.PublicHolidays
                 .Where(h => h.CountryCode == countryCode && h.Year == year && !h.IsCustom)
                 .ToListAsync(ct);
+            var overrides = existing
+                .Where(h => h.IsWorkingDay)
+                .ToDictionary(h => h.Date, h => true);
             db.PublicHolidays.RemoveRange(existing);
 
-            var entities = nagerHolidays.Select(h => new PublicHoliday
+            var entities = nagerHolidays.Select(h =>
             {
-                Date = DateOnly.Parse(h.Date),
-                Name = h.LocalName,
-                CountryCode = countryCode,
-                Year = year,
-                IsCustom = false,
+                var date = DateOnly.Parse(h.Date);
+                return new PublicHoliday
+                {
+                    Date = date,
+                    Name = h.LocalName,
+                    CountryCode = countryCode,
+                    Year = year,
+                    IsCustom = false,
+                    IsWorkingDay = overrides.ContainsKey(date),
+                };
             });
 
             db.PublicHolidays.AddRange(entities);
@@ -221,5 +239,6 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         Date = h.Date.ToString("yyyy-MM-dd"),
         Name = h.Name,
         IsCustom = h.IsCustom,
+        IsWorkingDay = h.IsWorkingDay,
     };
 }
