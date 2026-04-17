@@ -5,7 +5,7 @@ using TimeManagementBackend.Models;
 namespace TimeManagementBackend.Services;
 
 /// <summary>
-/// Runs daily at 08:00 server time and emails any employee
+/// Runs daily at 08:00 UTC and emails any employee
 /// who had no clock-in event the previous working day.
 /// </summary>
 public class MissedClockInReminderService(
@@ -18,9 +18,9 @@ public class MissedClockInReminderService(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
 
-            // Run once per day at 08:00
+            // Run once per day at 08:00 UTC
             if (now.Hour >= 8 && DateOnly.FromDateTime(now) != _lastRunDate)
             {
                 _lastRunDate = DateOnly.FromDateTime(now);
@@ -40,7 +40,7 @@ public class MissedClockInReminderService(
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
-            var yesterday = await GetPreviousWorkingDayAsync(DateOnly.FromDateTime(DateTime.Now), db, ct);
+            var yesterday = await GetPreviousWorkingDayAsync(DateOnly.FromDateTime(DateTime.UtcNow), db, ct);
             if (yesterday == null)
             {
                 logger.LogInformation("MissedClockInReminder: skipped — no previous working day resolved.");

@@ -30,6 +30,6 @@ public class AdjustmentRequestDto
     public DateTimeOffset? RequestedClockOut { get; set; }
     public string Reason { get; set; } = string.Empty;
     public AdjustmentRequestStatus Status { get; set; }
-    public DateTime RequestedAt { get; set; }
-    public DateTime? ReviewedAt { get; set; }
+    public DateTimeOffset RequestedAt { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
 }

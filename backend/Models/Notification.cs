@@ -7,5 +7,5 @@ public class Notification
     public User RecipientUser { get; set; } = null!;
     public string Message { get; set; } = string.Empty;
     public bool IsRead { get; set; }
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

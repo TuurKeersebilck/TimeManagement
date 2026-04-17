@@ -183,7 +183,7 @@ public class AdminService(AppDbContext context) : IAdminService
             ?? throw new ResourceNotFoundException($"Vacation type {id} not found.");
 
         entity.IsDeleted = true;
-        entity.DeletedAt = DateTime.UtcNow;
+        entity.DeletedAt = DateTimeOffset.UtcNow;
         await _context.SaveChangesAsync(ct);
     }
 
