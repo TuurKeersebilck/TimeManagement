@@ -88,7 +88,7 @@ public class AuthController(
                 Email = user.Email,
                 FullName = user.FullName,
                 Roles = [user.Role.ToString()],
-                Expiration = DateTime.Now.AddMinutes(_jwtConfig.ExpiryInMinutes)
+                Expiration = DateTimeOffset.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes)
             });
         }
         catch (Exception ex)
@@ -136,7 +136,7 @@ public class AuthController(
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 Roles = [user.Role.ToString()],
-                Expiration = DateTime.Now.AddMinutes(expiryMinutes)
+                Expiration = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
             });
         }
         catch (Exception ex)
@@ -209,7 +209,7 @@ public class AuthController(
 
         // Invalidate any existing unused tokens for this user
         var existing = await _db.PasswordResetTokens
-            .Where(t => t.UserId == user.Id && !t.Used && t.ExpiresAt > DateTime.UtcNow)
+            .Where(t => t.UserId == user.Id && !t.Used && t.ExpiresAt > DateTimeOffset.UtcNow)
             .ToListAsync();
         foreach (var t in existing) t.Used = true;
 
@@ -221,7 +221,7 @@ public class AuthController(
         {
             UserId = user.Id,
             TokenHash = hash,
-            ExpiresAt = DateTime.UtcNow.AddHours(1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
             Used = false,
         });
         await _db.SaveChangesAsync();
@@ -240,7 +240,7 @@ public class AuthController(
 
         var record = await _db.PasswordResetTokens
             .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.TokenHash == hash && !t.Used && t.ExpiresAt > DateTime.UtcNow);
+            .FirstOrDefaultAsync(t => t.TokenHash == hash && !t.Used && t.ExpiresAt > DateTimeOffset.UtcNow);
 
         if (record == null)
             return BadRequest(new ErrorResponseDto { Message = "This reset link is invalid or has expired.", Code = "INVALID_TOKEN" });

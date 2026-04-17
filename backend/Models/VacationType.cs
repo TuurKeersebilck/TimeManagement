@@ -21,5 +21,5 @@ public class VacationType
     public ICollection<EmployeeVacationBalance> EmployeeBalances { get; set; } = new List<EmployeeVacationBalance>();
 
     public bool IsDeleted { get; set; } = false;
-    public DateTime? DeletedAt { get; set; }
+    public DateTimeOffset? DeletedAt { get; set; }
 }

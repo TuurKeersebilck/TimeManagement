@@ -33,13 +33,13 @@ public class TimeAdjustmentRequest
     [MaxLength(64)]
     public string ApprovalTokenHash { get; set; } = string.Empty;
 
-    public DateTime ExpiresAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
 
     public bool TokenUsed { get; set; }
 
-    public DateTime RequestedAt { get; set; }
+    public DateTimeOffset RequestedAt { get; set; }
 
-    public DateTime? ReviewedAt { get; set; }
+    public DateTimeOffset? ReviewedAt { get; set; }
 
     public string? ReviewedByUserId { get; set; }
 

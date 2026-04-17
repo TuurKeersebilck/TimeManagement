@@ -47,7 +47,7 @@ public class TimeAdjustmentRequestService(
             throw new ValidationException("Clock-in must be before clock-out.");
 
         // Can't request future dates
-        if (dto.Date > DateOnly.FromDateTime(DateTime.Now))
+        if (dto.Date > DateOnly.FromDateTime(DateTime.UtcNow))
             throw new ValidationException("Cannot submit an adjustment request for a future date.");
 
         // Only one pending request per day per user
@@ -66,16 +66,16 @@ public class TimeAdjustmentRequestService(
         {
             UserId = userId,
             Date = dto.Date,
-            RequestedClockIn = dto.RequestedClockIn,
-            RequestedBreakStart = dto.RequestedBreakStart,
-            RequestedBreakEnd = dto.RequestedBreakEnd,
-            RequestedClockOut = dto.RequestedClockOut,
+            RequestedClockIn = dto.RequestedClockIn?.ToUniversalTime(),
+            RequestedBreakStart = dto.RequestedBreakStart?.ToUniversalTime(),
+            RequestedBreakEnd = dto.RequestedBreakEnd?.ToUniversalTime(),
+            RequestedClockOut = dto.RequestedClockOut?.ToUniversalTime(),
             Reason = dto.Reason,
             Status = AdjustmentRequestStatus.Pending,
             ApprovalTokenHash = tokenHash,
-            ExpiresAt = DateTime.UtcNow.AddDays(TokenExpiryDays),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(TokenExpiryDays),
             TokenUsed = false,
-            RequestedAt = DateTime.UtcNow,
+            RequestedAt = DateTimeOffset.UtcNow,
         };
 
         db.TimeAdjustmentRequests.Add(request);
@@ -172,7 +172,7 @@ public class TimeAdjustmentRequestService(
         if (request.TokenUsed)
             return "This approval link has already been used.";
 
-        if (request.ExpiresAt < DateTime.UtcNow)
+        if (request.ExpiresAt < DateTimeOffset.UtcNow)
             return "This approval link has expired.";
 
         if (request.Status != AdjustmentRequestStatus.Pending)
@@ -186,7 +186,7 @@ public class TimeAdjustmentRequestService(
 
         request.Status = AdjustmentRequestStatus.Approved;
         request.TokenUsed = true;
-        request.ReviewedAt = DateTime.UtcNow;
+        request.ReviewedAt = DateTimeOffset.UtcNow;
 
         await db.SaveChangesAsync(ct);
 
@@ -214,7 +214,7 @@ public class TimeAdjustmentRequestService(
 
         request.Status = AdjustmentRequestStatus.Approved;
         request.TokenUsed = true; // invalidate the email link
-        request.ReviewedAt = DateTime.UtcNow;
+        request.ReviewedAt = DateTimeOffset.UtcNow;
         request.ReviewedByUserId = adminUserId;
 
         await db.SaveChangesAsync(ct);
@@ -233,7 +233,7 @@ public class TimeAdjustmentRequestService(
             throw new ValidationException($"This request has already been {request.Status.ToString().ToLower()}.");
 
         request.Status = AdjustmentRequestStatus.Rejected;
-        request.ReviewedAt = DateTime.UtcNow;
+        request.ReviewedAt = DateTimeOffset.UtcNow;
         request.ReviewedByUserId = adminUserId;
         request.TokenUsed = true; // invalidate the email link
 

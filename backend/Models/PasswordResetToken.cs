@@ -19,7 +19,7 @@ public class PasswordResetToken
     [MaxLength(64)]
     public string TokenHash { get; set; } = string.Empty;
 
-    public DateTime ExpiresAt { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
 
     public bool Used { get; set; }
 }

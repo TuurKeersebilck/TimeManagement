@@ -21,7 +21,7 @@ public class NotificationService(AppDbContext db) : INotificationService
             RecipientUserId = id,
             Message = message,
             IsRead = false,
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow,
         }).ToList();
 
         _db.Notifications.AddRange(notifications);
