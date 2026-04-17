@@ -23,7 +23,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, CoffeeIcon } from "lucide-vue-next";
+import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, CoffeeIcon, MessageSquareTextIcon } from "lucide-vue-next";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+
+const descriptionDialog = ref<{ open: boolean; text: string; employee: string; date: string }>({
+  open: false,
+  text: "",
+  employee: "",
+  date: "",
+});
+
+function openDescription(log: AdminTimeLog) {
+  descriptionDialog.value = {
+    open: true,
+    text: log.description!,
+    employee: log.employeeName,
+    date: formatDate(log.date),
+  };
+}
+
+const descOverflow = ref<Record<string, boolean>>({});
+
+function checkDescOverflow(el: Element | null, key: string) {
+  if (el) descOverflow.value[key] = el.scrollWidth > el.clientWidth;
+}
 
 const toast = useAppToast();
 const route = useRoute();
@@ -263,17 +292,22 @@ onMounted(async () => {
                   </span>
                   <span v-else class="text-slate-400 text-xs">—</span>
                 </TableCell>
-                <TableCell
-                  class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px] truncate"
-                  :title="log.description"
-                >
-                  {{
-                    log.description
-                      ? log.description.length > 50
-                        ? log.description.substring(0, 50) + "…"
-                        : log.description
-                      : "—"
-                  }}
+                <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px]">
+                  <div v-if="log.description" class="flex items-center gap-1.5 min-w-0">
+                    <span
+                      class="truncate"
+                      :ref="(el) => checkDescOverflow(el as Element | null, `${log.userId}-${log.date}`)"
+                    >{{ log.description }}</span>
+                    <button
+                      v-if="descOverflow[`${log.userId}-${log.date}`]"
+                      class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                      title="View full description"
+                      @click="openDescription(log)"
+                    >
+                      <MessageSquareTextIcon class="size-3.5" />
+                    </button>
+                  </div>
+                  <span v-else class="text-slate-400">—</span>
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -317,5 +351,19 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+    <!-- Description dialog -->
+    <Dialog v-model:open="descriptionDialog.open">
+      <DialogContent class="max-w-md" @open-auto-focus.prevent>
+        <DialogHeader>
+          <DialogTitle>Description</DialogTitle>
+          <DialogDescription>
+            {{ descriptionDialog.employee }} &mdash; {{ descriptionDialog.date }}
+          </DialogDescription>
+        </DialogHeader>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+          {{ descriptionDialog.text }}
+        </p>
+      </DialogContent>
+    </Dialog>
   </AuthenticatedLayout>
 </template>

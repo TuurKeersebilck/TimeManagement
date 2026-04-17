@@ -18,8 +18,21 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
-import { ClipboardListIcon, Loader2Icon, XIcon, CheckIcon } from "lucide-vue-next";
+import {
+  ClipboardListIcon,
+  Loader2Icon,
+  XIcon,
+  CheckIcon,
+  MessageSquareTextIcon,
+} from "lucide-vue-next";
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
@@ -28,6 +41,22 @@ const loading = ref(false);
 const search = ref("");
 const approvingId = ref<number | null>(null);
 const rejectingId = ref<number | null>(null);
+
+const reasonDialog = ref<{ open: boolean; text: string; employee: string; date: string }>({
+  open: false,
+  text: "",
+  employee: "",
+  date: "",
+});
+
+function openReason(r: AdjustmentRequest) {
+  reasonDialog.value = {
+    open: true,
+    text: r.reason,
+    employee: r.employeeName,
+    date: fmtDate(r.date),
+  };
+}
 
 const STATUS_LABELS: Record<AdjustmentRequestStatus, string> = {
   Pending: "Pending",
@@ -54,7 +83,6 @@ const filtered = computed(() => {
 
 function fmt(t: string | null): string {
   if (!t) return "—";
-  // Backend now sends a full ISO 8601 DateTimeOffset string; parse and display in local time.
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
@@ -182,15 +210,25 @@ onMounted(load);
                 <TableCell class="text-slate-600 dark:text-slate-400">
                   {{ fmtDate(r.date) }}
                 </TableCell>
-                <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                  {{ fmt(r.requestedClockIn) }} / {{ fmt(r.requestedBreakStart) }} / {{ fmt(r.requestedBreakEnd) }} / {{ fmt(r.requestedClockOut) }}
+                <TableCell
+                  class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap"
+                >
+                  {{ fmt(r.requestedClockIn) }} / {{ fmt(r.requestedBreakStart) }} /
+                  {{ fmt(r.requestedBreakEnd) }} / {{ fmt(r.requestedClockOut) }}
                 </TableCell>
                 <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
-                  <span :title="r.reason">
-                    {{ r.reason.length > 80 ? r.reason.substring(0, 80) + "…" : r.reason }}
-                  </span>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <span class="truncate">{{ r.reason }}</span>
+                    <button
+                      class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                      title="View full reason"
+                      @click="openReason(r)"
+                    >
+                      <MessageSquareTextIcon class="size-3.5" />
+                    </button>
+                  </div>
                 </TableCell>
-                <TableCell class="text-slate-500 dark:text-slate-400 text-sm">
+                <TableCell class="text-slate-500 dark:text-slate-400 text-sm whitespace-nowrap">
                   {{ fmtDate(r.requestedAt) }}
                 </TableCell>
                 <TableCell>
@@ -233,5 +271,20 @@ onMounted(load);
         </div>
       </div>
     </div>
+
+    <!-- Reason dialog -->
+    <Dialog v-model:open="reasonDialog.open">
+      <DialogContent class="max-w-md" @open-auto-focus.prevent>
+        <DialogHeader>
+          <DialogTitle>Adjustment Reason</DialogTitle>
+          <DialogDescription>
+            {{ reasonDialog.employee }} &mdash; {{ reasonDialog.date }}
+          </DialogDescription>
+        </DialogHeader>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+          {{ reasonDialog.text }}
+        </p>
+      </DialogContent>
+    </Dialog>
   </AuthenticatedLayout>
 </template>
