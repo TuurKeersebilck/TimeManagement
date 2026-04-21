@@ -234,12 +234,36 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         }
     }
 
+    public async Task<AppConfigurationDto> SetNotificationTogglesAsync(bool enableAdjustmentRequestEmails, bool enableMissedClockInEmails, CancellationToken ct = default)
+    {
+        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+        if (config == null)
+        {
+            config = new AppConfiguration
+            {
+                EnableAdjustmentRequestEmails = enableAdjustmentRequestEmails,
+                EnableMissedClockInEmails = enableMissedClockInEmails,
+            };
+            db.AppConfigurations.Add(config);
+        }
+        else
+        {
+            config.EnableAdjustmentRequestEmails = enableAdjustmentRequestEmails;
+            config.EnableMissedClockInEmails = enableMissedClockInEmails;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return ToConfigDto(config);
+    }
+
     private static AppConfigurationDto ToConfigDto(AppConfiguration c) => new()
     {
         CountryCode = c.CountryCode,
         DefaultDailyHours = c.DefaultDailyHours,
         DefaultWeeklyHours = c.DefaultWeeklyHours,
         NotificationEmail = c.NotificationEmail,
+        EnableAdjustmentRequestEmails = c.EnableAdjustmentRequestEmails,
+        EnableMissedClockInEmails = c.EnableMissedClockInEmails,
     };
 
     private static PublicHolidayDto ToDto(PublicHoliday h) => new()

@@ -17,4 +17,10 @@ public class AppConfiguration
     /// <summary>Email address that receives adjustment request notifications. If null, no email is sent.</summary>
     [System.ComponentModel.DataAnnotations.MaxLength(254)]
     public string? NotificationEmail { get; set; }
+
+    /// <summary>When false, no email is sent when an employee submits a time adjustment request.</summary>
+    public bool EnableAdjustmentRequestEmails { get; set; } = true;
+
+    /// <summary>When false, the daily missed clock-in reminder emails are not sent to employees.</summary>
+    public bool EnableMissedClockInEmails { get; set; } = true;
 }

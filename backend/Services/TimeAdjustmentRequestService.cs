@@ -85,11 +85,11 @@ public class TimeAdjustmentRequestService(
         var user = await userManager.FindByIdAsync(userId);
         var approveLink = $"{approvalBaseUrl.TrimEnd('/')}/api/timeadjustmentrequests/approve/{Uri.EscapeDataString(rawToken)}";
 
-        // Send approval email to the configured notification address (if set)
+        // Send approval email to the configured notification address (if set and enabled)
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
         var notificationEmail = config?.NotificationEmail;
 
-        if (!string.IsNullOrEmpty(notificationEmail))
+        if (!string.IsNullOrEmpty(notificationEmail) && (config?.EnableAdjustmentRequestEmails ?? true))
         {
             try
             {

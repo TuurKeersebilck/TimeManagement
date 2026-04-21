@@ -15,6 +15,8 @@ export interface AppConfiguration {
   defaultDailyHours?: number | null;
   defaultWeeklyHours?: number | null;
   notificationEmail?: string | null;
+  enableAdjustmentRequestEmails: boolean;
+  enableMissedClockInEmails: boolean;
 }
 
 export interface AvailableCountry {
@@ -76,6 +78,14 @@ export const holidayService = {
 
   async setNotificationEmail(email: string | null): Promise<AppConfiguration> {
     const res = await apiClient.put<AppConfiguration>("/admin/settings/notification-email", { email });
+    return res.data;
+  },
+
+  async setNotificationToggles(enableAdjustmentRequestEmails: boolean, enableMissedClockInEmails: boolean): Promise<AppConfiguration> {
+    const res = await apiClient.put<AppConfiguration>("/admin/settings/notification-toggles", {
+      enableAdjustmentRequestEmails,
+      enableMissedClockInEmails,
+    });
     return res.data;
   },
 };

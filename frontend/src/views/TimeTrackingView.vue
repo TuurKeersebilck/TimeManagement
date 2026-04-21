@@ -9,6 +9,7 @@ import {
   type ClockEvent,
   type ClockEventType,
   type DaySummary,
+  type MyTarget,
 } from "@/services/clockEventService";
 import { vacationService, type VacationDay } from "@/services/vacationService";
 import { adjustmentRequestService } from "@/services/adjustmentRequestService";
@@ -50,6 +51,7 @@ import {
   CoffeeIcon,
   PlaneIcon,
   SunIcon,
+  TimerIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -57,6 +59,7 @@ const { clearCache: clearSummariesCache } = useClockEventsStore();
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
+const myTarget = ref<MyTarget | null>(null);
 const todayEvents = ref<ClockEvent[]>([]);
 const summaries = ref<DaySummary[]>([]);
 const loadingEvents = ref(false);
@@ -97,6 +100,36 @@ const nextAction = computed<ClockEventType | null>(() => {
 const isDayComplete = computed(() =>
   effectiveEventOrder.value.every((t) => completedTypes.value.has(t))
 );
+
+// Expected clock-out time: clockIn + dailyTarget + total break duration (including any ongoing break)
+const expectedClockOut = computed<string | null>(() => {
+  const dailyHours = myTarget.value?.dailyHours;
+  if (!dailyHours) return null;
+
+  const clockInEvent = todayEvents.value.find((e) => e.type === "ClockIn");
+  if (!clockInEvent) return null;
+
+  // Don't show once already clocked out
+  if (completedTypes.value.has("ClockOut")) return null;
+
+  const clockInMs = new Date(clockInEvent.recordedAt).getTime();
+  const dailyMs = dailyHours * 60 * 60 * 1000;
+
+  const breakStartEvent = todayEvents.value.find((e) => e.type === "BreakStart");
+  const breakEndEvent = todayEvents.value.find((e) => e.type === "BreakEnd");
+
+  let breakMs = 0;
+  if (breakStartEvent && breakEndEvent) {
+    breakMs = new Date(breakEndEvent.recordedAt).getTime() - new Date(breakStartEvent.recordedAt).getTime();
+  } else if (breakStartEvent && !breakEndEvent) {
+    // Ongoing break — use live now so it updates reactively
+    breakMs = now.value.getTime() - new Date(breakStartEvent.recordedAt).getTime();
+  }
+
+  const targetMs = clockInMs + dailyMs + breakMs;
+  const target = new Date(targetMs);
+  return `${String(target.getHours()).padStart(2, "0")}:${String(target.getMinutes()).padStart(2, "0")}`;
+});
 
 const now = ref(new Date());
 let clockInterval: ReturnType<typeof setInterval> | null = null;
@@ -335,6 +368,7 @@ onMounted(() => {
   loadTodayEvents();
   loadSummaries();
   loadTodayVacation();
+  clockEventService.getMyTarget().then((t) => { myTarget.value = t; }).catch(() => {});
   clockInterval = setInterval(() => { now.value = new Date(); }, 10_000);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 });
@@ -442,6 +476,18 @@ onUnmounted(() => {
                         :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
                       />
                     </template>
+                  </div>
+
+                  <!-- Expected clock-out indicator -->
+                  <div
+                    v-if="expectedClockOut"
+                    class="flex items-center justify-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 px-4 py-2.5 text-sm"
+                  >
+                    <TimerIcon class="size-4 text-indigo-500 shrink-0" />
+                    <span class="text-slate-600 dark:text-slate-400">
+                      Target clock-out:
+                    </span>
+                    <span class="font-semibold font-mono text-indigo-600 dark:text-indigo-400">{{ expectedClockOut }}</span>
                   </div>
 
                   <!-- Day complete -->
