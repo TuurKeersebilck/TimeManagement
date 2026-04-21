@@ -111,7 +111,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                     if (elapsedMinutes < minimumBreakMinutes.Value)
                         throw new ValidationException(
                             $"Minimum break duration is {minimumBreakMinutes.Value} minutes. " +
-                            $"Your break has only lasted {(int)elapsedMinutes} minute(s).");
+                            $"Your break has only lasted {Math.Max(0, (int)elapsedMinutes)} minute(s).");
                 }
             }
 

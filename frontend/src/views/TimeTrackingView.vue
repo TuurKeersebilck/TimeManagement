@@ -101,7 +101,9 @@ const isDayComplete = computed(() =>
   effectiveEventOrder.value.every((t) => completedTypes.value.has(t))
 );
 
-// Minimum break enforcement: minutes remaining before "End Break" is allowed
+// Minimum break enforcement: minutes remaining before "End Break" is allowed.
+// Uses now + minuteOffset to match the recordedAt that would actually be submitted,
+// so the countdown stays in sync with what the backend would validate.
 const breakMinutesRemaining = computed<number | null>(() => {
   if (nextAction.value !== "BreakEnd") return null;
   if (todayVacation.value?.amount === 0.5) return null; // half-day: no minimum
@@ -109,8 +111,9 @@ const breakMinutesRemaining = computed<number | null>(() => {
   if (!minimum) return null;
   const breakStartEvent = todayEvents.value.find((e) => e.type === "BreakStart");
   if (!breakStartEvent) return null;
-  const elapsedMs = now.value.getTime() - new Date(breakStartEvent.recordedAt).getTime();
-  const remaining = minimum - elapsedMs / 60000;
+  const effectiveNowMs = now.value.getTime() + minuteOffset.value * 60_000;
+  const elapsedMs = effectiveNowMs - new Date(breakStartEvent.recordedAt).getTime();
+  const remaining = minimum - elapsedMs / 60_000;
   return remaining > 0 ? Math.ceil(remaining) : 0;
 });
 
