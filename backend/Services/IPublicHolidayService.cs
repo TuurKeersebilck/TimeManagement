@@ -15,4 +15,5 @@ public interface IPublicHolidayService
     Task<IEnumerable<AvailableCountryDto>> GetAvailableCountriesAsync(CancellationToken ct = default);
     Task<AppConfigurationDto> SetNotificationEmailAsync(string? email, CancellationToken ct = default);
     Task<AppConfigurationDto> SetNotificationTogglesAsync(bool enableAdjustmentRequestEmails, bool enableMissedClockInEmails, CancellationToken ct = default);
+    Task<AppConfigurationDto> SetMinimumBreakMinutesAsync(int? minutes, CancellationToken ct = default);
 }

@@ -31,6 +31,10 @@ public class AdminSettingsController(IPublicHolidayService service) : Controller
     public async Task<ActionResult<AppConfigurationDto>> SetNotificationToggles([FromBody] SetNotificationTogglesDto dto, CancellationToken ct)
         => Ok(await service.SetNotificationTogglesAsync(dto.EnableAdjustmentRequestEmails, dto.EnableMissedClockInEmails, ct));
 
+    [HttpPut("min-break")]
+    public async Task<ActionResult<AppConfigurationDto>> SetMinimumBreakMinutes([FromBody] SetMinimumBreakMinutesDto dto, CancellationToken ct)
+        => Ok(await service.SetMinimumBreakMinutesAsync(dto.MinimumBreakMinutes, ct));
+
     [HttpGet("available-countries")]
     public async Task<ActionResult<IEnumerable<AvailableCountryDto>>> GetAvailableCountries(CancellationToken ct)
         => Ok(await service.GetAvailableCountriesAsync(ct));

@@ -60,6 +60,7 @@ export const CLOCK_EVENT_ENUM: Record<ClockEventType, number> = {
 export interface MyTarget {
   dailyHours: number | null;
   weeklyHours: number | null;
+  minimumBreakMinutes: number | null;
 }
 
 function localDateString(d: Date): string {

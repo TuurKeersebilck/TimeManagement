@@ -101,6 +101,27 @@ const isDayComplete = computed(() =>
   effectiveEventOrder.value.every((t) => completedTypes.value.has(t))
 );
 
+// Minimum break enforcement: minutes remaining before "End Break" is allowed.
+// Uses now + minuteOffset to match the recordedAt that would actually be submitted,
+// so the countdown stays in sync with what the backend would validate.
+const breakMinutesRemaining = computed<number | null>(() => {
+  if (nextAction.value !== "BreakEnd") return null;
+  if (todayVacation.value?.amount === 0.5) return null; // half-day: no minimum
+  const minimum = myTarget.value?.minimumBreakMinutes;
+  if (!minimum) return null;
+  const breakStartEvent = todayEvents.value.find((e) => e.type === "BreakStart");
+  if (!breakStartEvent) return null;
+  const effectiveNowMs = now.value.getTime() + minuteOffset.value * 60_000;
+  const elapsedMs = effectiveNowMs - new Date(breakStartEvent.recordedAt).getTime();
+  const remaining = minimum - elapsedMs / 60_000;
+  return remaining > 0 ? Math.ceil(remaining) : 0;
+});
+
+const breakMinimumReached = computed(() => {
+  const remaining = breakMinutesRemaining.value;
+  return remaining === null || remaining <= 0;
+});
+
 // Expected clock-out time: clockIn + dailyTarget + total break duration (including any ongoing break)
 const expectedClockOut = computed<string | null>(() => {
   const dailyHours = myTarget.value?.dailyHours;
@@ -369,7 +390,7 @@ onMounted(() => {
   loadSummaries();
   loadTodayVacation();
   clockEventService.getMyTarget().then((t) => { myTarget.value = t; }).catch(() => {});
-  clockInterval = setInterval(() => { now.value = new Date(); }, 10_000);
+  clockInterval = setInterval(() => { now.value = new Date(); }, 1_000);
   document.addEventListener("visibilitychange", handleVisibilityChange);
 });
 
@@ -533,7 +554,18 @@ onUnmounted(() => {
                     />
                   </div>
 
-                  <Button class="w-full" size="lg" :disabled="submitting" @click="submitClock">
+                  <div
+                    v-if="breakMinutesRemaining !== null && breakMinutesRemaining > 0"
+                    class="flex items-center justify-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-4 py-2.5 text-sm"
+                  >
+                    <CoffeeIcon class="size-4 text-amber-500 shrink-0" />
+                    <span class="text-slate-600 dark:text-slate-400">
+                      Break ends in
+                    </span>
+                    <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">{{ breakMinutesRemaining }}min</span>
+                  </div>
+
+                  <Button class="w-full" size="lg" :disabled="submitting || !breakMinimumReached" @click="submitClock">
                     <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
                     {{ CLOCK_EVENT_LABELS[nextAction!] }}
                   </Button>

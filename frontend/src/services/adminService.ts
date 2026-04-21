@@ -29,6 +29,8 @@ export interface EmployeeTarget {
   resolvedDailyHours?: number | null;
   resolvedWeeklyHours?: number | null;
   hasOverride: boolean;
+  minimumBreakMinutes?: number | null;
+  resolvedMinimumBreakMinutes?: number | null;
 }
 
 export interface WeekSummary {
@@ -75,7 +77,7 @@ export const adminService = {
     return res.data;
   },
 
-  async setEmployeeTarget(userId: string, data: { dailyHours?: number | null; weeklyHours?: number | null }): Promise<EmployeeTarget> {
+  async setEmployeeTarget(userId: string, data: { dailyHours?: number | null; weeklyHours?: number | null; minimumBreakMinutes?: number | null }): Promise<EmployeeTarget> {
     const res = await apiClient.put<EmployeeTarget>(`/admin/employees/${userId}/target`, data);
     return res.data;
   },
