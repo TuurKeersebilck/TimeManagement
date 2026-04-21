@@ -150,6 +150,8 @@ public class VacationService(AppDbContext db) : IVacationService
             throw new InsufficientVacationBalanceException(
                 $"Insufficient balance. Remaining: {balance.YearlyBalance - used} day(s).");
 
+        var typeChanged = day.VacationTypeId != dto.VacationTypeId;
+
         day.VacationTypeId = dto.VacationTypeId;
         day.Date = dto.Date;
         day.Amount = dto.Amount;
@@ -157,7 +159,7 @@ public class VacationService(AppDbContext db) : IVacationService
 
         await _db.SaveChangesAsync(ct);
 
-        if (day.VacationType.Id != dto.VacationTypeId)
+        if (typeChanged)
             await _db.Entry(day).Reference(d => d.VacationType).LoadAsync(ct);
 
         return ToDto(day);
