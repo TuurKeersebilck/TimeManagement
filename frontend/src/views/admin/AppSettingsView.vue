@@ -56,6 +56,10 @@ const savingTargets = ref(false);
 const notificationEmail = ref<string>("");
 const savingEmail = ref(false);
 
+const enableAdjustmentRequestEmails = ref(true);
+const enableMissedClockInEmails = ref(true);
+const savingToggles = ref(false);
+
 const loadingCountries = ref(false);
 const loadingHolidays = ref(false);
 const savingCountry = ref(false);
@@ -85,6 +89,8 @@ onMounted(async () => {
     if (config.defaultDailyHours != null) defaultDailyHours.value = String(config.defaultDailyHours);
     if (config.defaultWeeklyHours != null) defaultWeeklyHours.value = String(config.defaultWeeklyHours);
     if (config.notificationEmail) notificationEmail.value = config.notificationEmail;
+    enableAdjustmentRequestEmails.value = config.enableAdjustmentRequestEmails;
+    enableMissedClockInEmails.value = config.enableMissedClockInEmails;
   } catch {
     toast.error("Failed to load settings");
   } finally {
@@ -195,6 +201,21 @@ const saveTargets = async () => {
     toast.error("Failed to save targets");
   } finally {
     savingTargets.value = false;
+  }
+};
+
+const saveNotificationToggles = async () => {
+  savingToggles.value = true;
+  try {
+    await holidayService.setNotificationToggles(
+      enableAdjustmentRequestEmails.value,
+      enableMissedClockInEmails.value,
+    );
+    toast.success("Notification preferences saved");
+  } catch {
+    toast.error("Failed to save notification preferences");
+  } finally {
+    savingToggles.value = false;
   }
 };
 
@@ -341,8 +362,8 @@ const formatDate = (iso: string) =>
             Notifications
           </h2>
 
-          <div class="card p-5">
-            <div class="flex items-start gap-3 mb-5">
+          <div class="card p-5 space-y-5">
+            <div class="flex items-start gap-3">
               <MailIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
               <div>
                 <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -368,6 +389,37 @@ const formatDate = (iso: string) =>
                 <Loader2Icon v-if="savingEmail" class="size-4 animate-spin" />
                 Save
               </Button>
+            </div>
+
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-5 space-y-4">
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Email types</p>
+
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Adjustment request emails</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Send an approval email when an employee submits a time adjustment request.
+                  </p>
+                </div>
+                <Switch v-model="enableAdjustmentRequestEmails" />
+              </div>
+
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Missed clock-in reminders</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Send a daily reminder to employees who forgot to clock in the previous working day.
+                  </p>
+                </div>
+                <Switch v-model="enableMissedClockInEmails" />
+              </div>
+
+              <div class="flex justify-end">
+                <Button :disabled="savingToggles" @click="saveNotificationToggles">
+                  <Loader2Icon v-if="savingToggles" class="size-4 animate-spin" />
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
         </section>

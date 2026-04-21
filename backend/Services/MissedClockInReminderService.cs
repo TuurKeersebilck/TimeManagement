@@ -40,6 +40,13 @@ public class MissedClockInReminderService(
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
 
+            var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+            if (!(config?.EnableMissedClockInEmails ?? true))
+            {
+                logger.LogInformation("MissedClockInReminder: skipped — disabled in app settings.");
+                return;
+            }
+
             var yesterday = await GetPreviousWorkingDayAsync(DateOnly.FromDateTime(DateTime.UtcNow), db, ct);
             if (yesterday == null)
             {

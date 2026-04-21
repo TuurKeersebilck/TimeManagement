@@ -28,11 +28,19 @@ public class AppConfigurationDto
     public decimal? DefaultDailyHours { get; set; }
     public decimal? DefaultWeeklyHours { get; set; }
     public string? NotificationEmail { get; set; }
+    public bool EnableAdjustmentRequestEmails { get; set; }
+    public bool EnableMissedClockInEmails { get; set; }
 }
 
 public class SetNotificationEmailDto
 {
     public string? Email { get; set; }
+}
+
+public class SetNotificationTogglesDto
+{
+    public bool EnableAdjustmentRequestEmails { get; set; }
+    public bool EnableMissedClockInEmails { get; set; }
 }
 
 public class SetDefaultTargetsDto
