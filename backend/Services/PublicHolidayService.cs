@@ -16,13 +16,9 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
     public async Task<AppConfigurationDto> GetConfigurationAsync(CancellationToken ct = default)
     {
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
-        return new AppConfigurationDto
-        {
-            CountryCode = config?.CountryCode,
-            DefaultDailyHours = config?.DefaultDailyHours,
-            DefaultWeeklyHours = config?.DefaultWeeklyHours,
-            NotificationEmail = config?.NotificationEmail,
-        };
+        if (config == null)
+            return new AppConfigurationDto { EnableAdjustmentRequestEmails = true, EnableMissedClockInEmails = true };
+        return ToConfigDto(config);
     }
 
     public async Task<AppConfigurationDto> SetDefaultTargetsAsync(decimal? dailyHours, decimal? weeklyHours, CancellationToken ct = default)
