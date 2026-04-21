@@ -30,6 +30,7 @@ public class AppConfigurationDto
     public string? NotificationEmail { get; set; }
     public bool EnableAdjustmentRequestEmails { get; set; }
     public bool EnableMissedClockInEmails { get; set; }
+    public int? MinimumBreakMinutes { get; set; }
 }
 
 public class SetNotificationEmailDto
@@ -47,6 +48,11 @@ public class SetDefaultTargetsDto
 {
     public decimal? DefaultDailyHours { get; set; }
     public decimal? DefaultWeeklyHours { get; set; }
+}
+
+public class SetMinimumBreakMinutesDto
+{
+    public int? MinimumBreakMinutes { get; set; }
 }
 
 public class SetCountryDto

@@ -51,7 +51,9 @@ const holidays = ref<PublicHoliday[]>([]);
 
 const defaultDailyHours = ref<string>("");
 const defaultWeeklyHours = ref<string>("");
+const minimumBreakMinutes = ref<string>("");
 const savingTargets = ref(false);
+const savingMinBreak = ref(false);
 
 const notificationEmail = ref<string>("");
 const savingEmail = ref(false);
@@ -88,6 +90,7 @@ onMounted(async () => {
     if (config.countryCode) countryCode.value = config.countryCode;
     if (config.defaultDailyHours != null) defaultDailyHours.value = String(config.defaultDailyHours);
     if (config.defaultWeeklyHours != null) defaultWeeklyHours.value = String(config.defaultWeeklyHours);
+    if (config.minimumBreakMinutes != null) minimumBreakMinutes.value = String(config.minimumBreakMinutes);
     if (config.notificationEmail) notificationEmail.value = config.notificationEmail;
     enableAdjustmentRequestEmails.value = config.enableAdjustmentRequestEmails;
     enableMissedClockInEmails.value = config.enableMissedClockInEmails;
@@ -201,6 +204,19 @@ const saveTargets = async () => {
     toast.error("Failed to save targets");
   } finally {
     savingTargets.value = false;
+  }
+};
+
+const saveMinBreak = async () => {
+  savingMinBreak.value = true;
+  try {
+    const minutes = minimumBreakMinutes.value ? parseInt(minimumBreakMinutes.value) : null;
+    await holidayService.setMinimumBreakMinutes(minutes);
+    toast.success("Minimum break saved");
+  } catch {
+    toast.error("Failed to save minimum break");
+  } finally {
+    savingMinBreak.value = false;
   }
 };
 
@@ -350,6 +366,31 @@ const formatDate = (iso: string) =>
                 <Loader2Icon v-if="savingTargets" class="size-4 animate-spin" />
                 Save
               </Button>
+            </div>
+
+            <div class="border-t border-slate-100 dark:border-slate-800 pt-5">
+              <p class="text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">Minimum break duration</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                Employees must wait this many minutes before they can end their break. Leave blank to disable. Does not apply on half-day vacation days. Can be overridden per employee.
+              </p>
+              <div class="flex items-end gap-3">
+                <div class="space-y-1.5">
+                  <Label>Minimum break (minutes)</Label>
+                  <Input
+                    v-model="minimumBreakMinutes"
+                    type="number"
+                    min="1"
+                    max="120"
+                    step="1"
+                    placeholder="e.g. 30"
+                    class="w-32"
+                  />
+                </div>
+                <Button :disabled="savingMinBreak" @click="saveMinBreak">
+                  <Loader2Icon v-if="savingMinBreak" class="size-4 animate-spin" />
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
         </section>

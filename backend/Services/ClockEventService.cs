@@ -97,6 +97,24 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
             var isHalfDay = vacationTotal == 0.5m;
             ValidateOrder(dto.Type, existingToday.Select(e => e.Type).ToHashSet(), isHalfDay);
 
+            // Minimum break enforcement (skipped on half-days since breaks are not permitted there)
+            if (dto.Type == ClockEventType.BreakEnd && !isHalfDay)
+            {
+                var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+                var target = await db.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == userId, ct);
+                var minimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes;
+
+                if (minimumBreakMinutes.HasValue && minimumBreakMinutes.Value > 0)
+                {
+                    var breakStart = existingToday.First(e => e.Type == ClockEventType.BreakStart);
+                    var elapsedMinutes = (recordedTruncated - breakStart.RecordedAt).TotalMinutes;
+                    if (elapsedMinutes < minimumBreakMinutes.Value)
+                        throw new ValidationException(
+                            $"Minimum break duration is {minimumBreakMinutes.Value} minutes. " +
+                            $"Your break has only lasted {(int)elapsedMinutes} minute(s).");
+                }
+            }
+
             // Chronological check: new event must not be before any existing event
             if (existingToday.Count > 0)
             {
@@ -171,6 +189,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
         {
             DailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
             WeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
+            MinimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
         };
     }
 

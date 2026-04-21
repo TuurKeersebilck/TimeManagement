@@ -17,6 +17,7 @@ export interface AppConfiguration {
   notificationEmail?: string | null;
   enableAdjustmentRequestEmails: boolean;
   enableMissedClockInEmails: boolean;
+  minimumBreakMinutes?: number | null;
 }
 
 export interface AvailableCountry {
@@ -86,6 +87,11 @@ export const holidayService = {
       enableAdjustmentRequestEmails,
       enableMissedClockInEmails,
     });
+    return res.data;
+  },
+
+  async setMinimumBreakMinutes(minimumBreakMinutes: number | null): Promise<AppConfiguration> {
+    const res = await apiClient.put<AppConfiguration>("/admin/settings/min-break", { minimumBreakMinutes });
     return res.data;
   },
 };

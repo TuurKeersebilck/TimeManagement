@@ -272,7 +272,9 @@ public class AdminService(AppDbContext context) : IAdminService
             WeeklyHours = target?.WeeklyHours,
             ResolvedDailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
             ResolvedWeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
-            HasOverride = target != null && (target.DailyHours.HasValue || target.WeeklyHours.HasValue),
+            HasOverride = target != null && (target.DailyHours.HasValue || target.WeeklyHours.HasValue || target.MinimumBreakMinutes.HasValue),
+            MinimumBreakMinutes = target?.MinimumBreakMinutes,
+            ResolvedMinimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
         };
     }
 
@@ -287,6 +289,7 @@ public class AdminService(AppDbContext context) : IAdminService
 
         target.DailyHours = dto.DailyHours;
         target.WeeklyHours = dto.WeeklyHours;
+        target.MinimumBreakMinutes = dto.MinimumBreakMinutes;
         await _context.SaveChangesAsync(ct);
 
         return await GetEmployeeTargetAsync(userId, ct);

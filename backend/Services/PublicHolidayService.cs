@@ -252,6 +252,23 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         return ToConfigDto(config);
     }
 
+    public async Task<AppConfigurationDto> SetMinimumBreakMinutesAsync(int? minutes, CancellationToken ct = default)
+    {
+        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+        if (config == null)
+        {
+            config = new AppConfiguration { MinimumBreakMinutes = minutes };
+            db.AppConfigurations.Add(config);
+        }
+        else
+        {
+            config.MinimumBreakMinutes = minutes;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return ToConfigDto(config);
+    }
+
     private static AppConfigurationDto ToConfigDto(AppConfiguration c) => new()
     {
         CountryCode = c.CountryCode,
@@ -260,6 +277,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         NotificationEmail = c.NotificationEmail,
         EnableAdjustmentRequestEmails = c.EnableAdjustmentRequestEmails,
         EnableMissedClockInEmails = c.EnableMissedClockInEmails,
+        MinimumBreakMinutes = c.MinimumBreakMinutes,
     };
 
     private static PublicHolidayDto ToDto(PublicHoliday h) => new()

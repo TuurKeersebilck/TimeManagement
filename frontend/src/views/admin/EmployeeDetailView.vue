@@ -63,7 +63,7 @@ const loading = ref(false);
 
 const target = ref<EmployeeTarget | null>(null);
 const weeklySummary = ref<WeekSummary[]>([]);
-const targetForm = ref({ dailyHours: "", weeklyHours: "" });
+const targetForm = ref({ dailyHours: "", weeklyHours: "", minimumBreakMinutes: "" });
 const savingTarget = ref(false);
 
 const saveTarget = async () => {
@@ -71,7 +71,8 @@ const saveTarget = async () => {
   try {
     const daily = targetForm.value.dailyHours ? parseFloat(targetForm.value.dailyHours) : null;
     const weekly = targetForm.value.weeklyHours ? parseFloat(targetForm.value.weeklyHours) : null;
-    target.value = await adminService.setEmployeeTarget(userId, { dailyHours: daily, weeklyHours: weekly });
+    const minBreak = targetForm.value.minimumBreakMinutes ? parseInt(targetForm.value.minimumBreakMinutes) : null;
+    target.value = await adminService.setEmployeeTarget(userId, { dailyHours: daily, weeklyHours: weekly, minimumBreakMinutes: minBreak });
     toast.success("Target saved");
   } catch {
     toast.error("Failed to save target");
@@ -222,6 +223,7 @@ onMounted(async () => {
     targetForm.value = {
       dailyHours: fetchedTarget.dailyHours != null ? String(fetchedTarget.dailyHours) : "",
       weeklyHours: fetchedTarget.weeklyHours != null ? String(fetchedTarget.weeklyHours) : "",
+      minimumBreakMinutes: fetchedTarget.minimumBreakMinutes != null ? String(fetchedTarget.minimumBreakMinutes) : "",
     };
   } catch {
     toast.error("Failed to load employee");
@@ -402,13 +404,21 @@ onMounted(async () => {
             <div class="flex items-center gap-3">
               <ClockIcon class="size-4 text-indigo-500 shrink-0" />
               <div class="text-sm text-slate-600 dark:text-slate-400">
-                <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours">
-                  <span class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ target?.resolvedDailyHours ?? "—" }}h/day
+                <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours || target?.resolvedMinimumBreakMinutes">
+                  <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours">
+                    <span class="font-medium text-slate-900 dark:text-slate-100">
+                      {{ target?.resolvedDailyHours ?? "—" }}h/day
+                    </span>
+                    ·
+                    <span class="font-medium text-slate-900 dark:text-slate-100">
+                      {{ target?.resolvedWeeklyHours ?? "—" }}h/week
+                    </span>
                   </span>
-                  ·
-                  <span class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ target?.resolvedWeeklyHours ?? "—" }}h/week
+                  <span v-if="target?.resolvedMinimumBreakMinutes">
+                    <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours"> · </span>
+                    <span class="font-medium text-slate-900 dark:text-slate-100">
+                      {{ target.resolvedMinimumBreakMinutes }}min break
+                    </span>
                   </span>
                   <span v-if="target?.hasOverride" class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
                     Override
@@ -420,7 +430,7 @@ onMounted(async () => {
             </div>
 
             <!-- Override form -->
-            <div class="flex items-end gap-3 pt-1">
+            <div class="flex items-end gap-3 pt-1 flex-wrap">
               <div class="space-y-1.5">
                 <Label class="text-xs">Daily (h) — leave blank to use default</Label>
                 <Input
@@ -441,6 +451,18 @@ onMounted(async () => {
                   min="0"
                   max="168"
                   step="0.5"
+                  placeholder="default"
+                  class="w-28 h-8 text-sm"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label class="text-xs">Min. break (min) — leave blank to use default</Label>
+                <Input
+                  v-model="targetForm.minimumBreakMinutes"
+                  type="number"
+                  min="1"
+                  max="120"
+                  step="1"
                   placeholder="default"
                   class="w-28 h-8 text-sm"
                 />

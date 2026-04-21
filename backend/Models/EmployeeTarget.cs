@@ -8,4 +8,6 @@ public class EmployeeTarget
     public User User { get; set; } = null!;
     public decimal? DailyHours { get; set; }
     public decimal? WeeklyHours { get; set; }
+    /// <summary>Per-employee minimum break duration in minutes. Null = use global default.</summary>
+    public int? MinimumBreakMinutes { get; set; }
 }
