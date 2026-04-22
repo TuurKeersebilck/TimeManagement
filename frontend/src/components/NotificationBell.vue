@@ -13,8 +13,8 @@ const loading = ref(false);
 const open = ref(false);
 
 const routeForType: Record<NotificationType, string> = {
-  vacation: "team-calendar",
-  adjustmentRequest: "admin-adjustment-requests",
+  Vacation: "team-calendar",
+  AdjustmentRequest: "admin-adjustment-requests",
 };
 
 const fetchNotifications = async () => {

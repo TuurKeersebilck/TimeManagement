@@ -1,6 +1,6 @@
 import apiClient from "./api";
 
-export type NotificationType = "vacation" | "adjustmentRequest";
+export type NotificationType = "Vacation" | "AdjustmentRequest";
 
 export interface Notification {
   id: number;
