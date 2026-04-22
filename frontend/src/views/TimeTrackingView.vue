@@ -744,7 +744,7 @@ onUnmounted(() => {
                       </div>
                       <button
                         v-else
-                        class="group flex items-center gap-1.5 text-left w-full"
+                        class="group flex cursor-pointer items-center gap-1.5 text-left w-full disabled:cursor-not-allowed"
                         @click="s.clockOut ? startEdit(s) : undefined"
                         :disabled="!s.clockOut"
                       >
@@ -784,7 +784,7 @@ onUnmounted(() => {
 
           <div class="space-y-1.5">
             <Label>Date</Label>
-            <Input v-model="adjForm.date" type="date" />
+            <Input v-model="adjForm.date" type="date" class="cursor-pointer" />
           </div>
 
           <div class="grid grid-cols-2 gap-3">
