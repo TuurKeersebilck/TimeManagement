@@ -9,7 +9,7 @@ public class NotificationService(AppDbContext db) : INotificationService
 {
     private readonly AppDbContext _db = db;
 
-    public async Task NotifyAdminsAsync(string message, CancellationToken ct = default)
+    public async Task NotifyAdminsAsync(string message, NotificationType type, CancellationToken ct = default)
     {
         var adminIds = await _db.Users
             .Where(u => u.Role == UserRole.Admin)
@@ -20,6 +20,7 @@ public class NotificationService(AppDbContext db) : INotificationService
         {
             RecipientUserId = id,
             Message = message,
+            Type = type,
             IsRead = false,
             CreatedAt = DateTimeOffset.UtcNow,
         }).ToList();
@@ -37,6 +38,7 @@ public class NotificationService(AppDbContext db) : INotificationService
             {
                 Id = n.Id,
                 Message = n.Message,
+                Type = n.Type,
                 IsRead = n.IsRead,
                 CreatedAt = n.CreatedAt,
             })

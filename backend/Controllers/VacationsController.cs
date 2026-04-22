@@ -67,7 +67,7 @@ public class VacationsController(
 
         var dateLabel = dto.Date.ToString("d MMM yyyy");
         await _notificationService.NotifyAdminsAsync(
-            $"{user.FullName} planned a vacation on {dateLabel}", ct);
+            $"{user.FullName} planned a vacation on {dateLabel}", NotificationType.Vacation, ct);
 
         return CreatedAtAction(nameof(GetVacationDays), created);
     }
@@ -97,7 +97,7 @@ public class VacationsController(
             var message = dto.StartDate == dto.EndDate
                 ? $"{user.FullName} planned a vacation on {startLabel}"
                 : $"{user.FullName} planned a vacation from {startLabel} until {endLabel}";
-            await _notificationService.NotifyAdminsAsync(message, ct);
+            await _notificationService.NotifyAdminsAsync(message, NotificationType.Vacation, ct);
         }
 
         return Ok(result);
