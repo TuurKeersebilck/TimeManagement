@@ -744,7 +744,7 @@ onUnmounted(() => {
                       </div>
                       <button
                         v-else
-                        class="group flex items-center gap-1.5 text-left w-full"
+                        class="group flex cursor-pointer items-center gap-1.5 text-left w-full disabled:cursor-not-allowed"
                         @click="s.clockOut ? startEdit(s) : undefined"
                         :disabled="!s.clockOut"
                       >
