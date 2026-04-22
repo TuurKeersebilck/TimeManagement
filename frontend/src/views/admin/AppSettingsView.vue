@@ -503,7 +503,7 @@ const formatDate = (iso: string) =>
             <div class="flex items-end gap-2">
               <div class="space-y-1">
                 <Label class="text-xs">Date</Label>
-                <Input v-model="newDate" type="date" class="h-8 w-36 text-sm" />
+                <Input v-model="newDate" type="date" class="h-8 w-36 cursor-pointer text-sm" />
               </div>
               <div class="flex-1 space-y-1">
                 <Label class="text-xs">Name</Label>

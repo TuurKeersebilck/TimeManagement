@@ -784,7 +784,7 @@ onUnmounted(() => {
 
           <div class="space-y-1.5">
             <Label>Date</Label>
-            <Input v-model="adjForm.date" type="date" />
+            <Input v-model="adjForm.date" type="date" class="cursor-pointer" />
           </div>
 
           <div class="grid grid-cols-2 gap-3">

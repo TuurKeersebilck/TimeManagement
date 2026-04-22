@@ -653,11 +653,11 @@ onMounted(async () => {
                       <div :class="isPopoverEditMode || popoverDayEntries.length > 0 ? '' : 'grid grid-cols-2 gap-2'">
                         <div class="space-y-1">
                           <Label class="text-xs">{{ isPopoverEditMode || popoverDayEntries.length > 0 ? "Date" : "From" }}</Label>
-                          <Input v-model="popoverForm.startDate" type="date" class="h-8 text-sm" />
+                          <Input v-model="popoverForm.startDate" type="date" class="h-8 cursor-pointer text-sm" />
                         </div>
                         <div v-if="!isPopoverEditMode && popoverDayEntries.length === 0" class="space-y-1">
                           <Label class="text-xs">To</Label>
-                          <Input v-model="popoverForm.endDate" type="date" class="h-8 text-sm" />
+                          <Input v-model="popoverForm.endDate" type="date" class="h-8 cursor-pointer text-sm" />
                         </div>
                       </div>
 

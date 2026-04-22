@@ -220,11 +220,11 @@ onMounted(async () => {
           </div>
           <div class="flex-1 min-w-[150px] space-y-1.5">
             <Label>From</Label>
-            <Input v-model="dateFrom" type="date" />
+            <Input v-model="dateFrom" type="date" class="cursor-pointer" />
           </div>
           <div class="flex-1 min-w-[150px] space-y-1.5">
             <Label>To</Label>
-            <Input v-model="dateTo" type="date" />
+            <Input v-model="dateTo" type="date" class="cursor-pointer" />
           </div>
           <Button v-if="hasFilters" variant="outline" @click="clearFilters" class="shrink-0">
             Clear filters
