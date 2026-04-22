@@ -1,8 +1,11 @@
 import apiClient from "./api";
 
+export type NotificationType = "Vacation" | "AdjustmentRequest";
+
 export interface Notification {
   id: number;
   message: string;
+  type: NotificationType;
   isRead: boolean;
   createdAt: string;
 }

@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { notificationService, type Notification } from "@/services/notificationService";
+import { useRouter } from "vue-router";
+import { notificationService, type Notification, type NotificationType } from "@/services/notificationService";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { BellIcon } from "lucide-vue-next";
 
+const router = useRouter();
 const notifications = ref<Notification[]>([]);
 const unreadCount = ref(0);
 const loading = ref(false);
 const open = ref(false);
+
+const routeForType: Record<NotificationType, string> = {
+  Vacation: "team-calendar",
+  AdjustmentRequest: "admin-adjustment-requests",
+};
 
 const fetchNotifications = async () => {
   loading.value = true;
@@ -28,10 +35,13 @@ const onOpen = async (isOpen: boolean) => {
 };
 
 const markAsRead = async (n: Notification) => {
-  if (n.isRead) return;
-  n.isRead = true;
-  unreadCount.value = Math.max(0, unreadCount.value - 1);
-  await notificationService.markAsRead(n.id);
+  if (!n.isRead) {
+    n.isRead = true;
+    unreadCount.value = Math.max(0, unreadCount.value - 1);
+    await notificationService.markAsRead(n.id);
+  }
+  open.value = false;
+  router.push({ name: routeForType[n.type] });
 };
 
 const markAllAsRead = async () => {

@@ -124,6 +124,7 @@ public class TimeAdjustmentRequestService(
         {
             await notificationService.NotifyAdminsAsync(
                 $"{user?.FullName ?? "An employee"} submitted a time adjustment request for {dto.Date:d MMM yyyy}.",
+                NotificationType.AdjustmentRequest,
                 ct);
         }
         catch (Exception ex)
