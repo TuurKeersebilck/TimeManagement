@@ -10,7 +10,7 @@ import { MenuIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const { sidebarOpen, toggle: toggleSidebar } = useSidebar();
-const { clearUser, isAdmin } = useAuth();
+const { clearUser } = useAuth();
 
 const handleLogout = async (): Promise<void> => {
   clearUser();
