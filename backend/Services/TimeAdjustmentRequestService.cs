@@ -195,6 +195,16 @@ public class TimeAdjustmentRequestService(
             "Adjustment request {RequestId} for user {UserId} on {Date} approved.",
             request.Id, request.UserId, request.Date);
 
+        var approvedMessage = $"Your time adjustment request for {request.Date:d MMM yyyy} has been approved.";
+        try { await notificationService.NotifyUserAsync(request.UserId, approvedMessage, NotificationType.AdjustmentApproved, ct); }
+        catch (Exception ex) { logger.LogError(ex, "Failed to send approval in-app notification for request {RequestId}", request.Id); }
+
+        if (!string.IsNullOrEmpty(request.User.Email))
+        {
+            try { await emailService.SendAdjustmentOutcomeEmailAsync(request.User.Email, request.User.FullName, request.Date, approved: true); }
+            catch (Exception ex) { logger.LogError(ex, "Failed to send approval email for request {RequestId}", request.Id); }
+        }
+
         return $"Approved. Time log for {request.User.FullName} on {request.Date:yyyy-MM-dd} has been updated.";
     }
 

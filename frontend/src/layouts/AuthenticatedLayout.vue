@@ -38,7 +38,7 @@ const handleLogout = async (): Promise<void> => {
           <MenuIcon class="size-5" />
         </button>
         <AppLogo class="ml-3 flex-1 min-w-0" />
-        <NotificationBell v-if="isAdmin" />
+        <NotificationBell />
       </header>
 
       <!-- Page content -->
