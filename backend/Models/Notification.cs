@@ -4,6 +4,8 @@ public enum NotificationType
 {
     Vacation,
     AdjustmentRequest,
+    AdjustmentApproved,
+    AdjustmentRejected,
 }
 
 public class Notification

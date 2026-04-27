@@ -94,7 +94,7 @@ onMounted(() => fetchUser());
           <span class="sidebar-wordmark">TEMPO</span>
           <span class="sidebar-version">v.{{ appVersion }}</span>
         </div>
-        <NotificationBell v-if="isAdmin" class="mt-1" />
+        <NotificationBell class="mt-1" />
       </div>
     </div>
 

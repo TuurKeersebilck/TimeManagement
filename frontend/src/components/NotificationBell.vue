@@ -15,6 +15,8 @@ const open = ref(false);
 const routeForType: Record<NotificationType, string> = {
   Vacation: "team-calendar",
   AdjustmentRequest: "admin-adjustment-requests",
+  AdjustmentApproved: "time-tracking",
+  AdjustmentRejected: "time-tracking",
 };
 
 const fetchNotifications = async () => {

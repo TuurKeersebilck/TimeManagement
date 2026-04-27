@@ -29,6 +29,19 @@ public class NotificationService(AppDbContext db) : INotificationService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task NotifyUserAsync(string userId, string message, NotificationType type, CancellationToken ct = default)
+    {
+        _db.Notifications.Add(new Notification
+        {
+            RecipientUserId = userId,
+            Message = message,
+            Type = type,
+            IsRead = false,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+        await _db.SaveChangesAsync(ct);
+    }
+
     public async Task<IList<NotificationDto>> GetNotificationsAsync(string adminUserId, CancellationToken ct = default)
     {
         return await _db.Notifications

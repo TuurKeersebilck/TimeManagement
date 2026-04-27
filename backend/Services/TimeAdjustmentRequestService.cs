@@ -223,11 +223,23 @@ public class TimeAdjustmentRequestService(
         logger.LogInformation(
             "Adjustment request {RequestId} approved by admin {AdminId}.",
             requestId, adminUserId);
+
+        var approvedMessage = $"Your time adjustment request for {request.Date:d MMM yyyy} has been approved.";
+        try { await notificationService.NotifyUserAsync(request.UserId, approvedMessage, NotificationType.AdjustmentApproved, ct); }
+        catch (Exception ex) { logger.LogError(ex, "Failed to send approval in-app notification for request {RequestId}", requestId); }
+
+        if (!string.IsNullOrEmpty(request.User.Email))
+        {
+            try { await emailService.SendAdjustmentOutcomeEmailAsync(request.User.Email, request.User.FullName, request.Date, approved: true); }
+            catch (Exception ex) { logger.LogError(ex, "Failed to send approval email for request {RequestId}", requestId); }
+        }
     }
 
     public async Task RejectAsync(int requestId, string adminUserId, CancellationToken ct = default)
     {
-        var request = await db.TimeAdjustmentRequests.FindAsync([requestId], ct)
+        var request = await db.TimeAdjustmentRequests
+            .Include(r => r.User)
+            .FirstOrDefaultAsync(r => r.Id == requestId, ct)
             ?? throw new Exceptions.ResourceNotFoundException("Adjustment request not found.");
 
         if (request.Status != AdjustmentRequestStatus.Pending)
@@ -243,6 +255,16 @@ public class TimeAdjustmentRequestService(
         logger.LogInformation(
             "Adjustment request {RequestId} rejected by admin {AdminId}.",
             requestId, adminUserId);
+
+        var rejectedMessage = $"Your time adjustment request for {request.Date:d MMM yyyy} has been rejected.";
+        try { await notificationService.NotifyUserAsync(request.UserId, rejectedMessage, NotificationType.AdjustmentRejected, ct); }
+        catch (Exception ex) { logger.LogError(ex, "Failed to send rejection in-app notification for request {RequestId}", requestId); }
+
+        if (!string.IsNullOrEmpty(request.User.Email))
+        {
+            try { await emailService.SendAdjustmentOutcomeEmailAsync(request.User.Email, request.User.FullName, request.Date, approved: false); }
+            catch (Exception ex) { logger.LogError(ex, "Failed to send rejection email for request {RequestId}", requestId); }
+        }
     }
 
     private async Task UpsertClockEventAsync(
