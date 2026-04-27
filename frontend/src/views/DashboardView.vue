@@ -29,6 +29,15 @@ const isWeekend = computed(() => {
 
 const hasLoggedToday = computed(() => parseFloat(totalHoursToday.value) > 0);
 
+const todaysSummary = computed(() => {
+  const today = localDateString(new Date());
+  return summaries.value.find((s) => s.date === today) ?? null;
+});
+
+const isClockedIn = computed(
+  () => todaysSummary.value?.clockIn != null && todaysSummary.value?.clockOut == null
+);
+
 // Today vs. target
 const todayHours = computed(() => parseFloat(totalHoursToday.value));
 const todayRemaining = computed(() =>
@@ -52,6 +61,7 @@ const todayStatus = computed(() => {
   if (todayVacationAmount.value === 1.0) return "vacation";
   if (todayVacationAmount.value === 0.5 && !hasLoggedToday.value) return "half-vacation";
   if (isWeekend.value) return "weekend";
+  if (isClockedIn.value) return "clocked-in";
   if (!hasLoggedToday.value) return "not-logged";
   if (dailyTarget.value != null && todayHours.value >= dailyTarget.value) return "target-reached";
   return "logged";
@@ -99,6 +109,8 @@ onMounted(async () => {
               ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
               : todayStatus === 'logged'
                 ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800'
+                : todayStatus === 'clocked-in'
+                ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800'
                 : todayStatus === 'not-logged'
                   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
                   : todayStatus === 'vacation' || todayStatus === 'half-vacation'
@@ -114,6 +126,10 @@ onMounted(async () => {
             <TrendingUpIcon
               v-else-if="todayStatus === 'logged'"
               class="size-5 text-indigo-500 shrink-0"
+            />
+            <ClockIcon
+              v-else-if="todayStatus === 'clocked-in'"
+              class="size-5 text-blue-500 shrink-0"
             />
             <AlertCircleIcon
               v-else-if="todayStatus === 'not-logged'"
@@ -137,9 +153,11 @@ onMounted(async () => {
                     ? 'text-emerald-800 dark:text-emerald-200'
                     : todayStatus === 'logged'
                       ? 'text-indigo-800 dark:text-indigo-200'
-                      : todayStatus === 'not-logged'
-                        ? 'text-amber-800 dark:text-amber-200'
-                        : todayStatus === 'vacation' || todayStatus === 'half-vacation'
+                      : todayStatus === 'clocked-in'
+                        ? 'text-blue-800 dark:text-blue-200'
+                        : todayStatus === 'not-logged'
+                          ? 'text-amber-800 dark:text-amber-200'
+                          : todayStatus === 'vacation' || todayStatus === 'half-vacation'
                           ? 'text-violet-800 dark:text-violet-200'
                           : 'text-slate-600 dark:text-slate-400',
                 ]"
@@ -165,6 +183,9 @@ onMounted(async () => {
                     {{ totalHoursToday }}h logged today — great work!
                   </template>
                 </template>
+                <template v-else-if="todayStatus === 'clocked-in'">
+                  You're clocked in — hours will show once you clock out
+                </template>
                 <template v-else-if="todayStatus === 'not-logged'">
                   No hours logged yet today
                 </template>
@@ -181,7 +202,9 @@ onMounted(async () => {
                 ? 'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100'
                 : todayStatus === 'logged'
                   ? 'text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-100'
-                  : 'text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100'
+                  : todayStatus === 'clocked-in'
+                    ? 'text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100'
+                    : 'text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100'
             "
             @click="router.push({ name: 'time-tracking' })"
           >
