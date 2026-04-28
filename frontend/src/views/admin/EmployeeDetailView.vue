@@ -475,8 +475,11 @@ onMounted(async () => {
 
             <!-- Weekly chart -->
             <div v-if="weeklySummary.length > 0" class="pt-2">
-              <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">
+              <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-0.5">
                 Last 8 weeks — logged vs. target
+              </p>
+              <p class="text-xs text-slate-400 dark:text-slate-500 mb-3">
+                Logged = actual hours worked · Target = configured weekly target
               </p>
               <WeeklyHoursChart :weeks="weeklySummary" :is-dark="isDark" />
             </div>
