@@ -20,6 +20,10 @@ public class SubmitClockEventDto
     public string? Description { get; set; }
 
     public bool WorkedFromHome { get; set; } = false;
+
+    /// <summary>IANA timezone ID from the client (e.g. "Europe/Brussels"). Used to validate LocalDate server-side.</summary>
+    [MaxLength(100)]
+    public string? TimeZoneId { get; set; }
 }
 
 public class UpdateDayDto

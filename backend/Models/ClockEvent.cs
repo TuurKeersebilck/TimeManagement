@@ -35,4 +35,8 @@ public class ClockEvent
 
     /// <summary>Whether the employee worked from home this day. Editable anytime, stored on the ClockIn event.</summary>
     public bool WorkedFromHome { get; set; }
+
+    /// <summary>IANA timezone ID supplied by the client at submission time (e.g. "Europe/Brussels"). Nullable for events created before this field existed.</summary>
+    [MaxLength(100)]
+    public string? TimeZoneId { get; set; }
 }
