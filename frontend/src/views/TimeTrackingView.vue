@@ -286,6 +286,7 @@ async function submitClock() {
       type: CLOCK_EVENT_ENUM[nextAction.value],
       recordedAt: d.toISOString(),
       localDate: localDateString(d),
+      timeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
       description: showDescription.value && description.value.trim()
         ? description.value.trim()
         : undefined,

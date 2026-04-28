@@ -71,6 +71,23 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 $"Recorded time must be within {AllowedDeltaMinutes} minutes of the current time. " +
                 "Please submit an adjustment request if you need to log a different time.");
 
+        if (dto.TimeZoneId != null)
+        {
+            try
+            {
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(dto.TimeZoneId);
+                var localTime = TimeZoneInfo.ConvertTimeFromUtc(dto.RecordedAt.UtcDateTime, tz);
+                var derivedDate = DateOnly.FromDateTime(localTime);
+                if (derivedDate != dto.LocalDate)
+                    throw new ValidationException(
+                        "The submitted local date does not match the date derived from your timezone and timestamp.");
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                // Unknown timezone ID — skip validation rather than rejecting legitimate events
+            }
+        }
+
         var today = dto.LocalDate;
         var description = dto.Type == ClockEventType.ClockOut ? dto.Description : null;
 
@@ -133,6 +150,7 @@ public class ClockEventService(AppDbContext db, IMapper mapper) : IClockEventSer
                 RecordedAt = recordedTruncated,
                 Description = description,
                 WorkedFromHome = dto.Type == ClockEventType.ClockIn && dto.WorkedFromHome,
+                TimeZoneId = dto.TimeZoneId,
             };
 
             db.ClockEvents.Add(entity);

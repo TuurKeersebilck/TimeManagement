@@ -27,6 +27,7 @@ export interface SubmitClockEventPayload {
   type: number; // enum value: 0=ClockIn, 1=BreakStart, 2=BreakEnd, 3=ClockOut
   recordedAt: string; // ISO 8601 UTC string
   localDate: string; // "yyyy-MM-dd" — user's local calendar date
+  timeZoneId: string; // IANA timezone, e.g. "Europe/Brussels"
   description?: string;
   workedFromHome?: boolean;
 }
