@@ -7,7 +7,7 @@ ASP.NET Core 10 Web API for the Time Management application.
 ### Prerequisites
 
 - .NET 10 SDK
-- PostgreSQL database (Supabase or local)
+- PostgreSQL database
 
 ### Setup
 

@@ -2,7 +2,7 @@
 
 Full-stack employee time management app. Employees clock in/out throughout the day, request vacations, and track their hours. Admins manage employees, approve requests, and export data.
 
-**Stack:** Vue 3 + Vite (frontend) · ASP.NET Core 10 (backend) · PostgreSQL (Supabase)  
+**Stack:** Vue 3 + Vite (frontend) · ASP.NET Core 10 (backend) · PostgreSQL  
 **Deployed:** Vercel (frontend) · Railway (backend)
 
 ---
@@ -13,7 +13,7 @@ Full-stack employee time management app. Employees clock in/out throughout the d
 
 - Node.js ≥ 20
 - .NET 10 SDK
-- PostgreSQL database (Supabase or local)
+- PostgreSQL database
 
 ### Frontend
 
@@ -218,6 +218,9 @@ Railway detects .NET automatically. Set the following environment variables in t
 | `SMTP_PORT` | SMTP port (e.g. `587`) |
 | `SMTP_USER` | Sender email address |
 | `SMTP_PASS` | Gmail App Password |
+| `SMTP_FROM` | From address in outgoing emails |
+| `APP_URL` | Frontend URL (used in password reset links) |
+| `BACKEND_URL` | Public backend URL (used in approval email links) |
 
 ### Database migrations
 
