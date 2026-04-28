@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
+import { adminService, type AdminTimeLog, type AdminVacationDay, type Employee } from "../../services/adminService";
 import { useAppToast } from "@/composables/useAppToast";
 import {
   Select,
@@ -23,7 +23,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ClockIcon, ChevronLeftIcon, ChevronRightIcon, CoffeeIcon, MessageSquareTextIcon } from "lucide-vue-next";
+import {
+  ClockIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CoffeeIcon,
+  MessageSquareTextIcon,
+  CalendarIcon,
+} from "lucide-vue-next";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +65,7 @@ const toast = useAppToast();
 const route = useRoute();
 
 const allLogs = ref<AdminTimeLog[]>([]);
+const allVacations = ref<AdminVacationDay[]>([]);
 const employees = ref<Employee[]>([]);
 const loading = ref(false);
 
@@ -76,21 +84,158 @@ const paginatedLogs = computed(() => {
   return allLogs.value.slice(start, start + pageSize);
 });
 
-// ─── Filters ────────────────────────────────────────────────────────────────
+// ─── Week helpers ─────────────────────────────────────────────────────────────
 
-const totalHoursFiltered = computed(() =>
-  allLogs.value.reduce((sum, l) => sum + (l.totalHours ?? 0), 0).toFixed(2)
-);
+function toLocalDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getWeekKey(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay() || 7;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - day + 1);
+  return toLocalDateStr(monday);
+}
+
+function formatWeekLabel(mondayStr: string): string {
+  const monday = new Date(mondayStr + "T00:00:00");
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return `${monday.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${sunday.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`;
+}
+
+// ─── Merged rows (single-employee view) ──────────────────────────────────────
+
+type MergedRow =
+  | { kind: "log"; data: AdminTimeLog }
+  | { kind: "vacation"; data: AdminVacationDay }
+  | { kind: "week-subtotal"; label: string; hours: number };
+
+const mergedRows = computed<MergedRow[] | null>(() => {
+  if (selectedEmployeeId.value === "all") return null;
+
+  type Entry = { date: string } & (
+    | { kind: "log"; data: AdminTimeLog }
+    | { kind: "vacation"; data: AdminVacationDay }
+  );
+
+  const entries: Entry[] = [
+    ...allLogs.value.map((l) => ({ kind: "log" as const, date: l.date, data: l })),
+    ...allVacations.value
+      .filter((v) => {
+        if (dateFrom.value && v.date < dateFrom.value) return false;
+        if (dateTo.value && v.date > dateTo.value) return false;
+        return true;
+      })
+      .map((v) => ({ kind: "vacation" as const, date: v.date, data: v })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
+
+  const result: MergedRow[] = [];
+  let currentWeek: string | null = null;
+  let weekHours = 0;
+
+  for (const entry of entries) {
+    const week = getWeekKey(entry.date);
+    if (currentWeek !== null && week !== currentWeek) {
+      result.push({ kind: "week-subtotal", label: formatWeekLabel(currentWeek), hours: weekHours });
+      weekHours = 0;
+    }
+    currentWeek = week;
+    if (entry.kind === "log") {
+      result.push({ kind: "log", data: entry.data });
+      weekHours += entry.data.totalHours ?? 0;
+    } else {
+      result.push({ kind: "vacation", data: entry.data });
+    }
+  }
+  if (currentWeek !== null) {
+    result.push({ kind: "week-subtotal", label: formatWeekLabel(currentWeek), hours: weekHours });
+  }
+
+  return result;
+});
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+const hoursThisWeek = computed(() => {
+  const thisWeek = getWeekKey(toLocalDateStr(new Date()));
+  return allLogs.value
+    .filter((l) => getWeekKey(l.date) === thisWeek)
+    .reduce((sum, l) => sum + (l.totalHours ?? 0), 0)
+    .toFixed(2);
+});
+
+const hoursThisMonth = computed(() => {
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return allLogs.value
+    .filter((l) => l.date.startsWith(ym))
+    .reduce((sum, l) => sum + (l.totalHours ?? 0), 0)
+    .toFixed(2);
+});
+
+// ─── Predefined filters ───────────────────────────────────────────────────────
+
+function setFilter(preset: "today" | "this-week" | "this-month" | "last-month") {
+  const now = new Date();
+  const today = toLocalDateStr(now);
+  if (preset === "today") {
+    dateFrom.value = today;
+    dateTo.value = today;
+  } else if (preset === "this-week") {
+    dateFrom.value = getWeekKey(today);
+    dateTo.value = today;
+  } else if (preset === "this-month") {
+    dateFrom.value = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    dateTo.value = today;
+  } else {
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    dateFrom.value = toLocalDateStr(lastMonthStart);
+    dateTo.value = toLocalDateStr(lastMonthEnd);
+  }
+}
+
+const activePreset = computed(() => {
+  const now = new Date();
+  const today = toLocalDateStr(now);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  if (dateFrom.value === today && dateTo.value === today) return "today";
+  if (dateFrom.value === getWeekKey(today) && dateTo.value === today) return "this-week";
+  if (
+    dateFrom.value === `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01` &&
+    dateTo.value === today
+  )
+    return "this-month";
+  if (
+    dateFrom.value === toLocalDateStr(lastMonthStart) &&
+    dateTo.value === toLocalDateStr(lastMonthEnd)
+  )
+    return "last-month";
+  return null;
+});
+
+// ─── Fetch ────────────────────────────────────────────────────────────────────
 
 const fetchLogs = async () => {
   loading.value = true;
   currentPage.value = 1;
   try {
-    allLogs.value = await adminService.getAllTimeLogs({
-      userId: selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value,
-      dateFrom: dateFrom.value || undefined,
-      dateTo: dateTo.value || undefined,
-    });
+    const userId = selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value;
+    const [logs, vacations] = await Promise.all([
+      adminService.getAllTimeLogs({
+        userId,
+        dateFrom: dateFrom.value || undefined,
+        dateTo: dateTo.value || undefined,
+      }),
+      userId
+        ? adminService.getAllVacationDays({ userId })
+        : Promise.resolve([] as AdminVacationDay[]),
+    ]);
+    allLogs.value = logs;
+    allVacations.value = vacations;
   } catch {
     toast.error("Failed to load time logs");
   } finally {
@@ -114,7 +259,6 @@ const formatTime = (t?: string) => {
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
-
 
 const clearFilters = () => {
   selectedEmployeeId.value = "all";
@@ -160,7 +304,7 @@ onMounted(async () => {
         </div>
 
         <!-- Stats -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           <div class="stat-card">
             <p
               class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
@@ -168,9 +312,7 @@ onMounted(async () => {
               Employees
             </p>
             <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600"
-                >--</span
-              >
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
               <span v-else>{{ employees.length }}</span>
             </p>
           </div>
@@ -181,9 +323,7 @@ onMounted(async () => {
               Entries shown
             </p>
             <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600"
-                >--</span
-              >
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
               <span v-else>{{ allLogs.length }}</span>
             </p>
           </div>
@@ -191,19 +331,28 @@ onMounted(async () => {
             <p
               class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
             >
-              Total hours shown
+              This week
             </p>
             <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600"
-                >--</span
-              >
-              <span v-else>{{ totalHoursFiltered }}h</span>
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+              <span v-else>{{ hoursThisWeek }}h</span>
+            </p>
+          </div>
+          <div class="stat-card">
+            <p
+              class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
+            >
+              This month
+            </p>
+            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+              <span v-else>{{ hoursThisMonth }}h</span>
             </p>
           </div>
         </div>
 
         <!-- Filters -->
-        <div class="card p-4 mb-4 flex flex-wrap items-end gap-3">
+        <div class="card p-4 mb-3 flex flex-wrap items-end gap-3">
           <div class="flex-1 min-w-[180px] space-y-1.5">
             <Label>Employee</Label>
             <Select v-model="selectedEmployeeId">
@@ -231,6 +380,28 @@ onMounted(async () => {
           </Button>
         </div>
 
+        <!-- Quick filter chips -->
+        <div class="flex flex-wrap gap-2 mb-4">
+          <button
+            v-for="chip in [
+              { label: 'Today', value: 'today' },
+              { label: 'This week', value: 'this-week' },
+              { label: 'This month', value: 'this-month' },
+              { label: 'Last month', value: 'last-month' },
+            ]"
+            :key="chip.value"
+            :class="[
+              'px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer',
+              activePreset === chip.value
+                ? 'bg-indigo-600 text-white'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
+            ]"
+            @click="setFilter(chip.value as 'today' | 'this-week' | 'this-month' | 'last-month')"
+          >
+            {{ chip.label }}
+          </button>
+        </div>
+
         <!-- Table -->
         <div class="card overflow-hidden">
           <!-- Loading skeleton -->
@@ -254,7 +425,116 @@ onMounted(async () => {
                 <TableHead>Description</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+
+            <!-- Single-employee view: merged rows with vacation days + week subtotals -->
+            <TableBody v-if="mergedRows !== null">
+              <TableEmpty v-if="mergedRows.length === 0" :colspan="6">
+                <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
+              </TableEmpty>
+              <template v-else v-for="(row, i) in mergedRows" :key="i">
+                <!-- Regular time log row -->
+                <TableRow v-if="row.kind === 'log'">
+                  <TableCell>
+                    <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                      {{ row.data.employeeName }}
+                    </p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">{{ row.data.employeeEmail }}</p>
+                  </TableCell>
+                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                    {{ formatDate(row.data.date) }}
+                  </TableCell>
+                  <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                    <template v-if="row.data.breakStart && row.data.breakEnd">
+                      {{ formatTime(row.data.clockIn) }} → {{ formatTime(row.data.breakStart) }}
+                      <CoffeeIcon class="inline size-3 mx-1 text-amber-400" />
+                      {{ formatTime(row.data.breakEnd) }} → {{ formatTime(row.data.clockOut) }}
+                    </template>
+                    <template v-else>
+                      {{ formatTime(row.data.clockIn) }} → {{ formatTime(row.data.clockOut) }}
+                    </template>
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                    >
+                      {{ row.data.totalHours?.toFixed(2) ?? "0.00" }}h
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span v-if="row.data.workedFromHome" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                      WFH
+                    </span>
+                    <span v-else class="text-slate-400 text-xs">—</span>
+                  </TableCell>
+                  <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px]">
+                    <div v-if="row.data.description" class="flex items-center gap-1.5 min-w-0">
+                      <span
+                        class="truncate"
+                        :ref="(el) => checkDescOverflow(el as Element | null, `${row.data.userId}-${row.data.date}`)"
+                      >{{ row.data.description }}</span>
+                      <button
+                        v-if="descOverflow[`${row.data.userId}-${row.data.date}`]"
+                        class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                        title="View full description"
+                        @click="openDescription(row.data)"
+                      >
+                        <MessageSquareTextIcon class="size-3.5" />
+                      </button>
+                    </div>
+                    <span v-else class="text-slate-400">—</span>
+                  </TableCell>
+                </TableRow>
+
+                <!-- Vacation day row -->
+                <TableRow
+                  v-else-if="row.kind === 'vacation'"
+                  class="bg-violet-50/40 dark:bg-violet-950/20 hover:bg-violet-50/70 dark:hover:bg-violet-950/30"
+                >
+                  <TableCell>
+                    <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                      {{ row.data.employeeName }}
+                    </p>
+                  </TableCell>
+                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                    {{ formatDate(row.data.date) }}
+                  </TableCell>
+                  <TableCell :colspan="4">
+                    <div class="flex items-center gap-2">
+                      <CalendarIcon class="size-3.5 text-violet-500 shrink-0" />
+                      <div
+                        class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
+                        :style="{ backgroundColor: row.data.vacationTypeColor ?? '#6366f1' }"
+                      />
+                      <span class="text-sm text-slate-600 dark:text-slate-400">
+                        {{ row.data.vacationTypeName }}
+                      </span>
+                      <span class="text-xs text-slate-400 dark:text-slate-500">
+                        {{ row.data.amount === 1 ? "Full day" : "Half day" }}
+                      </span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+
+                <!-- Week subtotal row -->
+                <TableRow
+                  v-else-if="row.kind === 'week-subtotal'"
+                  class="bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/80"
+                >
+                  <TableCell :colspan="6" class="py-2">
+                    <div class="flex items-center justify-between px-1">
+                      <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.label }}</span>
+                      <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                        {{ row.hours.toFixed(2) }}h
+                      </span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </template>
+            </TableBody>
+
+            <!-- All-employees view: paginated -->
+            <TableBody v-else>
               <TableEmpty v-if="allLogs.length === 0" :colspan="6">
                 <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
@@ -313,9 +593,9 @@ onMounted(async () => {
             </TableBody>
           </Table>
 
-          <!-- Pagination -->
+          <!-- Pagination (all-employees view only) -->
           <div
-            v-if="!loading && totalPages > 1"
+            v-if="!loading && mergedRows === null && totalPages > 1"
             class="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800"
           >
             <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -351,6 +631,7 @@ onMounted(async () => {
         </div>
       </div>
     </div>
+
     <!-- Description dialog -->
     <Dialog v-model:open="descriptionDialog.open">
       <DialogContent class="max-w-md" @open-auto-focus.prevent>
