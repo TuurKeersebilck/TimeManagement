@@ -147,4 +147,46 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
 
         logger.LogInformation("Missed clock-in reminder sent to {Email} for {Date}", toEmail, missedDate);
     }
+
+    public async Task SendAdjustmentOutcomeEmailAsync(string toEmail, string toName, DateOnly date, bool approved)
+    {
+        var (statusWord, color, detail) = approved
+            ? ("approved", "#22c55e", "Your time log for this day has been updated accordingly.")
+            : ("rejected", "#ef4444", "No changes have been made to your time log. If you believe this is a mistake, please contact your manager.");
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.To.Add(new MailboxAddress(toName, toEmail));
+        message.Subject = $"Your time adjustment request for {date:yyyy-MM-dd} has been {statusWord}";
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                  <h2 style="color:#1e293b">Time Adjustment Request {char.ToUpper(statusWord[0])}{statusWord[1..]}</h2>
+                  <p style="color:#475569">Hi {toName},</p>
+                  <p style="color:#475569">
+                    Your time adjustment request for <strong>{date:dddd, MMMM d yyyy}</strong> has been
+                    <strong style="color:{color}">{statusWord}</strong>.
+                  </p>
+                  <p style="color:#475569">{detail}</p>
+                  <p style="color:#94a3b8;font-size:13px">You can view your time logs in the app at any time.</p>
+                </div>
+                """
+        };
+
+        using var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(config.User, config.Password);
+            await client.SendAsync(message);
+        }
+        finally
+        {
+            await client.DisconnectAsync(true);
+        }
+
+        logger.LogInformation("Adjustment outcome email ({Status}) sent to {Email}", statusWord, toEmail);
+    }
 }

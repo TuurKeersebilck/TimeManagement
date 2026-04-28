@@ -10,7 +10,7 @@ namespace TimeManagementBackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class NotificationsController(
     INotificationService notificationService,
     UserManager<User> userManager) : ApiControllerBase(userManager)
