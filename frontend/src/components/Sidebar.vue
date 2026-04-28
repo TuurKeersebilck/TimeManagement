@@ -91,7 +91,7 @@ onMounted(() => fetchUser());
     <div class="shrink-0 px-6 pt-8 pb-2">
       <div class="flex items-start justify-between">
         <div>
-          <span class="sidebar-wordmark">VALOG</span>
+          <span class="sidebar-wordmark">LOGR</span>
           <span class="sidebar-version">v.{{ appVersion }}</span>
         </div>
         <NotificationBell class="mt-1" />
