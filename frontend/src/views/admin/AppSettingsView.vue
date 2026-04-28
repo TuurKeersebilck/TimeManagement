@@ -316,6 +316,141 @@ const formatDate = (iso: string) =>
           </div>
         </section>
 
+        <!-- Holidays list -->
+        <section class="mb-8">
+          <div class="flex items-center justify-between mb-3">
+            <h2
+              class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
+            >
+              Holidays
+            </h2>
+            <div class="flex items-center gap-2">
+              <Select v-model.number="selectedYear" @update:model-value="loadHolidays">
+                <SelectTrigger class="h-8 w-28 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="y in yearOptions" :key="y" :value="y">{{ y }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="!countryCode || refreshing"
+                @click="refresh"
+              >
+                <Loader2Icon v-if="refreshing" class="size-3.5 animate-spin" />
+                <RefreshCwIcon v-else class="size-3.5" />
+                Refresh from API
+              </Button>
+            </div>
+          </div>
+
+          <!-- Add custom holiday -->
+          <div class="card p-4 mb-3">
+            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">
+              Add custom holiday
+            </p>
+            <div class="flex items-end gap-2">
+              <div class="space-y-1">
+                <Label class="text-xs">Date</Label>
+                <Input v-model="newDate" type="date" class="h-8 w-36 cursor-pointer text-sm" />
+              </div>
+              <div class="flex-1 space-y-1">
+                <Label class="text-xs">Name</Label>
+                <Input
+                  v-model="newName"
+                  type="text"
+                  placeholder="e.g. Company day off"
+                  class="h-8 text-sm"
+                  maxlength="100"
+                />
+              </div>
+              <Button
+                size="sm"
+                :disabled="!newDate || !newName.trim() || addingCustom"
+                @click="addCustom"
+              >
+                <Loader2Icon v-if="addingCustom" class="size-3.5 animate-spin" />
+                <PlusIcon v-else class="size-3.5" />
+                Add
+              </Button>
+            </div>
+          </div>
+
+          <!-- Holidays table -->
+          <div class="card overflow-hidden">
+            <div v-if="loadingHolidays" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <div v-for="i in 6" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
+                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded flex-1 animate-pulse" />
+              </div>
+            </div>
+
+            <Table v-else>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Day off</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableEmpty v-if="holidays.length === 0" :colspan="5">
+                  <CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                  <p class="text-slate-500 dark:text-slate-400">
+                    {{
+                      countryCode
+                        ? "No holidays found. Try refreshing from the API."
+                        : "Set a country above to load public holidays."
+                    }}
+                  </p>
+                </TableEmpty>
+                <TableRow v-for="holiday in holidays" :key="holiday.id">
+                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                    {{ formatDate(holiday.date) }}
+                  </TableCell>
+                  <TableCell class="text-slate-600 dark:text-slate-400">
+                    {{ holiday.name }}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      :class="[
+                        'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                        holiday.isCustom
+                          ? 'bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
+                      ]"
+                    >
+                      {{ holiday.isCustom ? "Custom" : "Official" }}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      :model-value="!holiday.isWorkingDay"
+                      :disabled="togglingId === holiday.id"
+                      @update:model-value="() => toggleWorkingDay(holiday)"
+                    />
+                  </TableCell>
+                  <TableCell class="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                      title="Remove"
+                      @click="deleteHoliday(holiday)"
+                    >
+                      <Trash2Icon class="size-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+
         <!-- Working hours targets -->
         <section class="mb-8">
           <h2
@@ -462,141 +597,6 @@ const formatDate = (iso: string) =>
                 </Button>
               </div>
             </div>
-          </div>
-        </section>
-
-        <!-- Holidays list -->
-        <section>
-          <div class="flex items-center justify-between mb-3">
-            <h2
-              class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500"
-            >
-              Holidays
-            </h2>
-            <div class="flex items-center gap-2">
-              <Select v-model.number="selectedYear" @update:model-value="loadHolidays">
-                <SelectTrigger class="h-8 w-28 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="y in yearOptions" :key="y" :value="y">{{ y }}</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="!countryCode || refreshing"
-                @click="refresh"
-              >
-                <Loader2Icon v-if="refreshing" class="size-3.5 animate-spin" />
-                <RefreshCwIcon v-else class="size-3.5" />
-                Refresh from API
-              </Button>
-            </div>
-          </div>
-
-          <!-- Add custom holiday -->
-          <div class="card p-4 mb-3">
-            <p class="text-xs font-medium text-slate-500 dark:text-slate-400 mb-3">
-              Add custom holiday
-            </p>
-            <div class="flex items-end gap-2">
-              <div class="space-y-1">
-                <Label class="text-xs">Date</Label>
-                <Input v-model="newDate" type="date" class="h-8 w-36 cursor-pointer text-sm" />
-              </div>
-              <div class="flex-1 space-y-1">
-                <Label class="text-xs">Name</Label>
-                <Input
-                  v-model="newName"
-                  type="text"
-                  placeholder="e.g. Company day off"
-                  class="h-8 text-sm"
-                  maxlength="100"
-                />
-              </div>
-              <Button
-                size="sm"
-                :disabled="!newDate || !newName.trim() || addingCustom"
-                @click="addCustom"
-              >
-                <Loader2Icon v-if="addingCustom" class="size-3.5 animate-spin" />
-                <PlusIcon v-else class="size-3.5" />
-                Add
-              </Button>
-            </div>
-          </div>
-
-          <!-- Holidays table -->
-          <div class="card overflow-hidden">
-            <div v-if="loadingHolidays" class="divide-y divide-slate-100 dark:divide-slate-800">
-              <div v-for="i in 6" :key="i" class="flex items-center gap-4 px-4 py-3.5">
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded flex-1 animate-pulse" />
-              </div>
-            </div>
-
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Day off</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableEmpty v-if="holidays.length === 0" :colspan="5">
-                  <CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                  <p class="text-slate-500 dark:text-slate-400">
-                    {{
-                      countryCode
-                        ? "No holidays found. Try refreshing from the API."
-                        : "Set a country above to load public holidays."
-                    }}
-                  </p>
-                </TableEmpty>
-                <TableRow v-for="holiday in holidays" :key="holiday.id">
-                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ formatDate(holiday.date) }}
-                  </TableCell>
-                  <TableCell class="text-slate-600 dark:text-slate-400">
-                    {{ holiday.name }}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      :class="[
-                        'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-                        holiday.isCustom
-                          ? 'bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400',
-                      ]"
-                    >
-                      {{ holiday.isCustom ? "Custom" : "Official" }}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      :model-value="!holiday.isWorkingDay"
-                      :disabled="togglingId === holiday.id"
-                      @update:model-value="() => toggleWorkingDay(holiday)"
-                    />
-                  </TableCell>
-                  <TableCell class="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-                      title="Remove"
-                      @click="deleteHoliday(holiday)"
-                    >
-                      <Trash2Icon class="size-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
           </div>
         </section>
       </div>
