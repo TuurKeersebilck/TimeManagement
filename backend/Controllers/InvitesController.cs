@@ -59,7 +59,16 @@ public class InvitesController(
         await db.SaveChangesAsync(ct);
 
         var inviteLink = $"{_appUrl}/register?token={Uri.EscapeDataString(rawToken)}";
-        await email.SendInviteEmailAsync(dto.Email, inviteLink);
+        try
+        {
+            await email.SendInviteEmailAsync(dto.Email, inviteLink);
+        }
+        catch
+        {
+            db.EmployeeInvites.Remove(invite);
+            await db.SaveChangesAsync(ct);
+            throw;
+        }
 
         logger.LogInformation("Invite sent to {Email} by admin {AdminId}", dto.Email, adminId);
         return Ok(new InviteDto
