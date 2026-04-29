@@ -18,6 +18,7 @@ public class AppDbContext : IdentityUserContext<User>
     public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
     public DbSet<VacationDay> VacationDays => Set<VacationDay>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<EmployeeInvite> EmployeeInvites => Set<EmployeeInvite>();
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
     public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
     public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
@@ -87,6 +88,12 @@ public class AppDbContext : IdentityUserContext<User>
         {
             entity.HasIndex(n => new { n.RecipientUserId, n.IsRead });
             entity.HasIndex(n => n.CreatedAt);
+        });
+
+        builder.Entity<EmployeeInvite>(entity =>
+        {
+            entity.HasIndex(e => e.TokenHash);
+            entity.HasIndex(e => e.Email);
         });
     }
 }

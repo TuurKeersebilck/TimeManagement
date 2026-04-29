@@ -189,4 +189,49 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
 
         logger.LogInformation("Adjustment outcome email ({Status}) sent to {Email}", statusWord, toEmail);
     }
+
+    public async Task SendInviteEmailAsync(string toEmail, string inviteLink)
+    {
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Logr", config.From));
+        message.To.Add(new MailboxAddress(toEmail, toEmail));
+        message.Subject = "You've been invited to Logr";
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                  <h2 style="color:#1e293b">You've been invited to Logr</h2>
+                  <p style="color:#475569">
+                    Your employer has invited you to create an account on Logr, a time tracking tool.
+                  </p>
+                  <p style="color:#475569">
+                    Click the button below to set up your account.
+                    This link expires in <strong>48 hours</strong> and can only be used once.
+                  </p>
+                  <a href="{inviteLink}"
+                     style="display:inline-block;margin:16px 0;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+                    Accept invitation
+                  </a>
+                  <p style="color:#94a3b8;font-size:13px">
+                    If you weren't expecting this email, you can safely ignore it.
+                  </p>
+                </div>
+                """
+        };
+
+        using var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
+            await client.AuthenticateAsync(config.User, config.Password);
+            await client.SendAsync(message);
+        }
+        finally
+        {
+            await client.DisconnectAsync(true);
+        }
+
+        logger.LogInformation("Invite email sent to {Email}", toEmail);
+    }
 }

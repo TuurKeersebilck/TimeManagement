@@ -287,8 +287,8 @@ void ConfigureRateLimiting(WebApplicationBuilder builder)
                     QueueLimit = 0
                 }));
 
-        // Register: 5 attempts per hour per IP
-        options.AddPolicy<string>("register-limit", httpContext =>
+        // Invite accept: 5 attempts per hour per IP
+        options.AddPolicy<string>("invite-accept-limit", httpContext =>
             RateLimitPartition.GetFixedWindowLimiter(
                 httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                 _ => new FixedWindowRateLimiterOptions
