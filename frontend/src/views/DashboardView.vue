@@ -6,8 +6,9 @@ import { useTimeCalculations } from "../composables/useTimeCalculations";
 import { useClockEventsStore } from "../composables/useClockEventsStore";
 import { clockEventService } from "../services/clockEventService";
 import { vacationService } from "../services/vacationService";
+import { holidayService, type PublicHoliday } from "../services/holidayService";
 import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
-import { ClockIcon, CheckCircleIcon, AlertCircleIcon, CalendarDaysIcon, TrendingUpIcon, PlaneIcon, SunIcon } from "lucide-vue-next";
+import { ClockIcon, CheckCircleIcon, AlertCircleIcon, CalendarDaysIcon, TrendingUpIcon, PlaneIcon, SunIcon, StarIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const { summaries, loading, fetchSummaries } = useClockEventsStore();
@@ -17,6 +18,7 @@ const dailyTarget = ref<number | null>(null);
 const weeklyTarget = ref<number | null>(null);
 const todayVacationAmount = ref<number | null>(null);
 const todayVacationTypeName = ref<string | null>(null);
+const todayHoliday = ref<PublicHoliday | null>(null);
 
 function localDateString(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -60,6 +62,7 @@ const todayStatus = computed(() => {
   if (loading.value) return null;
   if (todayVacationAmount.value === 1.0) return "vacation";
   if (todayVacationAmount.value === 0.5 && !hasLoggedToday.value) return "half-vacation";
+  if (todayHoliday.value) return "holiday";
   if (isWeekend.value) return "weekend";
   if (isClockedIn.value) return "clocked-in";
   if (!hasLoggedToday.value) return "not-logged";
@@ -70,9 +73,11 @@ const todayStatus = computed(() => {
 onMounted(async () => {
   await fetchSummaries();
   try {
-    const [target, vacation] = await Promise.all([
+    const today = localDateString(new Date());
+    const [target, vacation, yearHolidays] = await Promise.all([
       clockEventService.getMyTarget(),
-      vacationService.getVacationForDate(localDateString(new Date())),
+      vacationService.getVacationForDate(today),
+      holidayService.getHolidays(new Date().getFullYear()),
     ]);
     dailyTarget.value = target.dailyHours ?? null;
     weeklyTarget.value = target.weeklyHours ?? null;
@@ -84,6 +89,11 @@ onMounted(async () => {
       } else if (vacation.amount === 0.5 && dailyTarget.value != null) {
         dailyTarget.value = dailyTarget.value / 2;
       }
+    }
+    const holiday = yearHolidays.find(h => h.date === today && !h.isWorkingDay);
+    if (holiday) {
+      todayHoliday.value = holiday;
+      dailyTarget.value = null;
     }
   } catch {
     // No target configured — show plain hours
@@ -115,7 +125,9 @@ onMounted(async () => {
                   ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
                   : todayStatus === 'vacation' || todayStatus === 'half-vacation'
                     ? 'bg-violet-50 dark:bg-violet-950/30 border-violet-200 dark:border-violet-800'
-                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800',
+                    : todayStatus === 'holiday'
+                      ? 'bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800'
+                      : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800',
           ]"
         >
           <div class="flex items-center gap-3">
@@ -143,6 +155,10 @@ onMounted(async () => {
               v-else-if="todayStatus === 'half-vacation'"
               class="size-5 text-violet-500 shrink-0"
             />
+            <StarIcon
+              v-else-if="todayStatus === 'holiday'"
+              class="size-5 text-sky-500 shrink-0"
+            />
             <CalendarDaysIcon v-else class="size-5 text-slate-400 shrink-0" />
 
             <div>
@@ -159,6 +175,8 @@ onMounted(async () => {
                           ? 'text-amber-800 dark:text-amber-200'
                           : todayStatus === 'vacation' || todayStatus === 'half-vacation'
                           ? 'text-violet-800 dark:text-violet-200'
+                          : todayStatus === 'holiday'
+                          ? 'text-sky-800 dark:text-sky-200'
                           : 'text-slate-600 dark:text-slate-400',
                 ]"
               >
@@ -168,6 +186,9 @@ onMounted(async () => {
                 </template>
                 <template v-else-if="todayStatus === 'half-vacation'">
                   Half-day {{ todayVacationTypeName ?? 'vacation' }} today — clock in and out when ready
+                </template>
+                <template v-else-if="todayStatus === 'holiday'">
+                  Public holiday — {{ todayHoliday!.name }}
                 </template>
                 <template v-else-if="todayStatus === 'target-reached'">
                   Target reached! {{ totalHoursToday }}h logged today
@@ -195,7 +216,7 @@ onMounted(async () => {
           </div>
 
           <button
-            v-if="todayStatus !== 'weekend' && todayStatus !== 'vacation'"
+            v-if="todayStatus !== 'weekend' && todayStatus !== 'vacation' && todayStatus !== 'holiday'"
             class="text-sm font-medium shrink-0 transition-colors cursor-pointer"
             :class="
               todayStatus === 'target-reached'
