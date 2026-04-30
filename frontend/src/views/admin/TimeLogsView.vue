@@ -164,8 +164,10 @@ const mergedRows = computed<MergedRow[] | null>(() => {
     if (entry.kind === "log") {
       result.push({ kind: "log", data: entry.data });
       weekHours += entry.data.totalHours ?? 0;
-    } else {
+    } else if (entry.kind === "vacation") {
       result.push({ kind: "vacation", data: entry.data });
+    } else {
+      result.push({ kind: "holiday", data: entry.data });
     }
   }
   if (currentWeek !== null) {
@@ -249,16 +251,18 @@ const fetchLogs = async () => {
     const years: number[] = [];
     for (let y = fromYear; y <= toYear; y++) years.push(y);
 
-    const [logs, vacations, ...holidayArrays] = await Promise.all([
-      adminService.getAllTimeLogs({
-        userId,
-        dateFrom: dateFrom.value || undefined,
-        dateTo: dateTo.value || undefined,
-      }),
-      userId
-        ? adminService.getAllVacationDays({ userId })
-        : Promise.resolve([] as AdminVacationDay[]),
-      ...years.map((y) => holidayService.getHolidays(y)),
+    const [[logs, vacations], holidayArrays] = await Promise.all([
+      Promise.all([
+        adminService.getAllTimeLogs({
+          userId,
+          dateFrom: dateFrom.value || undefined,
+          dateTo: dateTo.value || undefined,
+        }),
+        userId
+          ? adminService.getAllVacationDays({ userId })
+          : Promise.resolve([] as AdminVacationDay[]),
+      ]),
+      Promise.all(years.map((y) => holidayService.getHolidays(y))),
     ]);
     allLogs.value = logs;
     allVacations.value = vacations;
