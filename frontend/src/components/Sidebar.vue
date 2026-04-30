@@ -6,7 +6,7 @@ const appVersion = __APP_VERSION__;
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import NotificationBell from "./NotificationBell.vue";
-import { LogOutIcon, ChevronDownIcon } from "lucide-vue-next";
+import { LogOutIcon, ChevronDownIcon, GithubIcon } from "lucide-vue-next";
 
 interface Props {
   isOpen?: boolean;
@@ -155,13 +155,24 @@ onMounted(() => fetchUser());
           </div>
           <span class="text-xs text-muted-foreground truncate">{{ currentUser.fullName }}</span>
         </div>
-        <button
-          @click="emit('logout')"
-          class="text-muted-foreground hover:text-destructive transition-colors cursor-pointer shrink-0"
-          title="Sign out"
-        >
-          <LogOutIcon class="size-3.5" />
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <a
+            href="https://github.com/TuurKeersebilck/TimeManagement/issues"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-muted-foreground hover:text-foreground transition-colors"
+            title="Report a bug or request a feature"
+          >
+            <GithubIcon class="size-3.5" />
+          </a>
+          <button
+            @click="emit('logout')"
+            class="text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+            title="Sign out"
+          >
+            <LogOutIcon class="size-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   </aside>
