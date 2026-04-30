@@ -95,6 +95,28 @@ onMounted(async () => {
       todayHoliday.value = holiday;
       dailyTarget.value = null;
     }
+    if (weeklyTarget.value != null) {
+      const now = new Date();
+      const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - daysFromMonday);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      const weekStartStr = localDateString(weekStart);
+      const weekEndStr = localDateString(weekEnd);
+
+      const workdayHolidaysThisWeek = yearHolidays.filter(h => {
+        if (h.isWorkingDay || h.date < weekStartStr || h.date > weekEndStr) return false;
+        const dow = new Date(h.date + "T00:00:00").getDay();
+        return dow !== 0 && dow !== 6;
+      });
+
+      if (workdayHolidaysThisWeek.length > 0) {
+        const dailyHours = target.dailyHours ?? weeklyTarget.value / 5;
+        const adjusted = weeklyTarget.value - workdayHolidaysThisWeek.length * dailyHours;
+        weeklyTarget.value = adjusted > 0 ? adjusted : null;
+      }
+    }
   } catch {
     // No target configured — show plain hours
   }
