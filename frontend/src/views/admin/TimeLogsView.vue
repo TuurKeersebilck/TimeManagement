@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type AdminTimeLog, type AdminVacationDay, type Employee } from "../../services/adminService";
+import { holidayService, type PublicHoliday } from "../../services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
 import {
   Select,
@@ -30,6 +31,7 @@ import {
   CoffeeIcon,
   MessageSquareTextIcon,
   CalendarIcon,
+  StarIcon,
 } from "lucide-vue-next";
 import {
   Dialog,
@@ -66,6 +68,7 @@ const route = useRoute();
 
 const allLogs = ref<AdminTimeLog[]>([]);
 const allVacations = ref<AdminVacationDay[]>([]);
+const allHolidays = ref<PublicHoliday[]>([]);
 const employees = ref<Employee[]>([]);
 const loading = ref(false);
 
@@ -110,14 +113,24 @@ function formatWeekLabel(mondayStr: string): string {
 type MergedRow =
   | { kind: "log"; data: AdminTimeLog }
   | { kind: "vacation"; data: AdminVacationDay }
+  | { kind: "holiday"; data: PublicHoliday }
   | { kind: "week-subtotal"; label: string; hours: number };
 
 const mergedRows = computed<MergedRow[] | null>(() => {
   if (selectedEmployeeId.value === "all") return null;
 
+  const logDates = new Set(allLogs.value.map((l) => l.date));
+  const today = toLocalDateStr(new Date());
+
+  const effectiveFrom = dateFrom.value || (allLogs.value.length > 0
+    ? [...allLogs.value].sort((a, b) => a.date.localeCompare(b.date))[0].date
+    : null);
+  const effectiveTo = dateTo.value || today;
+
   type Entry = { date: string } & (
     | { kind: "log"; data: AdminTimeLog }
     | { kind: "vacation"; data: AdminVacationDay }
+    | { kind: "holiday"; data: PublicHoliday }
   );
 
   const entries: Entry[] = [
@@ -129,6 +142,12 @@ const mergedRows = computed<MergedRow[] | null>(() => {
         return true;
       })
       .map((v) => ({ kind: "vacation" as const, date: v.date, data: v })),
+    ...allHolidays.value
+      .filter((h) => {
+        if (!h.isWorkingDay && (!effectiveFrom || h.date >= effectiveFrom) && h.date <= effectiveTo && !logDates.has(h.date)) return true;
+        return false;
+      })
+      .map((h) => ({ kind: "holiday" as const, date: h.date, data: h })),
   ].sort((a, b) => b.date.localeCompare(a.date));
 
   const result: MergedRow[] = [];
@@ -145,8 +164,10 @@ const mergedRows = computed<MergedRow[] | null>(() => {
     if (entry.kind === "log") {
       result.push({ kind: "log", data: entry.data });
       weekHours += entry.data.totalHours ?? 0;
-    } else {
+    } else if (entry.kind === "vacation") {
       result.push({ kind: "vacation", data: entry.data });
+    } else {
+      result.push({ kind: "holiday", data: entry.data });
     }
   }
   if (currentWeek !== null) {
@@ -224,18 +245,28 @@ const fetchLogs = async () => {
   currentPage.value = 1;
   try {
     const userId = selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value;
-    const [logs, vacations] = await Promise.all([
-      adminService.getAllTimeLogs({
-        userId,
-        dateFrom: dateFrom.value || undefined,
-        dateTo: dateTo.value || undefined,
-      }),
-      userId
-        ? adminService.getAllVacationDays({ userId })
-        : Promise.resolve([] as AdminVacationDay[]),
+
+    const fromYear = dateFrom.value ? parseInt(dateFrom.value.slice(0, 4)) : new Date().getFullYear();
+    const toYear = dateTo.value ? parseInt(dateTo.value.slice(0, 4)) : new Date().getFullYear();
+    const years: number[] = [];
+    for (let y = fromYear; y <= toYear; y++) years.push(y);
+
+    const [[logs, vacations], holidayArrays] = await Promise.all([
+      Promise.all([
+        adminService.getAllTimeLogs({
+          userId,
+          dateFrom: dateFrom.value || undefined,
+          dateTo: dateTo.value || undefined,
+        }),
+        userId
+          ? adminService.getAllVacationDays({ userId })
+          : Promise.resolve([] as AdminVacationDay[]),
+      ]),
+      Promise.all(years.map((y) => holidayService.getHolidays(y))),
     ]);
     allLogs.value = logs;
     allVacations.value = vacations;
+    allHolidays.value = holidayArrays.flat();
   } catch {
     toast.error("Failed to load time logs");
   } finally {
@@ -483,6 +514,23 @@ onMounted(async () => {
                       </button>
                     </div>
                     <span v-else class="text-slate-400">—</span>
+                  </TableCell>
+                </TableRow>
+
+                <!-- Holiday row -->
+                <TableRow
+                  v-else-if="row.kind === 'holiday'"
+                  class="bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50/70 dark:hover:bg-sky-950/30"
+                >
+                  <TableCell :colspan="2" class="font-medium text-slate-900 dark:text-slate-100">
+                    {{ formatDate(row.data.date) }}
+                  </TableCell>
+                  <TableCell :colspan="4">
+                    <div class="flex items-center gap-2">
+                      <StarIcon class="size-3.5 text-sky-500 shrink-0" />
+                      <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
+                      <span class="text-xs text-slate-400 dark:text-slate-500">Public holiday</span>
+                    </div>
                   </TableCell>
                 </TableRow>
 

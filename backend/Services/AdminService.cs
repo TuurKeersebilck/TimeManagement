@@ -393,6 +393,12 @@ public class AdminService(AppDbContext context) : IAdminService
             .ThenBy(s => s.Date)
             .ToList();
 
+        var publicHolidays = await _context.PublicHolidays
+            .AsNoTracking()
+            .Where(h => h.Date.Year == year && h.Date.Month == month && !h.IsWorkingDay)
+            .OrderBy(h => h.Date)
+            .ToListAsync(ct);
+
         var vacationsQuery = _context.VacationDays
             .AsNoTracking()
             .Where(d => d.Date.Year == year && d.Date.Month == month);
@@ -511,6 +517,23 @@ public class AdminService(AppDbContext context) : IAdminService
                     CsvEscape(v.VacationTypeName),
                     ((double)v.Amount).ToString("F1"),
                     CsvEscape(v.Note ?? "")
+                ));
+            }
+        }
+
+        // ── Section 4: Public Holidays ──────────────────────────────────────
+        if (publicHolidays.Count != 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("PUBLIC HOLIDAYS");
+            sb.AppendLine("Date,Day,Name");
+
+            foreach (var h in publicHolidays)
+            {
+                sb.AppendLine(string.Join(",",
+                    h.Date.ToString("yyyy-MM-dd"),
+                    h.Date.DayOfWeek.ToString(),
+                    CsvEscape(h.Name)
                 ));
             }
         }
