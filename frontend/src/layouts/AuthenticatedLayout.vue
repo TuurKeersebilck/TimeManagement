@@ -6,13 +6,16 @@ import NotificationBell from "@/components/NotificationBell.vue";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
 import { useSidebar } from "../composables/useSidebar";
+import { useNotifications } from "../composables/useNotifications";
 import { MenuIcon } from "lucide-vue-next";
 
 const router = useRouter();
 const { sidebarOpen, toggle: toggleSidebar } = useSidebar();
 const { clearUser } = useAuth();
+const { reset: resetNotifications } = useNotifications();
 
 const handleLogout = async (): Promise<void> => {
+  resetNotifications();
   clearUser();
   await authService.logout();
   router.push("/login");

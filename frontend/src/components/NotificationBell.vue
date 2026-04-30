@@ -1,32 +1,20 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { notificationService, type Notification, type NotificationType } from "@/services/notificationService";
+import { type NotificationType } from "@/services/notificationService";
+import { useNotifications } from "@/composables/useNotifications";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { BellIcon } from "lucide-vue-next";
 
 const router = useRouter();
-const notifications = ref<Notification[]>([]);
-const unreadCount = ref(0);
-const loading = ref(false);
 const open = ref(false);
+const { notifications, unreadCount, loading, fetchUnreadCount, fetchNotifications, markAsRead, markAllAsRead } = useNotifications();
 
 const routeForType: Record<NotificationType, string> = {
   Vacation: "team-calendar",
   AdjustmentRequest: "admin-adjustment-requests",
   AdjustmentApproved: "time-tracking",
   AdjustmentRejected: "time-tracking",
-};
-
-const fetchNotifications = async () => {
-  loading.value = true;
-  try {
-    notifications.value = await notificationService.getNotifications();
-    unreadCount.value = notifications.value.filter((n) => !n.isRead).length;
-  } finally {
-    loading.value = false;
-  }
 };
 
 const onOpen = async (isOpen: boolean) => {
@@ -36,28 +24,16 @@ const onOpen = async (isOpen: boolean) => {
   }
 };
 
-const markAsRead = async (n: Notification) => {
-  if (!n.isRead) {
-    n.isRead = true;
-    unreadCount.value = Math.max(0, unreadCount.value - 1);
-    await notificationService.markAsRead(n.id);
-  }
+const handleMarkAsRead = async (n: Parameters<typeof markAsRead>[0]) => {
+  await markAsRead(n);
   open.value = false;
   router.push({ name: routeForType[n.type] });
-};
-
-const markAllAsRead = async () => {
-  notifications.value.forEach((n) => (n.isRead = true));
-  unreadCount.value = 0;
-  await notificationService.markAllAsRead();
 };
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
-onMounted(async () => {
-  unreadCount.value = await notificationService.getUnreadCount();
-});
+onMounted(fetchUnreadCount);
 </script>
 
 <template>
@@ -108,7 +84,7 @@ onMounted(async () => {
               ? 'bg-white dark:bg-slate-900'
               : 'bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-50 dark:hover:bg-indigo-950/40',
           ]"
-          @click="markAsRead(n)"
+          @click="handleMarkAsRead(n)"
         >
           <span
             :class="[
