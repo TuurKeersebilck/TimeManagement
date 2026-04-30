@@ -2,6 +2,7 @@ import { ref, computed } from "vue";
 import { authService, type User } from "../services/authService";
 import { useRouter } from "vue-router";
 import { useClockEventsStore } from "./useClockEventsStore";
+import { useNotifications } from "./useNotifications";
 
 const currentUser = ref<User | null>(null);
 const isLoadingUser = ref(false);
@@ -41,6 +42,8 @@ export function useAuth() {
     storedRoles.value = [];
     const { clearCache } = useClockEventsStore();
     clearCache();
+    const { reset } = useNotifications();
+    reset();
   };
 
   const userInitials = computed(() => {
