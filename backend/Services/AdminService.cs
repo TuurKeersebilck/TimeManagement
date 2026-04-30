@@ -393,11 +393,13 @@ public class AdminService(AppDbContext context) : IAdminService
             .ThenBy(s => s.Date)
             .ToList();
 
-        var publicHolidays = await _context.PublicHolidays
+        var publicHolidays = (await _context.PublicHolidays
             .AsNoTracking()
             .Where(h => h.Date.Year == year && h.Date.Month == month && !h.IsWorkingDay)
             .OrderBy(h => h.Date)
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .Where(h => h.Date.DayOfWeek != DayOfWeek.Saturday && h.Date.DayOfWeek != DayOfWeek.Sunday)
+            .ToList();
 
         var vacationsQuery = _context.VacationDays
             .AsNoTracking()
