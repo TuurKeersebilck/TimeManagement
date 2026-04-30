@@ -74,10 +74,11 @@ onMounted(async () => {
   await fetchSummaries();
   try {
     const today = localDateString(new Date());
-    const [target, vacation, yearHolidays] = await Promise.all([
+    const [target, vacation, yearHolidays, myVacationDays] = await Promise.all([
       clockEventService.getMyTarget(),
       vacationService.getVacationForDate(today),
       holidayService.getHolidays(new Date().getFullYear()),
+      vacationService.getVacationDays(),
     ]);
     dailyTarget.value = target.dailyHours ?? null;
     weeklyTarget.value = target.weeklyHours ?? null;
@@ -104,6 +105,7 @@ onMounted(async () => {
       weekEnd.setDate(weekStart.getDate() + 6);
       const weekStartStr = localDateString(weekStart);
       const weekEndStr = localDateString(weekEnd);
+      const dailyHours = target.dailyHours ?? weeklyTarget.value / 5;
 
       const workdayHolidaysThisWeek = yearHolidays.filter(h => {
         if (h.isWorkingDay || h.date < weekStartStr || h.date > weekEndStr) return false;
@@ -111,9 +113,13 @@ onMounted(async () => {
         return dow !== 0 && dow !== 6;
       });
 
-      if (workdayHolidaysThisWeek.length > 0) {
-        const dailyHours = target.dailyHours ?? weeklyTarget.value / 5;
-        const adjusted = weeklyTarget.value - workdayHolidaysThisWeek.length * dailyHours;
+      const vacationHoursThisWeek = myVacationDays
+        .filter(v => v.date >= weekStartStr && v.date <= weekEndStr)
+        .reduce((sum, v) => sum + v.amount * dailyHours, 0);
+
+      const deduction = workdayHolidaysThisWeek.length * dailyHours + vacationHoursThisWeek;
+      if (deduction > 0) {
+        const adjusted = weeklyTarget.value - deduction;
         weeklyTarget.value = adjusted > 0 ? adjusted : null;
       }
     }
