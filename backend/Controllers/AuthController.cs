@@ -38,66 +38,6 @@ public class AuthController(
     private readonly IEmailService _email = email;
     private readonly string _appUrl = configuration["AppUrl"] ?? "http://localhost:5173";
 
-    [HttpPost("register")]
-    [EnableRateLimiting("register-limit")]
-    public async Task<ActionResult<AuthResponseDto>> Register(RegisterDto registerDto)
-    {
-        if (!ModelState.IsValid)
-            return BadRequest(new ErrorResponseDto { Message = "Invalid registration data" });
-
-        if (string.IsNullOrEmpty(registerDto.Email) || string.IsNullOrEmpty(registerDto.FullName))
-            return BadRequest(new ErrorResponseDto { Message = "Full name and email are required" });
-
-        if (registerDto.Password != registerDto.ConfirmPassword)
-            return BadRequest(new ErrorResponseDto { Message = "Passwords do not match" });
-
-        // Check if email already exists
-        var existingUserByEmail = await _userManager.FindByEmailAsync(registerDto.Email);
-        if (existingUserByEmail != null)
-            return Conflict(new ErrorResponseDto { Message = "Email is already registered", Code = "DUPLICATE_EMAIL" });
-
-        var user = new User
-        {
-            UserName = registerDto.Email, // Use email as username for Identity
-            Email = registerDto.Email,
-            FullName = registerDto.FullName
-        };
-
-        var result = await _userManager.CreateAsync(user, registerDto.Password);
-
-        if (!result.Succeeded)
-        {
-            _logger.LogWarning("Failed to create user {Email}: {Errors}",
-                registerDto.Email,
-                string.Join(", ", result.Errors.Select(e => e.Description)));
-
-            return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
-        }
-
-        try
-        {
-            _logger.LogInformation("User {Email} created successfully", user.Email);
-
-            var token = _jwtService.GenerateToken(user);
-            SetAuthCookie(token, _jwtConfig.ExpiryInMinutes);
-
-            return Ok(new AuthResponseDto
-            {
-                IsSuccess = true,
-                Message = "User registered successfully",
-                Email = user.Email,
-                FullName = user.FullName,
-                Roles = [user.Role.ToString()],
-                Expiration = DateTimeOffset.UtcNow.AddMinutes(_jwtConfig.ExpiryInMinutes)
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during user registration for {Email}", registerDto.Email);
-            return StatusCode(500, new ErrorResponseDto { Message = "An error occurred during registration" });
-        }
-    }
-
     [HttpPost("login")]
     [EnableRateLimiting("login-limit")]
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto loginDto)

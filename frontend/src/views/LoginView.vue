@@ -118,15 +118,6 @@ const handleLogin = async (): Promise<void> => {
           </Button>
         </form>
 
-        <!-- Register Link -->
-        <div class="mt-6 text-center">
-          <p class="text-sm text-muted-foreground">
-            Don't have an account?
-            <RouterLink to="/register" class="font-medium text-primary hover:underline">
-              Sign up
-            </RouterLink>
-          </p>
-        </div>
       </div>
     </div>
   </div>

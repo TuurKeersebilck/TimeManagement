@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import { useRouter } from "vue-router";
+import { ref, computed, onMounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
+import { inviteService } from "../services/inviteService";
 import { authService } from "../services/authService";
 import { useAuth } from "../composables/useAuth";
 import { extractApiError } from "@/utils/apiError";
@@ -10,62 +11,76 @@ import { Button } from "@/components/ui/button";
 import { Loader2Icon, EyeIcon, EyeOffIcon } from "lucide-vue-next";
 
 const router = useRouter();
-const fullname = ref<string>("");
-const email = ref<string>("");
+const route = useRoute();
+const { fetchUser } = useAuth();
+
+const token = ref<string>("");
+const inviteEmail = ref<string>("");
+const tokenValid = ref<boolean | null>(null); // null = loading
+const tokenError = ref<string>("");
+
+const fullName = ref<string>("");
 const password = ref<string>("");
 const confirmPassword = ref<string>("");
 const loading = ref<boolean>(false);
 const error = ref<string>("");
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
-const { fetchUser } = useAuth();
 
-const passwordsMatch = computed<boolean>(() => {
-  return password.value === confirmPassword.value;
-});
+const passwordsMatch = computed(() => password.value === confirmPassword.value);
 
 type PasswordStrength = "weak" | "medium" | "strong" | null;
-
 const passwordStrength = computed<PasswordStrength>(() => {
   const pwd = password.value;
   if (pwd.length === 0) return null;
   if (pwd.length < 8) return "weak";
-  if (pwd.length >= 8 && /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /[0-9]/.test(pwd)) {
-    return "strong";
-  }
+  if (pwd.length >= 8 && /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /[0-9]/.test(pwd)) return "strong";
   return "medium";
 });
 
-const handleRegister = async (): Promise<void> => {
-  error.value = "";
+onMounted(async () => {
+  const rawToken = route.query.token as string | undefined;
+  if (!rawToken) {
+    tokenValid.value = false;
+    tokenError.value = "No invitation token found. Please use the link from your invitation email.";
+    return;
+  }
+  token.value = rawToken;
+  try {
+    const result = await inviteService.validateToken(rawToken);
+    inviteEmail.value = result.email;
+    tokenValid.value = true;
+  } catch {
+    tokenValid.value = false;
+    tokenError.value = "This invitation link is invalid or has expired. Please ask your admin to send a new invite.";
+  }
+});
 
+const handleAccept = async (): Promise<void> => {
+  error.value = "";
   if (!passwordsMatch.value) {
     error.value = "Passwords do not match";
     return;
   }
-
   if (password.value.length < 8) {
     error.value = "Password must be at least 8 characters long";
     return;
   }
 
   loading.value = true;
-
   try {
-    const response = await authService.register({
-      fullName: fullname.value,
-      email: email.value,
+    const response = await inviteService.acceptInvite({
+      token: token.value,
+      fullName: fullName.value,
       password: password.value,
-      confirmPassword: password.value,
-    });
+      confirmPassword: confirmPassword.value,
+    }) as { email: string; fullName: string; roles: string[] };
 
     authService.setUserInfo(response.email, response.fullName, response.roles);
-
     await fetchUser(true);
-
     router.push("/");
   } catch (err) {
-    error.value = extractApiError(err, "Registration failed. Please try again.");
+    error.value = extractApiError(err, "Failed to create account. Please try again.");
   } finally {
     loading.value = false;
   }
@@ -78,13 +93,26 @@ const handleRegister = async (): Promise<void> => {
       <!-- Header -->
       <div class="text-center mb-8">
         <h2 class="text-3xl font-bold text-foreground">Create your account</h2>
-        <p class="mt-2 text-sm text-muted-foreground">Start tracking your time efficiently</p>
+        <p class="mt-2 text-sm text-muted-foreground">Complete your invitation to get started</p>
       </div>
 
-      <!-- Register Form -->
       <div class="bg-card text-card-foreground rounded-xl border border-border shadow-sm p-8">
-        <form @submit.prevent="handleRegister" class="space-y-5">
-          <!-- Error Message -->
+        <!-- Loading -->
+        <div v-if="tokenValid === null" class="flex justify-center py-8">
+          <Loader2Icon class="size-6 animate-spin text-muted-foreground" />
+        </div>
+
+        <!-- Invalid token -->
+        <div v-else-if="tokenValid === false" class="text-center py-4 space-y-4">
+          <p class="text-destructive text-sm">{{ tokenError }}</p>
+          <RouterLink to="/login" class="text-sm font-medium text-primary hover:underline">
+            Back to sign in
+          </RouterLink>
+        </div>
+
+        <!-- Registration form -->
+        <form v-else @submit.prevent="handleAccept" class="space-y-5">
+          <!-- Error message -->
           <div
             v-if="error"
             class="bg-destructive/10 border border-destructive/30 text-destructive text-sm px-4 py-3 rounded-lg"
@@ -92,12 +120,24 @@ const handleRegister = async (): Promise<void> => {
             {{ error }}
           </div>
 
-          <!-- Name Field -->
+          <!-- Email (read-only) -->
+          <div class="space-y-2">
+            <Label for="email">Email address</Label>
+            <Input
+              id="email"
+              :value="inviteEmail"
+              type="email"
+              disabled
+              class="bg-muted cursor-not-allowed"
+            />
+          </div>
+
+          <!-- Full name -->
           <div class="space-y-2">
             <Label for="fullname">Full name</Label>
             <Input
               id="fullname"
-              v-model="fullname"
+              v-model="fullName"
               type="text"
               required
               autocomplete="name"
@@ -105,20 +145,7 @@ const handleRegister = async (): Promise<void> => {
             />
           </div>
 
-          <!-- Email Field -->
-          <div class="space-y-2">
-            <Label for="email">Email address</Label>
-            <Input
-              id="email"
-              v-model="email"
-              type="email"
-              required
-              autocomplete="email"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <!-- Password Field -->
+          <!-- Password -->
           <div class="space-y-2">
             <Label for="password">Password</Label>
             <div class="relative">
@@ -141,7 +168,6 @@ const handleRegister = async (): Promise<void> => {
                 <EyeIcon v-else class="size-4" />
               </button>
             </div>
-            <!-- Password Strength Indicator -->
             <div v-if="passwordStrength" class="space-y-1">
               <div class="flex items-center gap-2">
                 <div class="flex-1 bg-muted rounded-full h-1.5">
@@ -171,7 +197,7 @@ const handleRegister = async (): Promise<void> => {
             </div>
           </div>
 
-          <!-- Confirm Password Field -->
+          <!-- Confirm password -->
           <div class="space-y-2">
             <Label for="confirmPassword">Confirm password</Label>
             <div class="relative">
@@ -183,11 +209,7 @@ const handleRegister = async (): Promise<void> => {
                 autocomplete="new-password"
                 placeholder="••••••••"
                 class="pr-10"
-                :class="
-                  confirmPassword && !passwordsMatch
-                    ? 'border-destructive focus-visible:ring-destructive/50'
-                    : ''
-                "
+                :class="confirmPassword && !passwordsMatch ? 'border-destructive focus-visible:ring-destructive/50' : ''"
               />
               <button
                 type="button"
@@ -204,20 +226,16 @@ const handleRegister = async (): Promise<void> => {
             </p>
           </div>
 
-          <!-- Submit Button -->
           <Button type="submit" :disabled="loading || !passwordsMatch" class="w-full">
             <Loader2Icon v-if="loading" class="size-4 animate-spin" />
             {{ loading ? "Creating account…" : "Create account" }}
           </Button>
         </form>
 
-        <!-- Login Link -->
         <div class="mt-6 text-center">
           <p class="text-sm text-muted-foreground">
             Already have an account?
-            <RouterLink to="/login" class="font-medium text-primary hover:underline">
-              Sign in
-            </RouterLink>
+            <RouterLink to="/login" class="font-medium text-primary hover:underline">Sign in</RouterLink>
           </p>
         </div>
       </div>

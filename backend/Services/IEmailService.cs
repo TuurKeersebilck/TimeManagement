@@ -19,4 +19,6 @@ public interface IEmailService
     Task SendMissedClockInReminderAsync(string toEmail, string toName, DateOnly missedDate);
 
     Task SendAdjustmentOutcomeEmailAsync(string toEmail, string toName, DateOnly date, bool approved);
+
+    Task SendInviteEmailAsync(string toEmail, string inviteLink);
 }
