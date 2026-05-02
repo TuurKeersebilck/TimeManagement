@@ -125,7 +125,7 @@ const handleAccept = async (): Promise<void> => {
             <Label for="email">Email address</Label>
             <Input
               id="email"
-              :value="inviteEmail"
+              :model-value="inviteEmail"
               type="email"
               disabled
               class="bg-muted cursor-not-allowed"
