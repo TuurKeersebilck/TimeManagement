@@ -7,10 +7,12 @@ namespace TimeManagementBackend.Services;
 
 public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEmailService
 {
+    private const int TimeoutSeconds = 30;
+
     public async Task SendPasswordResetEmailAsync(string toEmail, string toName, string resetLink)
     {
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.From.Add(new MailboxAddress("Logr", config.From));
         message.To.Add(new MailboxAddress(toName, toEmail));
         message.Subject = "Reset your password";
 
@@ -35,19 +37,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
-        using var client = new SmtpClient();
-        try
-        {
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(config.User, config.Password);
-            await client.SendAsync(message);
-        }
-        finally
-        {
-            await client.DisconnectAsync(true);
-        }
-
-        logger.LogInformation("Password reset email sent to {Email}", toEmail);
+        await SendMessageAsync(message, $"password-reset to {toEmail}");
     }
 
     public async Task SendAdjustmentRequestEmailAsync(
@@ -62,11 +52,10 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         string reason,
         string approveLink)
     {
-        // Show the employee's local time (the time they actually entered, not UTC)
         static string Fmt(DateTimeOffset? t) => t.HasValue ? t.Value.ToString("HH:mm") : "—";
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.From.Add(new MailboxAddress("Logr", config.From));
         message.To.Add(new MailboxAddress(toName, toEmail));
         message.Subject = $"Time adjustment request from {requesterName} — {date:yyyy-MM-dd}";
 
@@ -94,25 +83,13 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
-        using var client = new SmtpClient();
-        try
-        {
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(config.User, config.Password);
-            await client.SendAsync(message);
-        }
-        finally
-        {
-            await client.DisconnectAsync(true);
-        }
-
-        logger.LogInformation("Adjustment request email sent to admin {Email}", toEmail);
+        await SendMessageAsync(message, $"adjustment-request to {toEmail}");
     }
 
     public async Task SendMissedClockInReminderAsync(string toEmail, string toName, DateOnly missedDate)
     {
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.From.Add(new MailboxAddress("Logr", config.From));
         message.To.Add(new MailboxAddress(toName, toEmail));
         message.Subject = $"Missing time log — {missedDate:yyyy-MM-dd}";
 
@@ -133,19 +110,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
-        using var client = new SmtpClient();
-        try
-        {
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(config.User, config.Password);
-            await client.SendAsync(message);
-        }
-        finally
-        {
-            await client.DisconnectAsync(true);
-        }
-
-        logger.LogInformation("Missed clock-in reminder sent to {Email} for {Date}", toEmail, missedDate);
+        await SendMessageAsync(message, $"missed-clock-in reminder to {toEmail} for {missedDate}");
     }
 
     public async Task SendAdjustmentOutcomeEmailAsync(string toEmail, string toName, DateOnly date, bool approved)
@@ -155,7 +120,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
             : ("rejected", "#ef4444", "No changes have been made to your time log. If you believe this is a mistake, please contact your manager.");
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("Time Management", config.From));
+        message.From.Add(new MailboxAddress("Logr", config.From));
         message.To.Add(new MailboxAddress(toName, toEmail));
         message.Subject = $"Your time adjustment request for {date:yyyy-MM-dd} has been {statusWord}";
 
@@ -175,19 +140,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
-        using var client = new SmtpClient();
-        try
-        {
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(config.User, config.Password);
-            await client.SendAsync(message);
-        }
-        finally
-        {
-            await client.DisconnectAsync(true);
-        }
-
-        logger.LogInformation("Adjustment outcome email ({Status}) sent to {Email}", statusWord, toEmail);
+        await SendMessageAsync(message, $"adjustment-outcome ({statusWord}) to {toEmail}");
     }
 
     public async Task SendInviteEmailAsync(string toEmail, string inviteLink)
@@ -220,18 +173,44 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
+        await SendMessageAsync(message, $"invite to {toEmail}");
+    }
+
+    private async Task SendMessageAsync(MimeMessage message, string context)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutSeconds));
         using var client = new SmtpClient();
         try
         {
-            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls);
-            await client.AuthenticateAsync(config.User, config.Password);
-            await client.SendAsync(message);
+            await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls, cts.Token);
+            await client.AuthenticateAsync(config.User, config.Password, cts.Token);
+            await client.SendAsync(message, cancellationToken: cts.Token);
+            logger.LogInformation("Email sent: {Context}", context);
+        }
+        catch (OperationCanceledException)
+        {
+            logger.LogError(
+                "SMTP timeout after {TimeoutSeconds}s — could not send {Context}. Host: {Host}:{Port}, User: {User}",
+                TimeoutSeconds, context, config.Host, config.Port, config.User);
+            throw new TimeoutException($"SMTP connection to {config.Host}:{config.Port} timed out after {TimeoutSeconds} seconds.");
+        }
+        catch (MailKit.Security.AuthenticationException ex)
+        {
+            logger.LogError(
+                "SMTP authentication failed for {User} on {Host}:{Port} — {Message}",
+                config.User, config.Host, config.Port, ex.Message);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex,
+                "SMTP error sending {Context} via {Host}:{Port} as {User}",
+                context, config.Host, config.Port, config.User);
+            throw;
         }
         finally
         {
             await client.DisconnectAsync(true);
         }
-
-        logger.LogInformation("Invite email sent to {Email}", toEmail);
     }
 }
