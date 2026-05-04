@@ -210,7 +210,12 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         }
         finally
         {
-            await client.DisconnectAsync(true);
+            try
+            {
+                using var disconnectCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await client.DisconnectAsync(true, disconnectCts.Token);
+            }
+            catch { /* best-effort disconnect */ }
         }
     }
 }
