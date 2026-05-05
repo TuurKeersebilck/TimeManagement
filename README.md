@@ -3,7 +3,7 @@
 Full-stack employee time management app. Employees clock in/out throughout the day, request vacations, and track their hours. Admins manage employees, approve requests, and export data.
 
 **Stack:** Vue 3 + Vite (frontend) · ASP.NET Core 10 (backend) · PostgreSQL  
-**Deployed:** Docker on a self-hosted VPS (nginx + certbot for TLS)
+**Deployed:** Self-hosted
 
 ---
 
@@ -196,24 +196,7 @@ All routes under `/api/`. JWT required on all routes except auth.
 
 ---
 
-## Deployment
-
-Push to `main` triggers GitHub Actions, which builds and pushes Docker images to `ghcr.io`. On the VPS:
-
-```bash
-# first time
-cp .env.template .env   # fill in real values
-docker compose up -d
-
-# every update
-docker compose pull && docker compose up -d
-```
-
-The VPS runs nginx + certbot directly on the host for TLS termination. The three containers (frontend, backend, db) are internal only — only nginx is reachable from outside.
-
-See `.env.template` for all required environment variables.
-
-### Database migrations
+## Database migrations
 
 EF Core migrations run automatically on startup. To add a new migration locally:
 
