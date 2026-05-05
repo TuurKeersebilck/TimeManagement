@@ -114,6 +114,8 @@ try
         db.Database.Migrate();
     }
 
+    await Seeder.SeedAdminAsync(app.Services);
+
     // Use global exception handling middleware
     app.UseMiddleware<ExceptionHandlingMiddleware>();
 
