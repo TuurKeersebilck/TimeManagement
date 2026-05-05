@@ -3,7 +3,7 @@
 Full-stack employee time management app. Employees clock in/out throughout the day, request vacations, and track their hours. Admins manage employees, approve requests, and export data.
 
 **Stack:** Vue 3 + Vite (frontend) · ASP.NET Core 10 (backend) · PostgreSQL  
-**Deployed:** Vercel (frontend) · Railway (backend)
+**Deployed:** Docker on a self-hosted VPS (nginx + certbot for TLS)
 
 ---
 
@@ -198,33 +198,24 @@ All routes under `/api/`. JWT required on all routes except auth.
 
 ## Deployment
 
-### Frontend (Vercel)
+Push to `main` triggers GitHub Actions, which builds and pushes Docker images to `ghcr.io`. On the VPS:
 
-Deployed automatically on push to `main`. `vercel.json` rewrites `/api/*` to the Railway backend.
+```bash
+# first time
+cp .env.template .env   # fill in real values
+docker compose up -d
 
-### Backend (Railway)
+# every update
+docker compose pull && docker compose up -d
+```
 
-Railway detects .NET automatically. Set the following environment variables in the Railway dashboard (see `.env.template`):
+The VPS runs nginx + certbot directly on the host for TLS termination. The three containers (frontend, backend, db) are internal only — only nginx is reachable from outside.
 
-| Variable | Description |
-|---|---|
-| `CONNECTION_STRING` | PostgreSQL connection string |
-| `JWT_SECRET` | HS256 signing key (≥ 32 chars) |
-| `JWT_ISSUER` | Token issuer (e.g. `TimeManagementAPI`) |
-| `JWT_AUDIENCE` | Token audience (e.g. `TimeManagementAPI`) |
-| `JWT_EXPIRY_MINUTES` | Token lifetime |
-| `CORS_ORIGINS` | Comma-separated allowed origins |
-| `SMTP_HOST` | SMTP server (e.g. `smtp.gmail.com`) |
-| `SMTP_PORT` | SMTP port (e.g. `587`) |
-| `SMTP_USER` | Sender email address |
-| `SMTP_PASS` | Gmail App Password |
-| `SMTP_FROM` | From address in outgoing emails |
-| `APP_URL` | Frontend URL (used in password reset links) |
-| `BACKEND_URL` | Public backend URL (used in approval email links) |
+See `.env.template` for all required environment variables.
 
 ### Database migrations
 
-EF Core migrations run automatically on startup in production. To add a new migration locally:
+EF Core migrations run automatically on startup. To add a new migration locally:
 
 ```bash
 cd backend
