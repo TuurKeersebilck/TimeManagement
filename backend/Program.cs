@@ -114,6 +114,38 @@ try
         db.Database.Migrate();
     }
 
+    // Seed initial admin if env vars are set
+    var seedEmail    = Environment.GetEnvironmentVariable("ADMIN_SEED_EMAIL");
+    var seedPassword = Environment.GetEnvironmentVariable("ADMIN_SEED_PASSWORD");
+    if (!string.IsNullOrEmpty(seedEmail) && !string.IsNullOrEmpty(seedPassword))
+    {
+        using var scope = app.Services.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+        if (!await roleManager.RoleExistsAsync("Admin"))
+            await roleManager.CreateAsync(new IdentityRole("Admin"));
+
+        if (await userManager.FindByEmailAsync(seedEmail) is null)
+        {
+            var admin = new User { UserName = seedEmail, Email = seedEmail, EmailConfirmed = true };
+            var result = await userManager.CreateAsync(admin, seedPassword);
+            if (result.Succeeded)
+            {
+                await userManager.AddToRoleAsync(admin, "Admin");
+                Log.Information("Seed admin created: {Email}", seedEmail);
+            }
+            else
+            {
+                Log.Warning("Seed admin creation failed: {Errors}", string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            Log.Information("Seed admin already exists, skipping: {Email}", seedEmail);
+        }
+    }
+
     // Use global exception handling middleware
     app.UseMiddleware<ExceptionHandlingMiddleware>();
 
