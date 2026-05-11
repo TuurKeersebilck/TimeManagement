@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type Employee } from "../../services/adminService";
 import { inviteService, type Invite } from "../../services/inviteService";
 import { useAppToast } from "@/composables/useAppToast";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import { extractApiError } from "@/utils/apiError";
 import {
   Table,
@@ -17,10 +18,20 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { UsersIcon, ChevronRightIcon, MailIcon, Loader2Icon, XIcon } from "lucide-vue-next";
+import {
+  UsersIcon,
+  ChevronRightIcon,
+  MailIcon,
+  Loader2Icon,
+  XIcon,
+  BanIcon,
+  CircleCheckIcon,
+  Trash2Icon,
+} from "lucide-vue-next";
 
 const toast = useAppToast();
 const router = useRouter();
+const { confirm } = useConfirmDialog();
 const employees = ref<Employee[]>([]);
 const loading = ref(false);
 
@@ -30,6 +41,9 @@ const invitesLoading = ref(false);
 const showInviteForm = ref(false);
 const inviteEmail = ref("");
 const inviteLoading = ref(false);
+
+const activeEmployees = computed(() => employees.value.filter((e) => !e.isDisabled));
+const disabledEmployees = computed(() => employees.value.filter((e) => e.isDisabled));
 
 const weekStatus = (emp: Employee): "on-track" | "behind" | "none" => {
   if (emp.resolvedWeeklyTarget == null) return "none";
@@ -82,13 +96,68 @@ async function cancelInvite(invite: Invite) {
     toast.error("Failed to cancel invite");
   }
 }
+
+function disableEmployee(emp: Employee) {
+  confirm({
+    title: "Disable employee",
+    message: `This will revoke ${emp.fullName}'s access immediately. Their time log history will be preserved. You can re-enable their account at any time.`,
+    confirmLabel: "Disable",
+    variant: "destructive",
+    onConfirm: async () => {
+      try {
+        await adminService.disableEmployee(emp.id);
+        const idx = employees.value.findIndex((e) => e.id === emp.id);
+        if (idx !== -1) employees.value[idx] = { ...employees.value[idx], isDisabled: true };
+        toast.success(`${emp.fullName} has been disabled`);
+      } catch {
+        toast.error("Failed to disable employee");
+      }
+    },
+  });
+}
+
+function enableEmployee(emp: Employee) {
+  confirm({
+    title: "Re-enable employee",
+    message: `${emp.fullName} will be able to log in again immediately.`,
+    confirmLabel: "Enable",
+    onConfirm: async () => {
+      try {
+        await adminService.enableEmployee(emp.id);
+        const idx = employees.value.findIndex((e) => e.id === emp.id);
+        if (idx !== -1) employees.value[idx] = { ...employees.value[idx], isDisabled: false };
+        toast.success(`${emp.fullName} has been re-enabled`);
+      } catch {
+        toast.error("Failed to enable employee");
+      }
+    },
+  });
+}
+
+function deleteEmployee(emp: Employee) {
+  confirm({
+    title: "Permanently delete employee",
+    message: `This will permanently delete ${emp.fullName} and all their time log data. This action cannot be undone.`,
+    confirmLabel: "Delete permanently",
+    variant: "destructive",
+    onConfirm: async () => {
+      try {
+        await adminService.deleteEmployee(emp.id);
+        employees.value = employees.value.filter((e) => e.id !== emp.id);
+        toast.success(`${emp.fullName} has been permanently deleted`);
+      } catch {
+        toast.error("Failed to delete employee");
+      }
+    },
+  });
+}
 </script>
 
 <template>
   <AuthenticatedLayout>
     <div class="p-6 lg:p-8">
       <div class="max-w-4xl mx-auto space-y-8">
-        <!-- Employees section -->
+        <!-- Active employees section -->
         <div>
           <div class="flex items-center justify-between mb-6">
             <div>
@@ -148,23 +217,31 @@ async function cancelInvite(invite: Invite) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableEmpty v-if="employees.length === 0" :colspan="4">
+                <TableEmpty v-if="activeEmployees.length === 0" :colspan="4">
                   <UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                   <p class="text-slate-500 dark:text-slate-400">No employees found.</p>
                 </TableEmpty>
                 <TableRow
-                  v-for="employee in employees"
+                  v-for="employee in activeEmployees"
                   :key="employee.id"
-                  class="cursor-pointer hover:bg-muted/50 transition-colors"
-                  @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                  class="group"
                 >
-                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                  <TableCell
+                    class="font-medium text-slate-900 dark:text-slate-100 cursor-pointer"
+                    @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                  >
                     {{ employee.fullName }}
                   </TableCell>
-                  <TableCell class="text-slate-600 dark:text-slate-400">
+                  <TableCell
+                    class="text-slate-600 dark:text-slate-400 cursor-pointer"
+                    @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                  >
                     {{ employee.email }}
                   </TableCell>
-                  <TableCell>
+                  <TableCell
+                    class="cursor-pointer"
+                    @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                  >
                     <div class="flex items-center gap-2">
                       <span class="text-sm text-slate-700 dark:text-slate-300">
                         {{ employee.weeklyHoursLogged.toFixed(1) }}h
@@ -185,8 +262,77 @@ async function cancelInvite(invite: Invite) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell class="text-right w-8">
-                    <ChevronRightIcon class="size-4 text-slate-400 dark:text-slate-500 ml-auto" />
+                  <TableCell class="text-right w-20">
+                    <div class="flex items-center justify-end gap-1">
+                      <button
+                        class="p-1.5 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                        title="Disable employee"
+                        @click.stop="disableEmployee(employee)"
+                      >
+                        <BanIcon class="size-4" />
+                      </button>
+                      <ChevronRightIcon
+                        class="size-4 text-slate-400 dark:text-slate-500 cursor-pointer"
+                        @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <!-- Disabled employees section -->
+        <div v-if="!loading && disabledEmployees.length > 0">
+          <div class="mb-4">
+            <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Disabled employees</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">These accounts are deactivated. Re-enable or permanently delete them.</p>
+          </div>
+
+          <div class="card overflow-hidden opacity-80">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow
+                  v-for="employee in disabledEmployees"
+                  :key="employee.id"
+                  class="group"
+                >
+                  <TableCell class="font-medium text-slate-500 dark:text-slate-400">
+                    <div class="flex items-center gap-2">
+                      {{ employee.fullName }}
+                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                        Disabled
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell class="text-slate-400 dark:text-slate-500">
+                    {{ employee.email }}
+                  </TableCell>
+                  <TableCell class="text-right w-24">
+                    <div class="flex items-center justify-end gap-1">
+                      <button
+                        class="p-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                        title="Re-enable employee"
+                        @click="enableEmployee(employee)"
+                      >
+                        <CircleCheckIcon class="size-4" />
+                      </button>
+                      <button
+                        class="p-1.5 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer"
+                        title="Delete permanently"
+                        @click="deleteEmployee(employee)"
+                      >
+                        <Trash2Icon class="size-4" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               </TableBody>
