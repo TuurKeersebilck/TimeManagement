@@ -145,8 +145,8 @@ function deleteEmployee(emp: Employee) {
         await adminService.deleteEmployee(emp.id);
         employees.value = employees.value.filter((e) => e.id !== emp.id);
         toast.success(`${emp.fullName} has been permanently deleted`);
-      } catch {
-        toast.error("Failed to delete employee");
+      } catch (err) {
+        toast.error(extractApiError(err, "Failed to delete employee"));
       }
     },
   });

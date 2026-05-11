@@ -108,6 +108,9 @@ public class AuthController(
             if (user == null)
                 return NotFound(new ErrorResponseDto { Message = "User not found" });
 
+            if (user.IsDisabled)
+                return Unauthorized(new ErrorResponseDto { Message = "Your account has been disabled. Please contact your administrator.", Code = "ACCOUNT_DISABLED" });
+
             return Ok(new UserDto
             {
                 Id = user.Id,
