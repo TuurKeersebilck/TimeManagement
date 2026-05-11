@@ -55,6 +55,12 @@ public class AuthController(
                 return Unauthorized(new ErrorResponseDto { Message = "Invalid email or password" });
             }
 
+            if (user.IsDisabled)
+            {
+                _logger.LogWarning("Login attempt by disabled user: {Email}", loginDto.Email);
+                return Unauthorized(new ErrorResponseDto { Message = "Your account has been disabled. Please contact your administrator.", Code = "ACCOUNT_DISABLED" });
+            }
+
             var result = await _signInManager.CheckPasswordSignInAsync(user, loginDto.Password, false);
 
             if (!result.Succeeded)
@@ -101,6 +107,9 @@ public class AuthController(
 
             if (user == null)
                 return NotFound(new ErrorResponseDto { Message = "User not found" });
+
+            if (user.IsDisabled)
+                return Unauthorized(new ErrorResponseDto { Message = "Your account has been disabled. Please contact your administrator.", Code = "ACCOUNT_DISABLED" });
 
             return Ok(new UserDto
             {
