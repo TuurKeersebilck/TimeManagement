@@ -3,16 +3,21 @@ import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { authService, type ChangePasswordPayload, type UpdateProfilePayload } from "../services/authService";
+import { calendarFeedService } from "../services/calendarFeedService";
 import { useAuth } from "@/composables/useAuth";
 import { useApiCall } from "@/composables/useApiCall";
+import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { useAppToast } from "@/composables/useAppToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTheme } from "@/composables/useTheme";
-import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon, SwatchBookIcon } from "lucide-vue-next";
+import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon, SwatchBookIcon, CalendarIcon, CopyIcon, RefreshCwIcon, ExternalLinkIcon } from "lucide-vue-next";
 
 const { isDark, toggleTheme, palette, togglePalette } = useTheme();
+const { confirm } = useConfirmDialog();
+const toast = useAppToast();
 
 const router = useRouter();
 const { currentUser, fetchUser } = useAuth();
@@ -98,6 +103,93 @@ const {
     router.push("/login");
   },
 });
+
+// ─── Calendar feed ────────────────────────────────────────────────────────────
+// The raw token is only available at generation time (only the hash is stored server-side).
+// We persist the feed URL in localStorage so the user can always see it without regenerating.
+
+const calendarLoading = ref(false);
+const calendarHasToken = ref(false);
+const calendarExpiresAt = ref<string | null>(null);
+const calendarFeedUrl = ref<string | null>(null);
+const calendarUrlLost = ref(false);
+const regenerating = ref(false);
+
+function calendarStorageKey() {
+  return `calendar_feed_url_${currentUser.value?.id ?? ""}`;
+}
+
+async function initCalendar() {
+  calendarLoading.value = true;
+  try {
+    const info = await calendarFeedService.getTokenInfo();
+    calendarHasToken.value = info.hasToken;
+    calendarExpiresAt.value = info.expiresAt;
+
+    if (info.hasToken) {
+      const stored = localStorage.getItem(calendarStorageKey());
+      if (stored) {
+        calendarFeedUrl.value = stored;
+      } else {
+        calendarUrlLost.value = true;
+      }
+    }
+  } catch {
+    // silently ignore — feed section just stays hidden
+  } finally {
+    calendarLoading.value = false;
+  }
+}
+
+watch(currentUser, (user) => { if (user) initCalendar(); }, { immediate: true });
+
+async function copyFeedUrl() {
+  if (!calendarFeedUrl.value) return;
+  await navigator.clipboard.writeText(calendarFeedUrl.value);
+  toast.success("Feed URL copied");
+}
+
+async function generateOrRegenerate(skipConfirm = false) {
+  const run = async () => {
+    regenerating.value = true;
+    try {
+      const result = await calendarFeedService.regenerateToken();
+      calendarFeedUrl.value = result.feedUrl;
+      calendarExpiresAt.value = result.expiresAt;
+      calendarHasToken.value = true;
+      calendarUrlLost.value = false;
+      localStorage.setItem(calendarStorageKey(), result.feedUrl);
+      toast.success(calendarHasToken.value ? "Calendar feed URL regenerated" : "Calendar feed URL generated");
+    } catch {
+      toast.error("Failed to generate calendar feed URL");
+    } finally {
+      regenerating.value = false;
+    }
+  };
+
+  if (skipConfirm || !calendarHasToken.value) {
+    await run();
+    return;
+  }
+
+  confirm({
+    title: "Regenerate calendar feed URL?",
+    message:
+      "Your current feed URL will stop working immediately. Any calendar app using it will need to be updated with the new URL.",
+    confirmLabel: "Regenerate",
+    cancelLabel: "Cancel",
+    variant: "destructive",
+    onConfirm: run,
+  });
+}
+
+function formatExpiry(iso: string) {
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+function webcalUrl(feedUrl: string) {
+  return feedUrl.replace(/^https?:\/\//, "webcal://");
+}
 </script>
 
 <template>
@@ -287,6 +379,89 @@ const {
               <Switch :model-value="palette === 'slate'" @update:model-value="togglePalette" />
             </div>
           </div>
+        </div>
+
+        <!-- Calendar subscription section -->
+        <div class="card p-6 space-y-5 mt-6">
+          <div class="flex items-center gap-3 pb-1">
+            <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
+              <CalendarIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div>
+              <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Calendar subscription</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Subscribe to your vacation days in iOS, Google, or Outlook Calendar</p>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="calendarLoading" class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+            <Loader2Icon class="size-4 animate-spin" />
+            Checking calendar feed…
+          </div>
+
+          <template v-else>
+            <!-- No token yet -->
+            <template v-if="!calendarHasToken">
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                Generate a private feed URL to subscribe to your vacation days in any calendar app.
+              </p>
+              <Button class="w-full" :disabled="regenerating" @click="generateOrRegenerate(true)">
+                <Loader2Icon v-if="regenerating" class="size-4 animate-spin" />
+                <CalendarIcon v-else class="size-4" />
+                Get feed URL
+              </Button>
+            </template>
+
+            <!-- Token exists but URL not in localStorage -->
+            <template v-else-if="calendarUrlLost">
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                A feed URL is active but wasn't saved in this browser. Regenerate to get a new one (your calendar app will need to re-subscribe).
+              </p>
+              <p v-if="calendarExpiresAt" class="text-xs text-slate-500 dark:text-slate-400">
+                Expires <span class="font-medium text-slate-700 dark:text-slate-300">{{ formatExpiry(calendarExpiresAt) }}</span>
+              </p>
+              <Button variant="outline" class="w-full" :disabled="regenerating" @click="generateOrRegenerate(false)">
+                <Loader2Icon v-if="regenerating" class="size-4 animate-spin" />
+                <RefreshCwIcon v-else class="size-4" />
+                Regenerate URL
+              </Button>
+            </template>
+
+            <!-- Token + URL known -->
+            <template v-else-if="calendarFeedUrl">
+              <!-- Feed URL -->
+              <div class="space-y-1.5">
+                <Label>Feed URL</Label>
+                <div class="flex gap-2">
+                  <Input :value="calendarFeedUrl" readonly class="font-mono text-xs" />
+                  <Button variant="outline" size="icon" @click="copyFeedUrl" title="Copy URL">
+                    <CopyIcon class="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <!-- Subscribe link + expiry -->
+              <div class="flex flex-col gap-2 text-sm">
+                <a
+                  :href="webcalUrl(calendarFeedUrl)"
+                  class="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  <ExternalLinkIcon class="size-3.5" />
+                  Subscribe in calendar app
+                </a>
+                <p v-if="calendarExpiresAt" class="text-xs text-slate-500 dark:text-slate-400">
+                  Expires <span class="font-medium text-slate-700 dark:text-slate-300">{{ formatExpiry(calendarExpiresAt) }}</span> — re-subscribe when prompted
+                </p>
+              </div>
+
+              <!-- Regenerate -->
+              <Button variant="outline" :disabled="regenerating" @click="generateOrRegenerate(false)" class="w-full">
+                <Loader2Icon v-if="regenerating" class="size-4 animate-spin" />
+                <RefreshCwIcon v-else class="size-4" />
+                Regenerate URL
+              </Button>
+            </template>
+          </template>
         </div>
 
       </div>

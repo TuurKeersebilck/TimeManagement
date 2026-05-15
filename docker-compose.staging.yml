@@ -1,0 +1,66 @@
+name: timemanagement-staging
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - staging_db_data:/var/lib/postgresql/data
+    networks:
+      - backend-db
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  backend:
+    image: timemanagement-backend:staging
+    restart: unless-stopped
+    depends_on:
+      - db
+    env_file: /home/tuurk/staging/timemanagement/.env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      ASPNETCORE_URLS: http://+:8080
+    networks:
+      - proxy
+      - backend-db
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  frontend:
+    image: timemanagement-frontend:staging
+    restart: unless-stopped
+    labels:
+      caddy: timemanagement.dev.home.arpa
+      caddy.tls: internal
+      caddy.reverse_proxy: "{{upstreams 80}}"
+    networks:
+      - proxy
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  staging_db_data:
+
+networks:
+  proxy:
+    external: true
+  backend-db:
