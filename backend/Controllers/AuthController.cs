@@ -216,7 +216,7 @@ public class AuthController(
         {
             HttpOnly = true,
             Secure = !isDev,
-            SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
+            SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
         });
     }
