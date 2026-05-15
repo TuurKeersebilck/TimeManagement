@@ -167,12 +167,10 @@ public class InvitesController(
 
         return Ok(new AuthResponseDto
         {
-            IsSuccess = true,
             Message = "Account created successfully",
             Email = user.Email!,
             FullName = user.FullName,
             Roles = [user.Role.ToString()],
-            Expiration = DateTimeOffset.UtcNow.AddMinutes(jwtConfig.ExpiryInMinutes),
         });
     }
 
