@@ -77,12 +77,10 @@ public class AuthController(
 
             return Ok(new AuthResponseDto
             {
-                IsSuccess = true,
                 Message = "Login successful",
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 Roles = [user.Role.ToString()],
-                Expiration = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
             });
         }
         catch (Exception ex)
@@ -218,7 +216,7 @@ public class AuthController(
         {
             HttpOnly = true,
             Secure = !isDev,
-            SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
+            SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
         });
     }
