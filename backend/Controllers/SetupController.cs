@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Models;
@@ -9,6 +11,7 @@ namespace TimeManagementBackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public class SetupController(
     UserManager<User> userManager,
     AppDbContext db,
@@ -22,6 +25,7 @@ public class SetupController(
     }
 
     [HttpPost("complete")]
+    [EnableRateLimiting("login-limit")]
     public async Task<IActionResult> Complete(SetupDto dto)
     {
         if (!ModelState.IsValid)
