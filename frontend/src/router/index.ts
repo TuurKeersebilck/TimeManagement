@@ -3,8 +3,16 @@ import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import NotFoundView from "../views/NotFoundView.vue";
 import { authService } from "../services/authService";
+import { setupService } from "../services/setupService";
 
 const routes: Array<RouteRecordRaw> = [
+  {
+    path: "/setup",
+    name: "setup",
+    component: () => import("../views/SetupView.vue"),
+    meta: { isSetup: true },
+  },
+
   // Guest routes
   {
     path: "/login",
@@ -128,7 +136,24 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
+  let setupRequired = false;
+  try {
+    setupRequired = await setupService.isSetupRequired();
+  } catch {
+    setupRequired = false;
+  }
+
+  if (setupRequired && to.name !== "setup") {
+    next("/setup");
+    return;
+  }
+
+  if (!setupRequired && to.name === "setup") {
+    next("/login");
+    return;
+  }
+
   const isAuthenticated = authService.isAuthenticated();
 
   if (to.meta.requiresAuth && !isAuthenticated) {
