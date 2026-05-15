@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Full-stack time management app with a **Vue 3 + Vite** SPA frontend and a **.NET 10 ASP.NET Core** backend API, using **PostgreSQL** (via Npgsql EF Core).
-- Deployment: Railway (backend) + Vercel (frontend)
+- Deployment: VPS running Docker Compose, images built via GitHub Actions and pushed to GHCR. Staging runs on a local Raspberry Pi 5 via a self-hosted GitHub Actions runner.
 
 ## Development Commands
 
@@ -74,11 +74,12 @@ Copy `.env.template` to `.env` if it ever needs to be recreated — required var
 - Disagreement is welcome and useful — the goal is the best outcome for the project, not just compliance.
 
 ### Branching
-- Every bug fix or new feature MUST be implemented on a new branch created from `main`
+- Every bug fix or new feature MUST be implemented on a new branch created from `staging`
 - Branch naming: `fix/<short-description>` for bug fixes, `feat/<short-description>` for features
-- Never commit implementation work directly to `main`
+- Never commit implementation work directly to `staging` or `main`
+- Feature branches merge back into `staging` for testing via the Pi CI/CD
+- `staging` is periodically merged into `main` to trigger a production build and deploy to the VPS
 - Always verify PR and branch status (merged/open) before taking action on them
-- When creating a new fix for an already-merged branch, always create a new branch from main
 - Never push to already-merged branches
 
 ### Security & Secrets

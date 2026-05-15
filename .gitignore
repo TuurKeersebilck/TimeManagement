@@ -4,6 +4,7 @@ skills-lock.json
 not a tty
 package.json
 package-lock.json
+graphify-out/
 
 # Logs
 logs
@@ -43,6 +44,9 @@ coverage
 
 # dotenv files
 .env
+
+# local Docker override
+docker-compose.override.yml
 
 # User-specific files
 *.rsuser

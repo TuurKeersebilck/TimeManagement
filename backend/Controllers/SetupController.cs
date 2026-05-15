@@ -1,0 +1,53 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using TimeManagementBackend.Data;
+using TimeManagementBackend.Models;
+using TimeManagementBackend.Models.DTOs;
+
+namespace TimeManagementBackend.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+[AllowAnonymous]
+public class SetupController(
+    UserManager<User> userManager,
+    AppDbContext db,
+    ILogger<SetupController> logger) : ControllerBase
+{
+    [HttpGet("status")]
+    public async Task<IActionResult> GetStatus()
+    {
+        var setupRequired = !await db.Users.AnyAsync(u => u.Role == UserRole.Admin);
+        return Ok(new { setupRequired });
+    }
+
+    [HttpPost("complete")]
+    [EnableRateLimiting("login-limit")]
+    public async Task<IActionResult> Complete(SetupDto dto)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(new ErrorResponseDto { Message = "Invalid setup data" });
+
+        if (await db.Users.AnyAsync(u => u.Role == UserRole.Admin))
+            return Conflict(new ErrorResponseDto { Message = "Setup has already been completed.", Code = "SETUP_ALREADY_COMPLETE" });
+
+        var user = new User
+        {
+            UserName = dto.Email,
+            Email = dto.Email,
+            FullName = dto.FullName,
+            EmailConfirmed = true,
+            Role = UserRole.Admin,
+        };
+
+        var result = await userManager.CreateAsync(user, dto.Password);
+        if (!result.Succeeded)
+            return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
+
+        logger.LogInformation("Initial admin created via setup wizard: {Email}", dto.Email);
+        return NoContent();
+    }
+}
