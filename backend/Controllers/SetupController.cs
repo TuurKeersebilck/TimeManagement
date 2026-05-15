@@ -11,7 +11,6 @@ namespace TimeManagementBackend.Controllers;
 [Route("api/[controller]")]
 public class SetupController(
     UserManager<User> userManager,
-    RoleManager<IdentityRole> roleManager,
     AppDbContext db,
     ILogger<SetupController> logger) : ControllerBase
 {
@@ -31,11 +30,6 @@ public class SetupController(
         if (await db.Users.AnyAsync(u => u.Role == UserRole.Admin))
             return Conflict(new ErrorResponseDto { Message = "Setup has already been completed.", Code = "SETUP_ALREADY_COMPLETE" });
 
-        if (!await roleManager.RoleExistsAsync("Admin"))
-            await roleManager.CreateAsync(new IdentityRole("Admin"));
-        if (!await roleManager.RoleExistsAsync("Employee"))
-            await roleManager.CreateAsync(new IdentityRole("Employee"));
-
         var user = new User
         {
             UserName = dto.Email,
@@ -49,9 +43,7 @@ public class SetupController(
         if (!result.Succeeded)
             return BadRequest(new ErrorResponseDto { Message = string.Join(", ", result.Errors.Select(e => e.Description)) });
 
-        await userManager.AddToRoleAsync(user, "Admin");
         logger.LogInformation("Initial admin created via setup wizard: {Email}", dto.Email);
-
         return NoContent();
     }
 }
