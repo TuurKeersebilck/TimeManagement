@@ -4,6 +4,7 @@ skills-lock.json
 not a tty
 package.json
 package-lock.json
+graphify-out/
 
 # Logs
 logs
