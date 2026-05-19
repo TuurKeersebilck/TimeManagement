@@ -17,13 +17,10 @@ public class LoginDto
 
 public class AuthResponseDto
 {
-    public bool IsSuccess { get; set; }
     public string Message { get; set; } = string.Empty;
-    public string Token { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public List<string> Roles { get; set; } = [];
-    public DateTimeOffset Expiration { get; set; }
 }
 
 public class UserDto
