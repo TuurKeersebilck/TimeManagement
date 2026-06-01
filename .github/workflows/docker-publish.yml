@@ -51,6 +51,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Copy changelog into frontend public
+        run: cp CHANGELOG.md frontend/public/CHANGELOG.md
+
       - name: Build and push frontend
         uses: docker/build-push-action@v6
         with:

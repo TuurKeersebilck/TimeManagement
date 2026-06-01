@@ -13,6 +13,10 @@ jobs:
       - name: Build backend
         run: docker build -t timemanagement-backend:staging ./backend
 
+      - name: Copy changelog into frontend public
+        run: cp CHANGELOG.md frontend/public/CHANGELOG.md
+
+
       - name: Build frontend
         run: docker build -t timemanagement-frontend:staging ./frontend
 
