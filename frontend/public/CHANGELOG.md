@@ -1,16 +1,11 @@
 # Changelog
 
-## [v0.4.0] - 2026-06-01
-
-### New Features
-
-- In-app changelog viewer — see what's new without leaving the app; a subtle indicator in the sidebar highlights unseen releases
-
-## [v0.3.0] - 2026-05-19
+## [v0.3.0] - 2026-06-01
 
 ### New Features
 
 - First-run setup wizard — on a fresh install, a setup screen guides the admin through creating the first account; env-based admin seeding is removed
+- In-app changelog viewer — see what's new without leaving the app; a subtle indicator in the sidebar highlights unseen releases
 - Admins can disable and re-enable employee accounts — disabled users are blocked from logging in and kicked out of active sessions immediately
 - Admins can permanently delete a disabled employee — requires disabling first; deletes all associated data
 - iCalendar feed — employees can subscribe to a personal `.ics` URL to sync their approved vacation days with external calendar apps
