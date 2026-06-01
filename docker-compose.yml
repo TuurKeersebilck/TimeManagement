@@ -32,6 +32,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
     networks:
+      - frontend-backend
       - backend-db
     security_opt:
       - no-new-privileges:true
@@ -46,6 +47,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8090:80"
+    networks:
+      - frontend-backend
     security_opt:
       - no-new-privileges:true
     logging:
@@ -59,4 +62,5 @@ volumes:
   data_protection_keys:
 
 networks:
+  frontend-backend:
   backend-db:
