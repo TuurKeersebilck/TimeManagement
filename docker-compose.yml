@@ -26,7 +26,7 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - data_protection_keys:/root/.aspnet/DataProtection-Keys
+      - data_protection_keys:/home/app/.aspnet/DataProtection-Keys
     env_file: .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
