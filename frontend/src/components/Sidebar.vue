@@ -6,7 +6,8 @@ const appVersion = __APP_VERSION__;
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import NotificationBell from "./NotificationBell.vue";
-import { LogOutIcon, ChevronDownIcon, GithubIcon } from "lucide-vue-next";
+import ChangelogModal, { type ChangelogEntry, type ChangelogCategory } from "./ChangelogModal.vue";
+import { LogOutIcon, ChevronDownIcon, GithubIcon, ScrollTextIcon } from "lucide-vue-next";
 
 interface Props {
   isOpen?: boolean;
@@ -64,7 +65,56 @@ const handleNavClick = () => {
   if (window.innerWidth < 1024) emit("toggle");
 };
 
-onMounted(() => fetchUser());
+const CHANGELOG_KEY = "changelog-last-seen";
+const changelogOpen = ref(false);
+const hasUnread = ref(false);
+const changelogEntries = ref<ChangelogEntry[]>([]);
+
+function parseChangelog(md: string): ChangelogEntry[] {
+  const entries: ChangelogEntry[] = [];
+  const sections = md.split(/\n(?=## \[)/);
+  for (const section of sections) {
+    const vMatch = section.match(/^## \[(v[\d.]+)\] - (\d{4}-\d{2}-\d{2})/);
+    if (!vMatch) continue;
+    const [, version, date] = vMatch;
+    const categories: ChangelogCategory[] = [];
+    const catBlocks = section.split(/\n(?=### )/);
+    for (const block of catBlocks.slice(1)) {
+      const catMatch = block.match(/^### (.+)/);
+      if (!catMatch) continue;
+      const items = block
+        .split("\n")
+        .filter((l) => l.startsWith("- "))
+        .map((l) => l.slice(2));
+      if (items.length) categories.push({ name: catMatch[1], items });
+    }
+    entries.push({ version, date, categories });
+  }
+  return entries;
+}
+
+function openChangelog() {
+  changelogOpen.value = true;
+  if (changelogEntries.value.length) {
+    localStorage.setItem(CHANGELOG_KEY, changelogEntries.value[0].version);
+    hasUnread.value = false;
+  }
+}
+
+onMounted(async () => {
+  fetchUser();
+  try {
+    const res = await fetch("/CHANGELOG.md");
+    const text = await res.text();
+    changelogEntries.value = parseChangelog(text);
+    if (changelogEntries.value.length) {
+      hasUnread.value =
+        localStorage.getItem(CHANGELOG_KEY) !== changelogEntries.value[0].version;
+    }
+  } catch {
+    /* non-critical, silently ignore */
+  }
+});
 </script>
 
 <template>
@@ -156,6 +206,17 @@ onMounted(() => fetchUser());
           <span class="text-xs text-muted-foreground truncate">{{ currentUser.fullName }}</span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+          <button
+            @click="openChangelog"
+            class="relative text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            title="What's new"
+          >
+            <ScrollTextIcon class="size-3.5" />
+            <span
+              v-if="hasUnread"
+              class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-primary"
+            />
+          </button>
           <a
             href="https://github.com/TuurKeersebilck/TimeManagement/issues"
             target="_blank"
@@ -176,6 +237,8 @@ onMounted(() => fetchUser());
       </div>
     </div>
   </aside>
+
+  <ChangelogModal v-model:open="changelogOpen" :entries="changelogEntries" />
 </template>
 
 <style scoped>
