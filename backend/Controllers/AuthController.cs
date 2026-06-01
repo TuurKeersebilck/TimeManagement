@@ -55,6 +55,12 @@ public class AuthController(
                 return Unauthorized(new ErrorResponseDto { Message = "Invalid email or password" });
             }
 
+            if (user.IsDisabled)
+            {
+                _logger.LogWarning("Login attempt by disabled user: {Email}", loginDto.Email);
+                return Unauthorized(new ErrorResponseDto { Message = "Your account has been disabled. Please contact your administrator.", Code = "ACCOUNT_DISABLED" });
+            }
+
             var result = await _signInManager.CheckPasswordSignInAsync(user, loginDto.Password, false);
 
             if (!result.Succeeded)
@@ -71,12 +77,10 @@ public class AuthController(
 
             return Ok(new AuthResponseDto
             {
-                IsSuccess = true,
                 Message = "Login successful",
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
                 Roles = [user.Role.ToString()],
-                Expiration = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
             });
         }
         catch (Exception ex)
@@ -101,6 +105,9 @@ public class AuthController(
 
             if (user == null)
                 return NotFound(new ErrorResponseDto { Message = "User not found" });
+
+            if (user.IsDisabled)
+                return Unauthorized(new ErrorResponseDto { Message = "Your account has been disabled. Please contact your administrator.", Code = "ACCOUNT_DISABLED" });
 
             return Ok(new UserDto
             {
@@ -209,7 +216,7 @@ public class AuthController(
         {
             HttpOnly = true,
             Secure = !isDev,
-            SameSite = isDev ? SameSiteMode.Lax : SameSiteMode.None,
+            SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
         });
     }

@@ -76,6 +76,7 @@ try
     builder.Services.AddScoped<ITimeAdjustmentRequestService, TimeAdjustmentRequestService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
+    builder.Services.AddScoped<ICalendarService, CalendarService>();
     builder.Services.AddScoped<INotificationService, NotificationService>();
     builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();
     builder.Services.AddHostedService<MissedClockInReminderService>();
@@ -113,8 +114,6 @@ try
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         db.Database.Migrate();
     }
-
-    await Seeder.SeedAdminAsync(app.Services);
 
     // Use global exception handling middleware
     app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -305,6 +304,17 @@ void ConfigureRateLimiting(WebApplicationBuilder builder)
                 _ => new FixedWindowRateLimiterOptions
                 {
                     PermitLimit = 5,
+                    Window = TimeSpan.FromHours(1),
+                    QueueLimit = 0
+                }));
+
+        // Calendar feed: 60 fetches per hour per IP (calendar apps sync every few hours)
+        options.AddPolicy<string>("calendar-feed-limit", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 60,
                     Window = TimeSpan.FromHours(1),
                     QueueLimit = 0
                 }));

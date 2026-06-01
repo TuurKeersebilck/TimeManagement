@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
@@ -7,9 +8,10 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class AdminService(AppDbContext context) : IAdminService
+public class AdminService(AppDbContext context, UserManager<User> userManager) : IAdminService
 {
     private readonly AppDbContext _context = context;
+    private readonly UserManager<User> _userManager = userManager;
 
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
@@ -109,8 +111,47 @@ public class AdminService(AppDbContext context) : IAdminService
                 Email = u.Email ?? string.Empty,
                 WeeklyHoursLogged = Math.Round(weeklyLogged, 2),
                 ResolvedWeeklyTarget = resolvedWeekly,
+                IsDisabled = u.IsDisabled,
             };
         });
+    }
+
+    public async Task DisableEmployeeAsync(string userId, CancellationToken ct = default)
+    {
+        var user = await _context.Users.FindAsync([userId], ct)
+            ?? throw new ResourceNotFoundException($"User {userId} not found.");
+        user.IsDisabled = true;
+        await _context.SaveChangesAsync(ct);
+    }
+
+    public async Task EnableEmployeeAsync(string userId, CancellationToken ct = default)
+    {
+        var user = await _context.Users.FindAsync([userId], ct)
+            ?? throw new ResourceNotFoundException($"User {userId} not found.");
+        user.IsDisabled = false;
+        await _context.SaveChangesAsync(ct);
+    }
+
+    public async Task DeleteEmployeeAsync(string userId, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByIdAsync(userId)
+            ?? throw new ResourceNotFoundException($"User {userId} not found.");
+
+        if (!user.IsDisabled)
+            throw new Exceptions.ValidationException("Employee must be disabled before permanent deletion.");
+
+        // Delete all related data before removing the identity user record
+        await _context.ClockEvents.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.TimeAdjustmentRequests.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.EmployeeVacationBalances.Where(b => b.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.VacationDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.EmployeeTargets.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.Notifications.Where(n => n.RecipientUserId == userId).ExecuteDeleteAsync(ct);
+        await _context.PasswordResetTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
+
+        var result = await _userManager.DeleteAsync(user);
+        if (!result.Succeeded)
+            throw new Exception(string.Join(", ", result.Errors.Select(e => e.Description)));
     }
 
     // ─── Vacation types ───────────────────────────────────────────────────────

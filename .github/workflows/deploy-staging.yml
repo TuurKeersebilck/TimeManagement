@@ -1,0 +1,23 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches: [staging]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker build -t timemanagement-backend:staging ./backend
+
+      - name: Build frontend
+        run: docker build -t timemanagement-frontend:staging ./frontend
+
+      - name: Deploy
+        run: |
+          docker compose -f docker-compose.staging.yml \
+            --env-file /home/tuurk/staging/timemanagement/.env \
+            up -d

@@ -37,6 +37,9 @@ public class AppDbContext : IdentityUserContext<User>
             entity.Ignore(e => e.LockoutEnd);
             entity.Ignore(e => e.LockoutEnabled);
             entity.Ignore(e => e.AccessFailedCount);
+            entity.HasIndex(e => e.CalendarTokenHash)
+                  .IsUnique()
+                  .HasFilter("\"CalendarTokenHash\" IS NOT NULL");
         });
 
         builder.Entity<ClockEvent>(entity =>

@@ -31,6 +31,27 @@ public class AdminController(IAdminService adminService) : ControllerBase
         return Ok(employees);
     }
 
+    [HttpPut("employees/{userId}/disable")]
+    public async Task<IActionResult> DisableEmployee(string userId, CancellationToken ct)
+    {
+        await _adminService.DisableEmployeeAsync(userId, ct);
+        return NoContent();
+    }
+
+    [HttpPut("employees/{userId}/enable")]
+    public async Task<IActionResult> EnableEmployee(string userId, CancellationToken ct)
+    {
+        await _adminService.EnableEmployeeAsync(userId, ct);
+        return NoContent();
+    }
+
+    [HttpDelete("employees/{userId}")]
+    public async Task<IActionResult> DeleteEmployee(string userId, CancellationToken ct)
+    {
+        await _adminService.DeleteEmployeeAsync(userId, ct);
+        return NoContent();
+    }
+
     // ─── Vacation types ───────────────────────────────────────────────────────
 
     [HttpGet("vacation-types")]

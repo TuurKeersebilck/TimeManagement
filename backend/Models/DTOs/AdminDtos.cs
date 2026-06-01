@@ -23,6 +23,7 @@ public class EmployeeDto
     public string Email { get; set; } = string.Empty;
     public decimal WeeklyHoursLogged { get; set; }
     public decimal? ResolvedWeeklyTarget { get; set; }
+    public bool IsDisabled { get; set; }
 }
 
 public class EmployeeTargetDto

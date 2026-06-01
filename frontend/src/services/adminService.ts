@@ -21,6 +21,7 @@ export interface Employee {
   email: string;
   weeklyHoursLogged: number;
   resolvedWeeklyTarget?: number | null;
+  isDisabled: boolean;
 }
 
 export interface EmployeeTarget {
@@ -70,6 +71,18 @@ export const adminService = {
   async getEmployees(): Promise<Employee[]> {
     const response = await apiClient.get<Employee[]>("/admin/employees");
     return response.data;
+  },
+
+  async disableEmployee(userId: string): Promise<void> {
+    await apiClient.put(`/admin/employees/${userId}/disable`);
+  },
+
+  async enableEmployee(userId: string): Promise<void> {
+    await apiClient.put(`/admin/employees/${userId}/enable`);
+  },
+
+  async deleteEmployee(userId: string): Promise<void> {
+    await apiClient.delete(`/admin/employees/${userId}`);
   },
 
   async getEmployeeTarget(userId: string): Promise<EmployeeTarget> {

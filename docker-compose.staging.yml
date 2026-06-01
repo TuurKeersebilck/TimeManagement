@@ -1,3 +1,5 @@
+name: timemanagement-staging
+
 services:
   db:
     image: postgres:18-alpine
@@ -7,7 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - staging_db_data:/var/lib/postgresql/data
     networks:
       - backend-db
     security_opt:
@@ -19,15 +21,13 @@ services:
         max-file: "5"
 
   backend:
-    image: ghcr.io/tuurkeersebilck/timemanagement-backend:latest
+    image: timemanagement-backend:staging
     restart: unless-stopped
     depends_on:
       - db
-    ports:
-      - "127.0.0.1:8080:8080"
-    env_file: .env
+    env_file: /home/tuurk/staging/timemanagement/.env
     environment:
-      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_ENVIRONMENT: Staging
       ASPNETCORE_URLS: http://+:8080
     networks:
       - proxy
@@ -41,10 +41,12 @@ services:
         max-file: "5"
 
   frontend:
-    image: ghcr.io/tuurkeersebilck/timemanagement-frontend:latest
+    image: timemanagement-frontend:staging
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:80"
+    labels:
+      caddy: timemanagement.dev.home.arpa
+      caddy.tls: internal
+      caddy.reverse_proxy: "{{upstreams 80}}"
     networks:
       - proxy
     security_opt:
@@ -56,8 +58,9 @@ services:
         max-file: "5"
 
 volumes:
-  db_data:
+  staging_db_data:
 
 networks:
   proxy:
+    external: true
   backend-db:
