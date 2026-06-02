@@ -25,12 +25,14 @@ services:
       - db
     ports:
       - "127.0.0.1:8080:8080"
+    volumes:
+      - data_protection_keys:/home/app/.aspnet/DataProtection-Keys
     env_file: .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
     networks:
-      - proxy
+      - frontend-backend
       - backend-db
     security_opt:
       - no-new-privileges:true
@@ -44,9 +46,9 @@ services:
     image: ghcr.io/tuurkeersebilck/timemanagement-frontend:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:80"
+      - "127.0.0.1:8090:80"
     networks:
-      - proxy
+      - frontend-backend
     security_opt:
       - no-new-privileges:true
     logging:
@@ -57,7 +59,8 @@ services:
 
 volumes:
   db_data:
+  data_protection_keys:
 
 networks:
-  proxy:
+  frontend-backend:
   backend-db:
