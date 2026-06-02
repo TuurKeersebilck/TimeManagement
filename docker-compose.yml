@@ -25,8 +25,6 @@ services:
       - db
     ports:
       - "127.0.0.1:8080:8080"
-    volumes:
-      - data_protection_keys:/home/app/.aspnet/DataProtection-Keys
     env_file: .env
     environment:
       ASPNETCORE_ENVIRONMENT: Production
@@ -59,7 +57,6 @@ services:
 
 volumes:
   db_data:
-  data_protection_keys:
 
 networks:
   frontend-backend:
