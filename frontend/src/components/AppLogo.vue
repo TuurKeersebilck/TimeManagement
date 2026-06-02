@@ -5,7 +5,7 @@ const version = __APP_VERSION__;
 
 <template>
   <div class="flex items-baseline gap-2">
-    <span class="app-logo-name">TEMPO</span>
+    <span class="app-logo-name">LOGR</span>
     <span class="app-logo-version">v.{{ version }}</span>
   </div>
 </template>
