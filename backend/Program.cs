@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +66,12 @@ try
                   .AllowCredentials(); // Required for HttpOnly cookie auth
         });
     });
+
+    // Persist DataProtection keys in the database so they survive container recreation
+    // and require no filesystem volume or ownership fixups (the app runs as non-root).
+    builder.Services.AddDataProtection()
+        .PersistKeysToDbContext<AppDbContext>()
+        .SetApplicationName("Logr");
 
     // Configure Rate Limiting
     ConfigureRateLimiting(builder);
