@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -5,7 +6,7 @@ using TimeManagementBackend.Models;
 
 namespace TimeManagementBackend.Data;
 
-public class AppDbContext : IdentityUserContext<User>
+public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
@@ -23,6 +24,7 @@ public class AppDbContext : IdentityUserContext<User>
     public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
     public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
