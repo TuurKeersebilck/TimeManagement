@@ -39,6 +39,7 @@ const employeeNav: NavItem[] = [
   { name: "My Vacations", to: "/vacations" },
   { name: "Team Calendar", to: "/team-calendar" },
   { name: "Account", to: "/account" },
+  { name: "Help", to: "/help" },
 ];
 
 const adminPersonalNav: NavItem[] = [
@@ -46,6 +47,7 @@ const adminPersonalNav: NavItem[] = [
   { name: "My Vacations", to: "/vacations" },
   { name: "Team Calendar", to: "/team-calendar" },
   { name: "Account", to: "/account" },
+  { name: "Help", to: "/help" },
 ];
 
 const adminSectionNav: NavItem[] = [

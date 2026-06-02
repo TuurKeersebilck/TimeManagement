@@ -127,6 +127,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/AccountView.vue"),
     meta: { requiresAuth: true },
   },
+  {
+    path: "/help",
+    name: "help",
+    component: () => import("../views/HelpView.vue"),
+    meta: { requiresAuth: true },
+  },
 
   { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },
 ];
