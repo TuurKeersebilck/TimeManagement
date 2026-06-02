@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.4.0] - 2026-06-02
+
+### New Features
+
+- Help page — a dedicated `/help` route in the sidebar covers how time tracking works, vacation requests, calendar sync behaviour, in-app notifications, and emails; admins also see a section on team management and settings
+
 ## [v0.3.0] - 2026-06-01
 
 ### New Features
