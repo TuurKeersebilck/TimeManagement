@@ -47,7 +47,21 @@ public class MissedClockInReminderService(
                 return;
             }
 
-            var yesterday = await GetPreviousWorkingDayAsync(DateOnly.FromDateTime(DateTime.UtcNow), db, ct);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            {
+                logger.LogInformation("MissedClockInReminder: skipped — today is a weekend.");
+                return;
+            }
+
+            var isTodayHoliday = await db.PublicHolidays.AnyAsync(h => h.Date == today && !h.IsWorkingDay, ct);
+            if (isTodayHoliday)
+            {
+                logger.LogInformation("MissedClockInReminder: skipped — today is a public holiday.");
+                return;
+            }
+
+            var yesterday = await GetPreviousWorkingDayAsync(today, db, ct);
             if (yesterday == null)
             {
                 logger.LogInformation("MissedClockInReminder: skipped — no previous working day resolved.");
