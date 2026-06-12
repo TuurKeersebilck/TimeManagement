@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.4.1] - 2026-06-12
+
+### Bug Fixes
+
+- Missed clock-in reminder emails are no longer sent on weekends or public holidays — previously, Friday's missed clock-in triggered duplicate emails on both Saturday and Sunday
+- Employees on a full-day vacation no longer receive a missed clock-in reminder for that day — half-day vacations still trigger the reminder
+
 ## [v0.4.0] - 2026-06-02
 
 ### New Features

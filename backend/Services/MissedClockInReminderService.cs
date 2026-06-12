@@ -47,7 +47,21 @@ public class MissedClockInReminderService(
                 return;
             }
 
-            var yesterday = await GetPreviousWorkingDayAsync(DateOnly.FromDateTime(DateTime.UtcNow), db, ct);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            if (today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            {
+                logger.LogInformation("MissedClockInReminder: skipped — today is a weekend.");
+                return;
+            }
+
+            var isTodayHoliday = await db.PublicHolidays.AnyAsync(h => h.Date == today && !h.IsWorkingDay, ct);
+            if (isTodayHoliday)
+            {
+                logger.LogInformation("MissedClockInReminder: skipped — today is a public holiday.");
+                return;
+            }
+
+            var yesterday = await GetPreviousWorkingDayAsync(today, db, ct);
             if (yesterday == null)
             {
                 logger.LogInformation("MissedClockInReminder: skipped — no previous working day resolved.");
@@ -62,12 +76,17 @@ public class MissedClockInReminderService(
                 .Select(e => e.UserId)
                 .ToListAsync(ct);
 
+            var usersOnVacation = await db.VacationDays
+                .Where(v => v.Date == targetDate && v.Amount >= 1.0m)
+                .Select(v => v.UserId)
+                .ToListAsync(ct);
+
             var allEmployees = await db.Users
                 .Where(u => u.Role == UserRole.Employee && u.Email != null)
                 .ToListAsync(ct);
 
             var missingUsers = allEmployees
-                .Where(u => !usersWithClockIn.Contains(u.Id))
+                .Where(u => !usersWithClockIn.Contains(u.Id) && !usersOnVacation.Contains(u.Id))
                 .ToList();
 
             foreach (var user in missingUsers)
