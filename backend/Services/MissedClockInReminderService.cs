@@ -62,12 +62,17 @@ public class MissedClockInReminderService(
                 .Select(e => e.UserId)
                 .ToListAsync(ct);
 
+            var usersOnVacation = await db.VacationDays
+                .Where(v => v.Date == targetDate && v.Amount >= 1.0m)
+                .Select(v => v.UserId)
+                .ToListAsync(ct);
+
             var allEmployees = await db.Users
                 .Where(u => u.Role == UserRole.Employee && u.Email != null)
                 .ToListAsync(ct);
 
             var missingUsers = allEmployees
-                .Where(u => !usersWithClockIn.Contains(u.Id))
+                .Where(u => !usersWithClockIn.Contains(u.Id) && !usersOnVacation.Contains(u.Id))
                 .ToList();
 
             foreach (var user in missingUsers)
