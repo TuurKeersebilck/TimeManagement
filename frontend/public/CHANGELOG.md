@@ -1,5 +1,20 @@
 # Changelog
 
+## [v0.4.2] - 2026-06-16
+
+### Bug Fixes
+
+- Calendar feed URL input now correctly displays the generated URL — it was always set correctly but rendered empty due to a prop binding mismatch on the Input component
+- Help page — Calendar sync section now explains that regenerating the feed URL invalidates the old one immediately, that any subscribed calendar app will stop syncing until re-subscribed, and that the new URL is only visible in the browser where it was generated
+
+### Improvements
+
+- Search engine indexing is now blocked via `robots.txt`, an `X-Robots-Tag` HTTP header, and `<meta name="robots">` tags — three layers so no crawler can index the app
+
+### Security
+
+- Bumped esbuild to address a moderate-severity vulnerability in the development toolchain (no production impact)
+
 ## [v0.4.1] - 2026-06-12
 
 ### Bug Fixes
