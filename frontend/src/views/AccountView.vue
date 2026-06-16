@@ -433,7 +433,7 @@ function webcalUrl(feedUrl: string) {
               <div class="space-y-1.5">
                 <Label>Feed URL</Label>
                 <div class="flex gap-2">
-                  <Input :value="calendarFeedUrl" readonly class="font-mono text-xs" />
+                  <Input :model-value="calendarFeedUrl" readonly class="font-mono text-xs" />
                   <Button variant="outline" size="icon" @click="copyFeedUrl" title="Copy URL">
                     <CopyIcon class="size-4" />
                   </Button>
