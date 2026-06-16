@@ -159,7 +159,8 @@ function toggle(section: string) {
 
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Token expiry & regeneration</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">The feed URL expires periodically. When it does, generate a new one on the Account page and re-subscribe. Regenerating immediately invalidates the old URL — update any calendar app using it.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">The feed URL is valid for one year. When it expires — or if you choose to regenerate early — the old URL stops working <span class="font-medium text-slate-700 dark:text-slate-300">immediately</span>. Any calendar app still subscribed to the old URL will fail to sync and may show an error or stop updating.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">After regenerating, copy the new URL from <span class="font-medium text-slate-700 dark:text-slate-300">Account → Calendar subscription</span> and re-subscribe in every calendar app you use. The URL is only shown in the browser where you generated it, so copy it before switching devices.</p>
               </div>
             </div>
           </div>
