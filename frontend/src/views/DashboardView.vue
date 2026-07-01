@@ -2,23 +2,31 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
-import { useTimeCalculations } from "../composables/useTimeCalculations";
 import { useClockEventsStore } from "../composables/useClockEventsStore";
-import { clockEventService } from "../services/clockEventService";
+import { workSessionService, type WorkScheduleDto } from "../services/workSessionService";
 import { vacationService } from "../services/vacationService";
 import { holidayService, type PublicHoliday } from "../services/holidayService";
 import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
-import { ClockIcon, CheckCircleIcon, AlertCircleIcon, CalendarDaysIcon, TrendingUpIcon, PlaneIcon, SunIcon, StarIcon } from "lucide-vue-next";
+import {
+  ClockIcon,
+  CheckCircleIcon,
+  AlertCircleIcon,
+  CalendarDaysIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  PlaneIcon,
+  SunIcon,
+  StarIcon,
+} from "lucide-vue-next";
 
 const router = useRouter();
 const { summaries, loading, fetchSummaries } = useClockEventsStore();
-const { totalHoursToday, totalHoursThisWeek, totalHoursThisMonth } = useTimeCalculations(summaries);
 
-const dailyTarget = ref<number | null>(null);
-const weeklyTarget = ref<number | null>(null);
+const schedule = ref<WorkScheduleDto | null>(null);
 const todayVacationAmount = ref<number | null>(null);
 const todayVacationTypeName = ref<string | null>(null);
 const todayHoliday = ref<PublicHoliday | null>(null);
+const monthlyFlexHours = ref<number | null>(null);
 
 function localDateString(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -29,28 +37,68 @@ const isWeekend = computed(() => {
   return day === 0 || day === 6;
 });
 
-const hasLoggedToday = computed(() => parseFloat(totalHoursToday.value) > 0);
-
 const todaysSummary = computed(() => {
   const today = localDateString(new Date());
   return summaries.value.find((s) => s.date === today) ?? null;
 });
 
-const isClockedIn = computed(
-  () => todaysSummary.value?.clockIn != null && todaysSummary.value?.clockOut == null
-);
+const hasLoggedToday = computed(() => (todaysSummary.value?.totalWorkedHours ?? 0) > 0);
 
-// Today vs. target
-const todayHours = computed(() => parseFloat(totalHoursToday.value));
+const isClockedIn = computed(() => todaysSummary.value?.hasOpenSession ?? false);
+
+// Resolve today's target hours from per-weekday schedule
+const todayTargetHours = computed<number | null>(() => {
+  if (!schedule.value) return null;
+  const dow = new Date().getDay();
+  return schedule.value.workdayTargets.find((t) => t.dayOfWeek === dow)?.hours ?? null;
+});
+
+const todayHours = computed(() => todaysSummary.value?.totalWorkedHours ?? 0);
+
 const todayRemaining = computed(() =>
-  dailyTarget.value != null ? Math.max(0, dailyTarget.value - todayHours.value) : null
+  todayTargetHours.value != null ? Math.max(0, todayTargetHours.value - todayHours.value) : null
 );
-const todayExceeded = computed(() =>
-  dailyTarget.value != null && todayHours.value > dailyTarget.value
+const todayExceeded = computed(
+  () => todayTargetHours.value != null && todayHours.value > todayTargetHours.value
 );
 const todayProgress = computed(() =>
-  dailyTarget.value ? Math.min((todayHours.value / dailyTarget.value) * 100, 100) : null
+  todayTargetHours.value ? Math.min((todayHours.value / todayTargetHours.value) * 100, 100) : null
 );
+
+// This-week hours from summaries
+const totalHoursThisWeek = computed(() => {
+  const now = new Date();
+  const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - daysFromMonday);
+  const weekStartStr = localDateString(weekStart);
+
+  return summaries.value
+    .filter((s) => s.date >= weekStartStr)
+    .reduce((sum, s) => sum + s.totalWorkedHours, 0)
+    .toFixed(2);
+});
+
+// This-month hours from summaries
+const totalHoursThisMonth = computed(() => {
+  const now = new Date();
+  const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  return summaries.value
+    .filter((s) => s.date >= monthStartStr)
+    .reduce((sum, s) => sum + s.totalWorkedHours, 0)
+    .toFixed(2);
+});
+
+// This-week target (Mon–Fri from schedule)
+const weeklyTarget = computed<number | null>(() => {
+  if (!schedule.value) return null;
+  // Sun=0 Mon=1…Sat=6 → Mon=1 Tue=2 … Fri=5
+  const weekdayHours = schedule.value.workdayTargets
+    .filter((t) => t.dayOfWeek >= 1 && t.dayOfWeek <= 5)
+    .reduce((sum, t) => sum + t.hours, 0);
+  return weekdayHours > 0 ? weekdayHours : null;
+});
 
 const weeklyProgress = computed(() =>
   weeklyTarget.value
@@ -66,65 +114,44 @@ const todayStatus = computed(() => {
   if (isWeekend.value) return "weekend";
   if (isClockedIn.value) return "clocked-in";
   if (!hasLoggedToday.value) return "not-logged";
-  if (dailyTarget.value != null && todayHours.value >= dailyTarget.value) return "target-reached";
+  if (todayTargetHours.value != null && todayHours.value >= todayTargetHours.value)
+    return "target-reached";
   return "logged";
 });
 
+function formatHours(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
 onMounted(async () => {
   await fetchSummaries();
-  try {
-    const today = localDateString(new Date());
-    const [target, vacation, yearHolidays, myVacationDays] = await Promise.all([
-      clockEventService.getMyTarget(),
-      vacationService.getVacationForDate(today),
-      holidayService.getHolidays(new Date().getFullYear()),
-      vacationService.getVacationDays(),
-    ]);
-    dailyTarget.value = target.dailyHours ?? null;
-    weeklyTarget.value = target.weeklyHours ?? null;
-    if (vacation) {
-      todayVacationAmount.value = vacation.amount;
-      todayVacationTypeName.value = vacation.vacationTypeName;
-      if (vacation.amount === 1.0) {
-        dailyTarget.value = null;
-      } else if (vacation.amount === 0.5 && dailyTarget.value != null) {
-        dailyTarget.value = dailyTarget.value / 2;
-      }
-    }
-    const holiday = yearHolidays.find(h => h.date === today && !h.isWorkingDay);
-    if (holiday) {
-      todayHoliday.value = holiday;
-      dailyTarget.value = null;
-    }
-    if (weeklyTarget.value != null) {
-      const now = new Date();
-      const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - daysFromMonday);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      const weekStartStr = localDateString(weekStart);
-      const weekEndStr = localDateString(weekEnd);
-      const dailyHours = target.dailyHours ?? weeklyTarget.value / 5;
+  const today = localDateString(new Date());
 
-      const workdayHolidaysThisWeek = yearHolidays.filter(h => {
-        if (h.isWorkingDay || h.date < weekStartStr || h.date > weekEndStr) return false;
-        const dow = new Date(h.date + "T00:00:00").getDay();
-        return dow !== 0 && dow !== 6;
-      });
+  const [scheduleResult, vacationResult, yearHolidays, overtimeResult] = await Promise.allSettled([
+    workSessionService.getMySchedule(),
+    vacationService.getVacationForDate(today),
+    holidayService.getHolidays(new Date().getFullYear()),
+    workSessionService.getOvertime(),
+  ]);
 
-      const vacationHoursThisWeek = myVacationDays
-        .filter(v => v.date >= weekStartStr && v.date <= weekEndStr)
-        .reduce((sum, v) => sum + v.amount * dailyHours, 0);
+  if (scheduleResult.status === "fulfilled") schedule.value = scheduleResult.value;
 
-      const deduction = workdayHolidaysThisWeek.length * dailyHours + vacationHoursThisWeek;
-      if (deduction > 0) {
-        const adjusted = weeklyTarget.value - deduction;
-        weeklyTarget.value = adjusted > 0 ? adjusted : null;
-      }
-    }
-  } catch {
-    // No target configured — show plain hours
+  if (vacationResult.status === "fulfilled" && vacationResult.value) {
+    todayVacationAmount.value = vacationResult.value.amount;
+    todayVacationTypeName.value = vacationResult.value.vacationTypeName;
+  }
+
+  if (yearHolidays.status === "fulfilled") {
+    const holiday = yearHolidays.value.find((h) => h.date === today && !h.isWorkingDay);
+    if (holiday) todayHoliday.value = holiday;
+  }
+
+  if (overtimeResult.status === "fulfilled") {
+    monthlyFlexHours.value = overtimeResult.value.runningBalanceHours;
   }
 });
 </script>
@@ -159,53 +186,26 @@ onMounted(async () => {
           ]"
         >
           <div class="flex items-center gap-3">
-            <CheckCircleIcon
-              v-if="todayStatus === 'target-reached'"
-              class="size-5 text-emerald-500 shrink-0"
-            />
-            <TrendingUpIcon
-              v-else-if="todayStatus === 'logged'"
-              class="size-5 text-indigo-500 shrink-0"
-            />
-            <ClockIcon
-              v-else-if="todayStatus === 'clocked-in'"
-              class="size-5 text-blue-500 shrink-0"
-            />
-            <AlertCircleIcon
-              v-else-if="todayStatus === 'not-logged'"
-              class="size-5 text-amber-500 shrink-0"
-            />
-            <PlaneIcon
-              v-else-if="todayStatus === 'vacation'"
-              class="size-5 text-violet-500 shrink-0"
-            />
-            <SunIcon
-              v-else-if="todayStatus === 'half-vacation'"
-              class="size-5 text-violet-500 shrink-0"
-            />
-            <StarIcon
-              v-else-if="todayStatus === 'holiday'"
-              class="size-5 text-sky-500 shrink-0"
-            />
+            <CheckCircleIcon v-if="todayStatus === 'target-reached'" class="size-5 text-emerald-500 shrink-0" />
+            <TrendingUpIcon v-else-if="todayStatus === 'logged'" class="size-5 text-indigo-500 shrink-0" />
+            <ClockIcon v-else-if="todayStatus === 'clocked-in'" class="size-5 text-blue-500 shrink-0" />
+            <AlertCircleIcon v-else-if="todayStatus === 'not-logged'" class="size-5 text-amber-500 shrink-0" />
+            <PlaneIcon v-else-if="todayStatus === 'vacation'" class="size-5 text-violet-500 shrink-0" />
+            <SunIcon v-else-if="todayStatus === 'half-vacation'" class="size-5 text-violet-500 shrink-0" />
+            <StarIcon v-else-if="todayStatus === 'holiday'" class="size-5 text-sky-500 shrink-0" />
             <CalendarDaysIcon v-else class="size-5 text-slate-400 shrink-0" />
 
             <div>
               <p
                 :class="[
                   'text-sm font-medium',
-                  todayStatus === 'target-reached'
-                    ? 'text-emerald-800 dark:text-emerald-200'
-                    : todayStatus === 'logged'
-                      ? 'text-indigo-800 dark:text-indigo-200'
-                      : todayStatus === 'clocked-in'
-                        ? 'text-blue-800 dark:text-blue-200'
-                        : todayStatus === 'not-logged'
-                          ? 'text-amber-800 dark:text-amber-200'
-                          : todayStatus === 'vacation' || todayStatus === 'half-vacation'
-                          ? 'text-violet-800 dark:text-violet-200'
-                          : todayStatus === 'holiday'
-                          ? 'text-sky-800 dark:text-sky-200'
-                          : 'text-slate-600 dark:text-slate-400',
+                  todayStatus === 'target-reached' ? 'text-emerald-800 dark:text-emerald-200'
+                    : todayStatus === 'logged' ? 'text-indigo-800 dark:text-indigo-200'
+                    : todayStatus === 'clocked-in' ? 'text-blue-800 dark:text-blue-200'
+                    : todayStatus === 'not-logged' ? 'text-amber-800 dark:text-amber-200'
+                    : todayStatus === 'vacation' || todayStatus === 'half-vacation' ? 'text-violet-800 dark:text-violet-200'
+                    : todayStatus === 'holiday' ? 'text-sky-800 dark:text-sky-200'
+                    : 'text-slate-600 dark:text-slate-400',
                 ]"
               >
                 <template v-if="todayStatus === 'vacation'">
@@ -219,25 +219,21 @@ onMounted(async () => {
                   Public holiday — {{ todayHoliday!.name }}
                 </template>
                 <template v-else-if="todayStatus === 'target-reached'">
-                  Target reached! {{ totalHoursToday }}h logged today
+                  Target reached! {{ todayHours.toFixed(2) }}h logged today
                   <span v-if="todayExceeded" class="font-normal opacity-75">
-                    ({{ (todayHours - dailyTarget!).toFixed(2) }}h over)
+                    ({{ (todayHours - todayTargetHours!).toFixed(2) }}h over)
                   </span>
                 </template>
                 <template v-else-if="todayStatus === 'logged'">
                   <template v-if="todayRemaining != null">
-                    {{ totalHoursToday }}h / {{ dailyTarget }}h — {{ todayRemaining.toFixed(2) }}h to go
+                    {{ todayHours.toFixed(2) }}h / {{ todayTargetHours }}h — {{ todayRemaining.toFixed(2) }}h to go
                   </template>
-                  <template v-else>
-                    {{ totalHoursToday }}h logged today — great work!
-                  </template>
+                  <template v-else>{{ todayHours.toFixed(2) }}h logged today — great work!</template>
                 </template>
                 <template v-else-if="todayStatus === 'clocked-in'">
                   You're clocked in — hours will show once you clock out
                 </template>
-                <template v-else-if="todayStatus === 'not-logged'">
-                  No hours logged yet today
-                </template>
+                <template v-else-if="todayStatus === 'not-logged'">No hours logged yet today</template>
                 <template v-else>Enjoy your weekend!</template>
               </p>
             </div>
@@ -247,13 +243,10 @@ onMounted(async () => {
             v-if="todayStatus !== 'weekend' && todayStatus !== 'vacation' && todayStatus !== 'holiday'"
             class="text-sm font-medium shrink-0 transition-colors cursor-pointer"
             :class="
-              todayStatus === 'target-reached'
-                ? 'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100'
-                : todayStatus === 'logged'
-                  ? 'text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-100'
-                  : todayStatus === 'clocked-in'
-                    ? 'text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100'
-                    : 'text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100'
+              todayStatus === 'target-reached' ? 'text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100'
+                : todayStatus === 'logged' ? 'text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-100'
+                : todayStatus === 'clocked-in' ? 'text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100'
+                : 'text-violet-700 dark:text-violet-300 hover:text-violet-900 dark:hover:text-violet-100'
             "
             @click="router.push({ name: 'time-tracking' })"
           >
@@ -262,32 +255,25 @@ onMounted(async () => {
         </div>
 
         <!-- Stats -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <!-- Today -->
           <div class="stat-card">
             <div class="flex items-center gap-2 mb-1">
               <ClockIcon class="size-3.5 text-slate-400" />
-              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Today
-              </p>
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Today</p>
             </div>
             <p class="text-3xl font-bold font-mono text-foreground">
               <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
-              <span v-else>{{ totalHoursToday }}h</span>
+              <span v-else>{{ todayHours.toFixed(2) }}h</span>
             </p>
-            <template v-if="!loading && dailyTarget != null">
+            <template v-if="!loading && todayTargetHours != null && todayTargetHours > 0">
               <div class="mt-2 w-full bg-muted rounded-full h-1.5">
                 <div
-                  :class="[
-                    'h-1.5 rounded-full transition-all',
-                    todayProgress === 100 ? 'bg-emerald-500' : 'bg-primary',
-                  ]"
+                  :class="['h-1.5 rounded-full transition-all', todayProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
                   :style="{ width: `${todayProgress}%` }"
                 />
               </div>
-              <p class="text-xs font-mono text-muted-foreground mt-1">
-                / {{ dailyTarget }}h target
-              </p>
+              <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ todayTargetHours }}h target</p>
             </template>
           </div>
 
@@ -295,9 +281,7 @@ onMounted(async () => {
           <div class="stat-card">
             <div class="flex items-center gap-2 mb-1">
               <ClockIcon class="size-3.5 text-slate-400" />
-              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                This week
-              </p>
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This week</p>
             </div>
             <p class="text-3xl font-bold font-mono text-foreground">
               <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
@@ -306,16 +290,11 @@ onMounted(async () => {
             <template v-if="!loading && weeklyTarget != null">
               <div class="mt-2 w-full bg-muted rounded-full h-1.5">
                 <div
-                  :class="[
-                    'h-1.5 rounded-full transition-all',
-                    weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary',
-                  ]"
+                  :class="['h-1.5 rounded-full transition-all', weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
                   :style="{ width: `${weeklyProgress}%` }"
                 />
               </div>
-              <p class="text-xs font-mono text-muted-foreground mt-1">
-                / {{ weeklyTarget }}h target
-              </p>
+              <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ weeklyTarget }}h target</p>
             </template>
           </div>
 
@@ -323,14 +302,36 @@ onMounted(async () => {
           <div class="stat-card">
             <div class="flex items-center gap-2 mb-1">
               <ClockIcon class="size-3.5 text-slate-400" />
-              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                This month
-              </p>
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This month</p>
             </div>
             <p class="text-3xl font-bold font-mono text-foreground">
               <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisMonth }}h</span>
             </p>
+          </div>
+
+          <!-- Monthly flex balance -->
+          <div class="stat-card">
+            <div class="flex items-center gap-2 mb-1">
+              <component
+                :is="monthlyFlexHours !== null && monthlyFlexHours >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                class="size-3.5 text-slate-400"
+              />
+              <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Flex balance</p>
+            </div>
+            <p
+              class="text-3xl font-bold font-mono"
+              :class="monthlyFlexHours === null || loading
+                ? 'text-muted-foreground/40'
+                : monthlyFlexHours >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400'"
+            >
+              <span v-if="loading" class="animate-pulse">--</span>
+              <span v-else-if="monthlyFlexHours === null">—</span>
+              <span v-else>{{ formatHours(monthlyFlexHours) }}</span>
+            </p>
+            <p class="text-xs text-muted-foreground mt-1">This month</p>
           </div>
         </div>
 
