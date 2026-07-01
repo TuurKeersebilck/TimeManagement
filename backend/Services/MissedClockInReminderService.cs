@@ -4,10 +4,9 @@ using TimeManagementBackend.Models;
 
 namespace TimeManagementBackend.Services;
 
-/// <summary>
-/// Runs daily at 08:00 UTC and emails any employee
-/// who had no clock-in event the previous working day.
-/// </summary>
+// NOTE: If this backend is ever scaled to multiple replicas, each replica will run these jobs
+// independently. A distributed lock (e.g. Postgres advisory lock) would be needed to prevent
+// duplicate sends and double-invalidation.
 public class MissedClockInReminderService(
     IServiceScopeFactory scopeFactory,
     ILogger<MissedClockInReminderService> logger) : BackgroundService
@@ -18,19 +17,75 @@ public class MissedClockInReminderService(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var now = DateTime.UtcNow;
+            // Auto-invalidation runs on every pass, not just the daily one.
+            await AutoInvalidateExpiredSessionsAsync(stoppingToken);
 
-            // Run once per day at 08:00 UTC
+            var now = DateTime.UtcNow;
             if (now.Hour >= 8 && DateOnly.FromDateTime(now) != _lastRunDate)
             {
                 _lastRunDate = DateOnly.FromDateTime(now);
                 await SendRemindersAsync(stoppingToken);
+                // Month-end settlement generation is implemented in #219 (MonthlySettlement entity).
+                // When that issue is merged, add: if (now.Day == 1) await GenerateMonthlySettlementsAsync(stoppingToken);
             }
 
-            // Check again in 15 minutes
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
         }
     }
+
+    // ── Auto-invalidation ─────────────────────────────────────────────────────
+
+    private async Task AutoInvalidateExpiredSessionsAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+            var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+            var maxHours = config?.MaxSessionHours ?? 10m;
+            var cutoff = DateTimeOffset.UtcNow.AddHours(-(double)maxHours);
+
+            var expiredSessions = await db.WorkSessions
+                .Where(s => s.Status == WorkSessionStatus.Open && s.ClockIn < cutoff)
+                .ToListAsync(ct);
+
+            if (expiredSessions.Count == 0)
+                return;
+
+            foreach (var session in expiredSessions)
+            {
+                session.Status = WorkSessionStatus.Invalidated;
+
+                var msg = $"Your session from {session.ClockIn.ToUniversalTime():HH:mm UTC} on " +
+                          $"{session.Date:d MMM yyyy} was auto-closed after {maxHours}h. " +
+                          "Submit an adjustment request to record your actual hours.";
+                try
+                {
+                    await notificationService.NotifyUserAsync(
+                        session.UserId, msg, NotificationType.SessionInvalidated, ct);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex,
+                        "Failed to send SessionInvalidated notification to {UserId} for session {SessionId}.",
+                        session.UserId, session.Id);
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+
+            logger.LogInformation(
+                "AutoInvalidate: invalidated {Count} expired session(s).", expiredSessions.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "AutoInvalidateExpiredSessionsAsync encountered an error.");
+        }
+    }
+
+    // ── Missed clock-in reminder ──────────────────────────────────────────────
 
     private async Task SendRemindersAsync(CancellationToken ct)
     {
@@ -70,10 +125,11 @@ public class MissedClockInReminderService(
 
             var targetDate = yesterday.Value;
 
-            // Find users who had no ClockIn for that date
-            var usersWithClockIn = await db.ClockEvents
-                .Where(e => e.Date == targetDate && e.Type == ClockEventType.ClockIn)
-                .Select(e => e.UserId)
+            // Users who have at least one non-Invalidated WorkSession for that date.
+            var usersWithSession = await db.WorkSessions
+                .Where(s => s.Date == targetDate && s.Status != WorkSessionStatus.Invalidated)
+                .Select(s => s.UserId)
+                .Distinct()
                 .ToListAsync(ct);
 
             var usersOnVacation = await db.VacationDays
@@ -82,11 +138,11 @@ public class MissedClockInReminderService(
                 .ToListAsync(ct);
 
             var allEmployees = await db.Users
-                .Where(u => u.Role == UserRole.Employee && u.Email != null)
+                .Where(u => u.Role == UserRole.Employee && u.Email != null && !u.IsDisabled)
                 .ToListAsync(ct);
 
             var missingUsers = allEmployees
-                .Where(u => !usersWithClockIn.Contains(u.Id) && !usersOnVacation.Contains(u.Id))
+                .Where(u => !usersWithSession.Contains(u.Id) && !usersOnVacation.Contains(u.Id))
                 .ToList();
 
             foreach (var user in missingUsers)
@@ -111,9 +167,6 @@ public class MissedClockInReminderService(
         }
     }
 
-    /// <summary>
-    /// Returns the most recent working day before today, skipping weekends and public holidays.
-    /// </summary>
     private static async Task<DateOnly?> GetPreviousWorkingDayAsync(DateOnly today, AppDbContext db, CancellationToken ct)
     {
         var candidate = today.AddDays(-1);
@@ -126,7 +179,7 @@ public class MissedClockInReminderService(
                 continue;
             }
 
-            var isHoliday = await db.PublicHolidays.AnyAsync(h => h.Date == candidate, ct);
+            var isHoliday = await db.PublicHolidays.AnyAsync(h => h.Date == candidate && !h.IsWorkingDay, ct);
             if (isHoliday)
             {
                 candidate = candidate.AddDays(-1);
