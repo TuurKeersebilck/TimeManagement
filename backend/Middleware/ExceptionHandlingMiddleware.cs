@@ -32,6 +32,18 @@ public class ExceptionHandlingMiddleware
     {
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
+        // SettlementBlockedException returns a structured list of blockers so the frontend can display them.
+        if (exception is Exceptions.SettlementBlockedException sbe)
+        {
+            _logger.LogWarning("Settlement confirm blocked: {Count} blocker(s).", sbe.Blockers.Count);
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            context.Response.ContentType = "application/json";
+            var blocked = JsonSerializer.Serialize(
+                new { code = "SETTLEMENT_BLOCKED", blockers = sbe.Blockers },
+                options);
+            return context.Response.WriteAsync(blocked);
+        }
+
         // BreakTooShortException gets a structured payload so the frontend can render a countdown.
         if (exception is Exceptions.BreakTooShortException bts)
         {

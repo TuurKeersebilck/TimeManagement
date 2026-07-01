@@ -25,8 +25,8 @@ public class MissedClockInReminderService(
             {
                 _lastRunDate = DateOnly.FromDateTime(now);
                 await SendRemindersAsync(stoppingToken);
-                // Month-end settlement generation is implemented in #219 (MonthlySettlement entity).
-                // When that issue is merged, add: if (now.Day == 1) await GenerateMonthlySettlementsAsync(stoppingToken);
+                if (now.Day == 1)
+                    await GenerateMonthlySettlementsAsync(stoppingToken);
             }
 
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
@@ -164,6 +164,31 @@ public class MissedClockInReminderService(
         catch (Exception ex)
         {
             logger.LogError(ex, "MissedClockInReminderService encountered an error.");
+        }
+    }
+
+    // ── Month-end settlement generation ───────────────────────────────────────
+
+    private async Task GenerateMonthlySettlementsAsync(CancellationToken ct)
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            // Generate for the prior month
+            var priorMonth = new DateTime(now.Year, now.Month, 1).AddMonths(-1);
+            var year = priorMonth.Year;
+            var month = priorMonth.Month;
+
+            using var scope = scopeFactory.CreateScope();
+            var settlementService = scope.ServiceProvider.GetRequiredService<ISettlementService>();
+
+            logger.LogInformation("Generating MonthlySettlements for {Year}-{Month:00}.", year, month);
+            await settlementService.GenerateForAllEmployeesAsync(year, month, ct);
+            logger.LogInformation("MonthlySettlement generation complete for {Year}-{Month:00}.", year, month);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "GenerateMonthlySettlementsAsync encountered an error.");
         }
     }
 
