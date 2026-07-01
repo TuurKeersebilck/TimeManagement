@@ -13,6 +13,7 @@ namespace TimeManagementBackend.Controllers;
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
 public class WorkSessionsController(
     IWorkSessionService service,
+    IOvertimeCalculationService overtimeService,
     UserManager<User> userManager) : ApiControllerBase(userManager)
 {
     [HttpPost("clock-in")]
@@ -92,6 +93,19 @@ public class WorkSessionsController(
         if (user == null) return Unauthorized();
 
         return Ok(await service.GetMyWorkScheduleAsync(user.Id, ct));
+    }
+
+    [HttpGet("overtime")]
+    public async Task<ActionResult<OvertimeResultDto>> GetOvertime(
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        var now = DateTime.UtcNow;
+        return Ok(await overtimeService.CalculateAsync(user.Id, year ?? now.Year, month ?? now.Month, ct));
     }
 
     [HttpPatch("{date}")]
