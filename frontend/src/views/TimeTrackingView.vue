@@ -154,19 +154,35 @@ const todayFlexSeconds = computed(() => todayWorkedSeconds.value - todayTargetHo
 const monthlyFlexHours = computed(() => overtime.value?.runningBalanceHours ?? null);
 
 // Minimum break enforcement
-const breakMinutesRemaining = computed<number | null>(() => {
-  if (!isOnBreak.value || !openBreak.value) return null;
+const breakElapsedSeconds = computed<number>(() => {
+  if (!isOnBreak.value || !openBreak.value) return 0;
+  return Math.max(0, (now.value.getTime() - new Date(openBreak.value.breakStart).getTime()) / 1_000);
+});
+
+const breakRemainingSeconds = computed<number | null>(() => {
   const minimum = schedule.value?.minimumBreakMinutes;
-  if (!minimum) return null;
-  const elapsedMin =
-    (now.value.getTime() - new Date(openBreak.value.breakStart).getTime()) / 60_000;
-  const remaining = minimum - elapsedMin;
-  return remaining > 0 ? Math.ceil(remaining) : 0;
+  if (!minimum || !isOnBreak.value) return null;
+  const remaining = minimum * 60 - breakElapsedSeconds.value;
+  return remaining > 0 ? remaining : 0;
 });
-const breakMinimumReached = computed(() => {
-  const r = breakMinutesRemaining.value;
-  return r === null || r <= 0;
-});
+
+const breakMinimumReached = computed(
+  () => breakRemainingSeconds.value === null || breakRemainingSeconds.value <= 0
+);
+
+function formatMmSs(totalSeconds: number): string {
+  const s = Math.ceil(totalSeconds);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
+function formatElapsedBreak(totalSeconds: number): string {
+  const s = Math.floor(totalSeconds);
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+}
 
 // Half-day vacation disables breaks
 const isHalfDayVacation = computed(() => todayVacation.value?.amount === 0.5);
@@ -661,16 +677,30 @@ onUnmounted(() => {
                   <span v-if="monthlyFlexHours < 0" class="text-slate-500 text-xs ml-1">below target</span>
                 </div>
 
-                <!-- On-break countdown -->
+                <!-- On-break status / countdown -->
                 <div
-                  v-if="isOnBreak && breakMinutesRemaining !== null && breakMinutesRemaining > 0"
-                  class="flex items-center justify-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-4 py-2.5 text-sm"
+                  v-if="isOnBreak"
+                  class="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm"
+                  :class="breakMinimumReached
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40'
+                    : 'bg-amber-50 dark:bg-amber-950/40'"
                 >
-                  <CoffeeIcon class="size-4 text-amber-500 shrink-0" />
-                  <span class="text-slate-600 dark:text-slate-400">Break ends in</span>
-                  <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">
-                    {{ breakMinutesRemaining }}min
-                  </span>
+                  <CoffeeIcon
+                    class="size-4 shrink-0"
+                    :class="breakMinimumReached ? 'text-emerald-500' : 'text-amber-500'"
+                  />
+                  <template v-if="!breakMinimumReached && breakRemainingSeconds !== null">
+                    <span class="text-slate-600 dark:text-slate-400">End Break available in</span>
+                    <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">
+                      {{ formatMmSs(breakRemainingSeconds) }}
+                    </span>
+                  </template>
+                  <template v-else>
+                    <span class="text-slate-600 dark:text-slate-400">On break —</span>
+                    <span class="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+                      {{ formatElapsedBreak(breakElapsedSeconds) }}
+                    </span>
+                  </template>
                 </div>
 
                 <!-- Time offset adjuster (only when an action is available) -->
