@@ -29,6 +29,7 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
     public DbSet<WorkdayTarget> WorkdayTargets => Set<WorkdayTarget>();
     public DbSet<TimeBankAdjustment> TimeBankAdjustments => Set<TimeBankAdjustment>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<MonthlySettlement> MonthlySettlements => Set<MonthlySettlement>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
@@ -169,6 +170,16 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
         {
             entity.HasIndex(e => e.TokenHash);
             entity.HasIndex(e => e.Email);
+        });
+
+        builder.Entity<MonthlySettlement>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Year, e.Month }).IsUnique();
+            entity.HasIndex(e => e.Status);
+            entity.HasOne(e => e.ReviewedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
