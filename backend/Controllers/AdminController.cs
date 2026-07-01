@@ -9,7 +9,7 @@ namespace TimeManagementBackend.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
-public class AdminController(IAdminService adminService) : ControllerBase
+public class AdminController(IAdminService adminService, IOvertimeCalculationService overtimeService) : ControllerBase
 {
     private readonly IAdminService _adminService = adminService;
 
@@ -159,6 +159,17 @@ public class AdminController(IAdminService adminService) : ControllerBase
         [FromQuery] int weeks = 8,
         CancellationToken ct = default)
         => Ok(await _adminService.GetEmployeeWeeklySummaryAsync(userId, weeks, ct));
+
+    [HttpGet("employees/{userId}/overtime")]
+    public async Task<ActionResult<OvertimeResultDto>> GetEmployeeOvertime(
+        string userId,
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        return Ok(await overtimeService.CalculateAsync(userId, year ?? now.Year, month ?? now.Month, ct));
+    }
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 

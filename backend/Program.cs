@@ -80,6 +80,7 @@ try
     builder.Services.AddMemoryCache();
     builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
     builder.Services.AddScoped<IWorkSessionService, WorkSessionService>();
+    builder.Services.AddScoped<IOvertimeCalculationService, OvertimeCalculationService>();
     builder.Services.AddScoped<ITimeAdjustmentRequestService, TimeAdjustmentRequestService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();

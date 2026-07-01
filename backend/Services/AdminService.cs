@@ -146,6 +146,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         await _context.WorkSessions.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.WorkDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.WorkdayTargets.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.TimeBankAdjustments.Where(a => a.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.TimeAdjustmentRequests.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.EmployeeVacationBalances.Where(b => b.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.VacationDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);

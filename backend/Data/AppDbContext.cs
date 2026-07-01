@@ -27,6 +27,7 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
     public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
     public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
     public DbSet<WorkdayTarget> WorkdayTargets => Set<WorkdayTarget>();
+    public DbSet<TimeBankAdjustment> TimeBankAdjustments => Set<TimeBankAdjustment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -108,6 +109,11 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
                 new WorkdayTarget { Id = 6, DayOfWeek = DayOfWeek.Saturday,  Hours = 0m },
                 new WorkdayTarget { Id = 7, DayOfWeek = DayOfWeek.Sunday,    Hours = 0m }
             );
+        });
+
+        builder.Entity<TimeBankAdjustment>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.EffectiveDate });
         });
 
         builder.Entity<TimeAdjustmentRequest>(entity =>
