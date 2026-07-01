@@ -43,7 +43,15 @@ import {
   CalendarIcon,
   Loader2Icon,
   ClockIcon,
+  CheckCircleIcon,
+  ScaleIcon,
 } from "lucide-vue-next";
+import {
+  settlementService,
+  type MonthlySettlementDto,
+  OUTCOME_LABELS,
+  STATUS_LABELS,
+} from "@/services/settlementService";
 
 const route = useRoute();
 const router = useRouter();
@@ -199,6 +207,19 @@ const usedByType = computed(() => {
 const displayDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
+// ─── Settlement history ───────────────────────────────────────────────────────
+
+const settlementHistory = ref<MonthlySettlementDto[]>([]);
+const loadingSettlements = ref(false);
+
+function fmtH(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
 onMounted(async () => {
   loading.value = true;
   try {
@@ -230,6 +251,13 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+
+  // Load settlement history in background (non-blocking)
+  loadingSettlements.value = true;
+  settlementService.getEmployeeHistory(userId)
+    .then((data) => { settlementHistory.value = data; })
+    .catch(() => { /* non-critical */ })
+    .finally(() => { loadingSettlements.value = false; });
 });
 </script>
 
@@ -527,6 +555,70 @@ onMounted(async () => {
                 ]"
                 >{{ day.amount === 1 ? "Full day" : "Half day" }}</span
               >
+            </div>
+          </div>
+        </div>
+
+        <!-- Settlement history section -->
+        <div class="mt-6">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <ScaleIcon class="size-4" />
+              Settlement history
+            </h2>
+            <RouterLink
+              :to="{ name: 'admin-settlements' }"
+              class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+            >
+              View all settlements →
+            </RouterLink>
+          </div>
+
+          <div v-if="loadingSettlements" class="card divide-y divide-slate-100 dark:divide-slate-800">
+            <div v-for="i in 3" :key="i" class="flex items-center gap-4 px-4 py-3">
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+              <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+            </div>
+          </div>
+
+          <div v-else-if="settlementHistory.length === 0" class="card text-center py-8">
+            <ScaleIcon class="size-6 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+            <p class="text-sm text-slate-500 dark:text-slate-400">No settlements generated yet.</p>
+          </div>
+
+          <div v-else class="card divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+            <div
+              v-for="s in settlementHistory"
+              :key="s.id"
+              class="flex items-center gap-3 px-4 py-3"
+            >
+              <span class="text-sm font-medium text-slate-900 dark:text-slate-100 w-24 shrink-0 font-mono">
+                {{ s.year }}-{{ String(s.month).padStart(2, '0') }}
+              </span>
+              <span
+                class="text-xs font-mono px-1.5 py-0.5 rounded"
+                :class="s.netBalanceHours >= 0
+                  ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
+              >
+                {{ fmtH(s.netBalanceHours) }}
+              </span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">
+                {{ s.outcome !== null ? OUTCOME_LABELS[s.outcome as 0 | 1 | 2] : '—' }}
+              </span>
+              <div class="ml-auto flex items-center gap-2">
+                <span
+                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                  :class="s.status === 1
+                    ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'"
+                >
+                  <CheckCircleIcon v-if="s.status === 1" class="size-3" />
+                  <ClockIcon v-else class="size-3" />
+                  {{ STATUS_LABELS[s.status] }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
