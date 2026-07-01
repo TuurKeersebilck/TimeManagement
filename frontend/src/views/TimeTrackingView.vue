@@ -2,18 +2,16 @@
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
-  clockEventService,
-  CLOCK_EVENT_TYPE_ORDER,
-  CLOCK_EVENT_LABELS,
-  CLOCK_EVENT_ENUM,
-  type ClockEvent,
-  type ClockEventType,
-  type DaySummary,
-  type MyTarget,
-} from "@/services/clockEventService";
+  workSessionService,
+  type TodayStatusDto,
+  type WorkDaySummaryDto,
+  type WorkScheduleDto,
+  type OvertimeResultDto,
+  type WorkSessionDto,
+} from "@/services/workSessionService";
+import { adjustmentRequestService } from "@/services/adjustmentRequestService";
 import { vacationService, type VacationDay } from "@/services/vacationService";
 import { holidayService, type PublicHoliday } from "@/services/holidayService";
-import { adjustmentRequestService } from "@/services/adjustmentRequestService";
 import { useClockEventsStore } from "@/composables/useClockEventsStore";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
@@ -54,6 +52,9 @@ import {
   SunIcon,
   TimerIcon,
   StarIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
+  ScaleIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -61,12 +62,13 @@ const { clearCache: clearSummariesCache } = useClockEventsStore();
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
-const myTarget = ref<MyTarget | null>(null);
-const todayEvents = ref<ClockEvent[]>([]);
-const summaries = ref<DaySummary[]>([]);
-const loadingEvents = ref(false);
+const schedule = ref<WorkScheduleDto | null>(null);
+const today = ref<TodayStatusDto | null>(null);
+const summaries = ref<WorkDaySummaryDto[]>([]);
+const overtime = ref<OvertimeResultDto | null>(null);
+const loadingToday = ref(false);
 const loadingSummaries = ref(false);
-const submitting = ref(false);
+const acting = ref<"clockIn" | "clockOut" | "startBreak" | "endBreak" | null>(null);
 
 const minuteOffset = ref(0);
 const description = ref("");
@@ -84,133 +86,134 @@ const editingDate = ref<string | null>(null);
 const editingDescription = ref("");
 const savingDate = ref<string | null>(null);
 
-// ─── Computed ─────────────────────────────────────────────────────────────────
-
-const completedTypes = computed<Set<ClockEventType>>(
-  () => new Set(todayEvents.value.map((e) => e.type as ClockEventType))
-);
-
-const effectiveEventOrder = computed<ClockEventType[]>(() =>
-  todayVacation.value?.amount === 0.5
-    ? ["ClockIn", "ClockOut"]
-    : CLOCK_EVENT_TYPE_ORDER
-);
-
-const nextAction = computed<ClockEventType | null>(() => {
-  return effectiveEventOrder.value.find((t) => !completedTypes.value.has(t)) ?? null;
-});
-
-const isDayComplete = computed(() =>
-  effectiveEventOrder.value.every((t) => completedTypes.value.has(t))
-);
-
-// Minimum break enforcement: minutes remaining before "End Break" is allowed.
-// Uses now + minuteOffset to match the recordedAt that would actually be submitted,
-// so the countdown stays in sync with what the backend would validate.
-const breakMinutesRemaining = computed<number | null>(() => {
-  if (nextAction.value !== "BreakEnd") return null;
-  if (todayVacation.value?.amount === 0.5) return null; // half-day: no minimum
-  const minimum = myTarget.value?.minimumBreakMinutes;
-  if (!minimum) return null;
-  const breakStartEvent = todayEvents.value.find((e) => e.type === "BreakStart");
-  if (!breakStartEvent) return null;
-  const effectiveNowMs = now.value.getTime() + minuteOffset.value * 60_000;
-  const elapsedMs = effectiveNowMs - new Date(breakStartEvent.recordedAt).getTime();
-  const remaining = minimum - elapsedMs / 60_000;
-  return remaining > 0 ? Math.ceil(remaining) : 0;
-});
-
-const breakMinimumReached = computed(() => {
-  const remaining = breakMinutesRemaining.value;
-  return remaining === null || remaining <= 0;
-});
-
-// Expected clock-out time: clockIn + dailyTarget + total break duration (including any ongoing break)
-const expectedClockOut = computed<string | null>(() => {
-  const dailyHours = myTarget.value?.dailyHours;
-  if (!dailyHours) return null;
-
-  const clockInEvent = todayEvents.value.find((e) => e.type === "ClockIn");
-  if (!clockInEvent) return null;
-
-  // Don't show once already clocked out
-  if (completedTypes.value.has("ClockOut")) return null;
-
-  const clockInMs = new Date(clockInEvent.recordedAt).getTime();
-  const dailyMs = dailyHours * 60 * 60 * 1000;
-
-  const breakStartEvent = todayEvents.value.find((e) => e.type === "BreakStart");
-  const breakEndEvent = todayEvents.value.find((e) => e.type === "BreakEnd");
-
-  let breakMs = 0;
-  if (breakStartEvent && breakEndEvent) {
-    breakMs = new Date(breakEndEvent.recordedAt).getTime() - new Date(breakStartEvent.recordedAt).getTime();
-  } else if (breakStartEvent && !breakEndEvent) {
-    // Ongoing break — use live now so it updates reactively
-    breakMs = now.value.getTime() - new Date(breakStartEvent.recordedAt).getTime();
-  }
-
-  const targetMs = clockInMs + dailyMs + breakMs;
-  const target = new Date(targetMs);
-  return `${String(target.getHours()).padStart(2, "0")}:${String(target.getMinutes()).padStart(2, "0")}`;
-});
-
+// Live clock
 const now = ref(new Date());
 let clockInterval: ReturnType<typeof setInterval> | null = null;
 
-function handleVisibilityChange() {
-  if (!document.hidden) {
-    now.value = new Date();
-    loadTodayEvents();
-    loadSummaries();
-    loadTodayVacation();
+// ─── Derived clock state ──────────────────────────────────────────────────────
+
+const isClockedIn = computed(() => today.value?.openSession != null);
+const isOnBreak = computed(() => {
+  const open = today.value?.openSession;
+  return open != null && open.breaks.some((b) => b.breakEnd == null);
+});
+const openBreak = computed(() =>
+  today.value?.openSession?.breaks.find((b) => b.breakEnd == null) ?? null
+);
+
+const todayWorkedSeconds = computed(() => {
+  const status = today.value;
+  if (!status) return 0;
+  let total = 0;
+
+  // Add up all closed sessions
+  for (const s of status.closedSessions) {
+    if (!s.clockOut) continue;
+    const raw =
+      (new Date(s.clockOut).getTime() - new Date(s.clockIn).getTime()) / 1000;
+    const breakSecs = s.breaks
+      .filter((b) => b.breakEnd)
+      .reduce(
+        (sum, b) =>
+          sum + (new Date(b.breakEnd!).getTime() - new Date(b.breakStart).getTime()) / 1000,
+        0
+      );
+    total += raw - breakSecs;
   }
-}
 
-const selectedTime = computed(() => {
-  const d = new Date(now.value);
-  d.setMinutes(d.getMinutes() + minuteOffset.value);
-  return timeToStr(d);
+  // Add open session (live, excluding ongoing break)
+  const open = status.openSession;
+  if (open) {
+    const raw =
+      (now.value.getTime() - new Date(open.clockIn).getTime()) / 1000;
+    const closedBreakSecs = open.breaks
+      .filter((b) => b.breakEnd)
+      .reduce(
+        (sum, b) =>
+          sum + (new Date(b.breakEnd!).getTime() - new Date(b.breakStart).getTime()) / 1000,
+        0
+      );
+    // Ongoing break time is excluded
+    const ongoingBreakSecs = openBreak.value
+      ? (now.value.getTime() - new Date(openBreak.value.breakStart).getTime()) / 1000
+      : 0;
+    total += Math.max(0, raw - closedBreakSecs - ongoingBreakSecs);
+  }
+
+  return total;
 });
 
-const offsetLabel = computed(() => {
-  if (minuteOffset.value === 0) return "now";
-  return minuteOffset.value > 0 ? `+${minuteOffset.value} min` : `${minuteOffset.value} min`;
+const todayTargetHours = computed<number>(() => {
+  if (!schedule.value) return 0;
+  const dow = new Date().getDay(); // 0=Sun 6=Sat
+  return schedule.value.workdayTargets.find((t) => t.dayOfWeek === dow)?.hours ?? 0;
 });
 
-function adjustMinutes(delta: number) {
-  minuteOffset.value = Math.max(-5, Math.min(5, minuteOffset.value + delta));
-}
+const todayFlexSeconds = computed(() => todayWorkedSeconds.value - todayTargetHours.value * 3600);
 
-const showDescription = computed(() => nextAction.value === "ClockOut");
-const showWfh = computed(() => nextAction.value === "ClockIn");
+const monthlyFlexHours = computed(() => overtime.value?.runningBalanceHours ?? null);
+
+// Minimum break enforcement
+const breakMinutesRemaining = computed<number | null>(() => {
+  if (!isOnBreak.value || !openBreak.value) return null;
+  const minimum = schedule.value?.minimumBreakMinutes;
+  if (!minimum) return null;
+  const elapsedMin =
+    (now.value.getTime() - new Date(openBreak.value.breakStart).getTime()) / 60_000;
+  const remaining = minimum - elapsedMin;
+  return remaining > 0 ? Math.ceil(remaining) : 0;
+});
+const breakMinimumReached = computed(() => {
+  const r = breakMinutesRemaining.value;
+  return r === null || r <= 0;
+});
+
+// Half-day vacation disables breaks
+const isHalfDayVacation = computed(() => todayVacation.value?.amount === 0.5);
+const isFullDayVacation = computed(() => todayVacation.value?.amount === 1.0);
+
+const canClockIn = computed(() => !isClockedIn.value && !isFullDayVacation.value);
+const canClockOut = computed(() => isClockedIn.value && !isOnBreak.value);
+const canStartBreak = computed(() => isClockedIn.value && !isOnBreak.value && !isHalfDayVacation.value);
+const canEndBreak = computed(() => isOnBreak.value && breakMinimumReached.value);
+
+// ─── History helpers ──────────────────────────────────────────────────────────
 
 type HistoryRow =
-  | { kind: "summary"; data: DaySummary }
+  | { kind: "summary"; data: WorkDaySummaryDto }
   | { kind: "holiday"; data: PublicHoliday };
 
 const mergedHistory = computed<HistoryRow[]>(() => {
-  const today = localDateString(new Date());
-  const summaryDates = new Set(summaries.value.map((s) => s.date.split("T")[0]));
+  const todayStr = localDateString(new Date());
+  const summaryDates = new Set(summaries.value.map((s) => s.date));
 
-  const rows: HistoryRow[] = summaries.value.map((s) => ({ kind: "summary" as const, data: s }));
+  const rows: HistoryRow[] = summaries.value.map((s) => ({
+    kind: "summary" as const,
+    data: s,
+  }));
 
   for (const h of holidays.value) {
-    if (!h.isWorkingDay && h.date <= today && !summaryDates.has(h.date)) {
+    if (!h.isWorkingDay && h.date <= todayStr && !summaryDates.has(h.date)) {
       rows.push({ kind: "holiday" as const, data: h });
     }
   }
 
-  return rows.sort((a, b) => b.data.date.split("T")[0].localeCompare(a.data.date.split("T")[0]));
+  return rows.sort((a, b) => b.data.date.localeCompare(a.data.date));
 });
+
+function flexDeltaForDay(s: WorkDaySummaryDto): number | null {
+  if (!overtime.value) return null;
+  const dayEntry = overtime.value.perDay.find((p) => p.date === s.date);
+  return dayEntry ? dayEntry.flexDelta : null;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function timeToStr(d: Date): string {
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+function localDateString(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function formatTime(t: string | null | undefined): string {
+function formatUtc(t: string | null | undefined): string {
   if (!t) return "—";
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -224,12 +227,45 @@ function formatDate(s: string): string {
   });
 }
 
-function localDateString(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function formatSeconds(secs: number): string {
+  const abs = Math.abs(secs);
+  const h = Math.floor(abs / 3600);
+  const m = Math.floor((abs % 3600) / 60);
+  const sign = secs < 0 ? "-" : "+";
+  return `${sign}${h}h${m.toString().padStart(2, "0")}m`;
 }
 
-function eventLabel(type: string): string {
-  return CLOCK_EVENT_LABELS[type as ClockEventType] ?? type;
+function formatHours(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
+function sessionTimeline(session: WorkSessionDto): string {
+  const ci = formatUtc(session.clockIn);
+  const co = session.clockOut ? formatUtc(session.clockOut) : "…";
+  const breaks = session.breaks
+    .filter((b) => b.breakEnd)
+    .map((b) => ` ☕ ${formatUtc(b.breakStart)}–${formatUtc(b.breakEnd)}`)
+    .join("");
+  return `${ci} → ${co}${breaks}`;
+}
+
+const selectedTime = computed(() => {
+  const d = new Date(now.value);
+  d.setMinutes(d.getMinutes() + minuteOffset.value);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+});
+
+const offsetLabel = computed(() => {
+  if (minuteOffset.value === 0) return "now";
+  return minuteOffset.value > 0 ? `+${minuteOffset.value} min` : `${minuteOffset.value} min`;
+});
+
+function adjustMinutes(delta: number) {
+  minuteOffset.value = Math.max(-5, Math.min(5, minuteOffset.value + delta));
 }
 
 function emptyAdjForm() {
@@ -243,32 +279,130 @@ function emptyAdjForm() {
   };
 }
 
-// Build a full ISO 8601 DateTimeOffset string (e.g. "2026-04-15T09:00:00+02:00") from a
-// date string and a local time string. Using the specific date (not today) ensures DST
-// transitions are handled correctly for historical adjustment requests.
-function toLocalDateTimeOffset(date: string, time: string): string | undefined {
-  if (!time) return undefined;
+function toLocalIso(date: string, time: string): string {
   const dt = new Date(`${date}T${time}:00`);
-  const offsetMin = -dt.getTimezoneOffset(); // getTimezoneOffset() returns UTC − local, so negate
+  const offsetMin = -dt.getTimezoneOffset();
   const sign = offsetMin >= 0 ? "+" : "-";
-  const absOffset = Math.abs(offsetMin);
-  const offsetH = String(Math.floor(absOffset / 60)).padStart(2, "0");
-  const offsetM = String(absOffset % 60).padStart(2, "0");
-  const y = dt.getFullYear();
-  const mo = String(dt.getMonth() + 1).padStart(2, "0");
-  const d = String(dt.getDate()).padStart(2, "0");
-  const h = String(dt.getHours()).padStart(2, "0");
-  const m = String(dt.getMinutes()).padStart(2, "0");
-  return `${y}-${mo}-${d}T${h}:${m}:00${sign}${offsetH}:${offsetM}`;
+  const abs = Math.abs(offsetMin);
+  const oh = String(Math.floor(abs / 60)).padStart(2, "0");
+  const om = String(abs % 60).padStart(2, "0");
+  const [y, mo, d, h, m] = [
+    dt.getFullYear(),
+    String(dt.getMonth() + 1).padStart(2, "0"),
+    String(dt.getDate()).padStart(2, "0"),
+    String(dt.getHours()).padStart(2, "0"),
+    String(dt.getMinutes()).padStart(2, "0"),
+  ];
+  return `${y}-${mo}-${d}T${h}:${m}:00${sign}${oh}:${om}`;
 }
 
 // ─── Clock actions ────────────────────────────────────────────────────────────
+
+async function handleClockIn() {
+  acting.value = "clockIn";
+  try {
+    await workSessionService.clockIn(minuteOffset.value, wfh.value);
+    await refreshAll();
+    minuteOffset.value = 0;
+    wfh.value = false;
+    toast.success("Clocked in");
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to clock in"));
+  } finally {
+    acting.value = null;
+  }
+}
+
+async function handleClockOut() {
+  acting.value = "clockOut";
+  try {
+    await workSessionService.clockOut(minuteOffset.value, description.value);
+    await refreshAll();
+    minuteOffset.value = 0;
+    description.value = "";
+    toast.success("Clocked out");
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to clock out"));
+  } finally {
+    acting.value = null;
+  }
+}
+
+async function handleStartBreak() {
+  acting.value = "startBreak";
+  try {
+    await workSessionService.startBreak();
+    await refreshToday();
+    toast.success("Break started");
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to start break"));
+  } finally {
+    acting.value = null;
+  }
+}
+
+async function handleEndBreak() {
+  acting.value = "endBreak";
+  try {
+    await workSessionService.endBreak(minuteOffset.value);
+    await refreshToday();
+    minuteOffset.value = 0;
+    toast.success("Break ended");
+  } catch (err: unknown) {
+    // Structured BREAK_TOO_SHORT error
+    const anyErr = err as Record<string, unknown>;
+    const data =
+      (anyErr?.response as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+    if (data?.code === "BREAK_TOO_SHORT") {
+      toast.error(
+        `Break too short — ${data.elapsedMinutes} / ${data.requiredMinutes} min elapsed`
+      );
+    } else {
+      toast.error(extractApiError(err, "Failed to end break"));
+    }
+  } finally {
+    acting.value = null;
+  }
+}
+
+// ─── Data loading ─────────────────────────────────────────────────────────────
+
+async function refreshToday() {
+  loadingToday.value = true;
+  try {
+    today.value = await workSessionService.getToday();
+  } catch {
+    toast.error("Failed to load today's status");
+  } finally {
+    loadingToday.value = false;
+  }
+}
+
+async function refreshAll() {
+  await Promise.allSettled([
+    refreshToday(),
+    (async () => {
+      loadingSummaries.value = true;
+      try {
+        [summaries.value, overtime.value] = await Promise.all([
+          workSessionService.getSummaries(),
+          workSessionService.getOvertime(),
+        ]);
+        clearSummariesCache();
+      } catch {
+        // Summaries are non-critical
+      } finally {
+        loadingSummaries.value = false;
+      }
+    })(),
+  ]);
+}
 
 async function loadTodayVacation() {
   try {
     todayVacation.value = await vacationService.getVacationForDate(localDateString(new Date()));
   } catch {
-    // Non-critical — silently ignore if vacation check fails
+    // Non-critical
   }
 }
 
@@ -280,66 +414,11 @@ async function loadHolidays() {
   }
 }
 
-async function loadTodayEvents() {
-  try {
-    loadingEvents.value = true;
-    todayEvents.value = await clockEventService.getTodayEvents();
-  } catch {
-    toast.error("Failed to load today's events");
-  } finally {
-    loadingEvents.value = false;
-  }
-}
-
-async function loadSummaries() {
-  try {
-    loadingSummaries.value = true;
-    summaries.value = await clockEventService.getSummaries();
-  } catch {
-    toast.error("Failed to load history");
-  } finally {
-    loadingSummaries.value = false;
-  }
-}
-
-async function submitClock() {
-  if (!nextAction.value) return;
-  submitting.value = true;
-  try {
-    const d = new Date(now.value);
-    d.setMinutes(d.getMinutes() + minuteOffset.value);
-    d.setSeconds(0);
-    d.setMilliseconds(0);
-    await clockEventService.submit({
-      type: CLOCK_EVENT_ENUM[nextAction.value],
-      recordedAt: d.toISOString(),
-      localDate: localDateString(d),
-      timeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      description: showDescription.value && description.value.trim()
-        ? description.value.trim()
-        : undefined,
-      workedFromHome: showWfh.value ? wfh.value : undefined,
-    });
-    const label = CLOCK_EVENT_LABELS[nextAction.value!];
-    await loadTodayEvents();
-    await loadSummaries();
-    clearSummariesCache(); // force Dashboard to refetch on next visit
-    minuteOffset.value = 0;
-    description.value = "";
-    wfh.value = false;
-    toast.success(`${label} recorded`);
-  } catch (err: unknown) {
-    toast.error(extractApiError(err, "Failed to record clock event"));
-  } finally {
-    submitting.value = false;
-  }
-}
-
 // ─── History actions ──────────────────────────────────────────────────────────
 
-function startEdit(summary: DaySummary) {
+function startEdit(summary: WorkDaySummaryDto) {
   editingDate.value = summary.date;
-  editingDescription.value = summary.description ?? "";
+  editingDescription.value = summary.workDay?.description ?? "";
 }
 
 function cancelEdit() {
@@ -350,31 +429,34 @@ function cancelEdit() {
 async function saveDescription(date: string) {
   savingDate.value = date;
   try {
-    const updated = await clockEventService.updateDay(date, {
+    await workSessionService.updateDay(date, {
       description: editingDescription.value.trim() || undefined,
     });
-    const idx = summaries.value.findIndex((s) => s.date === date);
-    if (idx !== -1) summaries.value[idx] = updated;
+    // Refresh summaries to reflect update
+    summaries.value = await workSessionService.getSummaries();
     editingDate.value = null;
     toast.success("Description saved");
-  } catch (err: unknown) {
+  } catch (err) {
     toast.error(extractApiError(err, "Failed to save description"));
   } finally {
     savingDate.value = null;
   }
 }
 
-async function toggleWfh(summary: DaySummary) {
+async function toggleWfh(summary: WorkDaySummaryDto) {
   savingDate.value = summary.date;
   try {
-    const updated = await clockEventService.updateDay(summary.date, {
-      workedFromHome: !summary.workedFromHome,
+    await workSessionService.updateDay(summary.date, {
+      workedFromHome: !(summary.workDay?.workedFromHome ?? false),
     });
-    const idx = summaries.value.findIndex((s) => s.date === summary.date);
-    if (idx !== -1) summaries.value[idx] = updated;
-    toast.success(updated.workedFromHome ? "Marked as working from home" : "Marked as office");
-  } catch (err: unknown) {
-    toast.error(extractApiError(err, "Failed to update work from home status"));
+    summaries.value = await workSessionService.getSummaries();
+    toast.success(
+      !(summary.workDay?.workedFromHome ?? false)
+        ? "Marked as working from home"
+        : "Marked as office"
+    );
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to update WFH status"));
   } finally {
     savingDate.value = null;
   }
@@ -387,41 +469,78 @@ async function submitAdjustmentRequest() {
     toast.error("Please provide a reason for the adjustment");
     return;
   }
-  if (!adjForm.value.clockIn && !adjForm.value.breakStart && !adjForm.value.breakEnd && !adjForm.value.clockOut) {
-    toast.error("Please fill in at least one time field");
+  if (!adjForm.value.clockIn || !adjForm.value.clockOut) {
+    toast.error("Clock-in and clock-out times are required");
     return;
+  }
+
+  const breaks = [];
+  if (adjForm.value.breakStart && adjForm.value.breakEnd) {
+    breaks.push({
+      breakStart: toLocalIso(adjForm.value.date, adjForm.value.breakStart),
+      breakEnd: toLocalIso(adjForm.value.date, adjForm.value.breakEnd),
+    });
   }
 
   adjSubmitting.value = true;
   try {
     await adjustmentRequestService.create({
       date: adjForm.value.date,
-      requestedClockIn: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.clockIn),
-      requestedBreakStart: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.breakStart),
-      requestedBreakEnd: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.breakEnd),
-      requestedClockOut: toLocalDateTimeOffset(adjForm.value.date, adjForm.value.clockOut),
+      desiredDaySnapshot: {
+        sessions: [
+          {
+            clockIn: toLocalIso(adjForm.value.date, adjForm.value.clockIn),
+            clockOut: toLocalIso(adjForm.value.date, adjForm.value.clockOut),
+            breaks,
+          },
+        ],
+      },
       reason: adjForm.value.reason.trim(),
     });
     showAdjustDialog.value = false;
     adjForm.value = emptyAdjForm();
     toast.success("Adjustment request sent to admin for approval");
-  } catch (err: unknown) {
+  } catch (err) {
     toast.error(extractApiError(err, "Failed to submit adjustment request"));
   } finally {
     adjSubmitting.value = false;
   }
 }
 
-// ─── Mount ────────────────────────────────────────────────────────────────────
+// ─── Visibility / mount ───────────────────────────────────────────────────────
 
-onMounted(() => {
-  loadTodayEvents();
-  loadSummaries();
-  loadTodayVacation();
-  loadHolidays();
-  clockEventService.getMyTarget().then((t) => { myTarget.value = t; }).catch(() => {});
+function handleVisibilityChange() {
+  if (!document.hidden) {
+    now.value = new Date();
+    refreshToday();
+  }
+}
+
+onMounted(async () => {
   clockInterval = setInterval(() => { now.value = new Date(); }, 1_000);
   document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  await Promise.allSettled([
+    refreshToday(),
+    (async () => {
+      try {
+        schedule.value = await workSessionService.getMySchedule();
+      } catch {}
+    })(),
+    (async () => {
+      loadingSummaries.value = true;
+      try {
+        [summaries.value, overtime.value] = await Promise.all([
+          workSessionService.getSummaries(),
+          workSessionService.getOvertime(),
+        ]);
+      } catch {} finally {
+        loadingSummaries.value = false;
+      }
+    })(),
+    loadTodayVacation(),
+    loadHolidays(),
+  ]);
 });
 
 onUnmounted(() => {
@@ -458,204 +577,259 @@ onUnmounted(() => {
           <!-- ── Today tab ───────────────────────────────────────────────── -->
           <TabsContent value="today" class="space-y-6">
 
-            <!-- Clock action card -->
-            <div class="card p-6">
-              <!-- Loading skeleton -->
-              <div v-if="loadingEvents" class="space-y-5">
-                <div class="flex items-start justify-between">
-                  <div v-for="i in 4" :key="i" class="flex flex-col items-center gap-1.5 flex-1">
-                    <div class="size-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                    <div class="h-2.5 w-10 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  </div>
-                </div>
-                <div class="flex items-center justify-center gap-4">
-                  <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  <div class="h-9 w-28 rounded bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                  <div class="size-9 rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
-                </div>
-                <div class="h-11 w-full rounded-lg bg-slate-200 dark:bg-slate-700 animate-pulse" />
+            <!-- Full vacation -->
+            <div
+              v-if="isFullDayVacation"
+              class="card flex flex-col items-center gap-3 py-8 text-center"
+            >
+              <div class="size-10 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center">
+                <PlaneIcon class="size-5 text-violet-500" />
+              </div>
+              <div>
+                <p class="font-medium text-slate-900 dark:text-slate-100">Full vacation day</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                  {{ todayVacation?.vacationTypeName }} vacation today — enjoy!
+                </p>
+              </div>
+            </div>
+
+            <template v-else>
+              <!-- Half-day banner -->
+              <div
+                v-if="isHalfDayVacation"
+                class="flex items-center gap-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-3"
+              >
+                <SunIcon class="size-4 text-violet-500 shrink-0" />
+                <p class="text-sm text-violet-800 dark:text-violet-200">
+                  Half-day {{ todayVacation?.vacationTypeName }} vacation — clock in/out only, no break.
+                </p>
               </div>
 
-              <div v-else class="space-y-5">
-                <!-- Full vacation: block clock-in -->
-                <div v-if="todayVacation?.amount === 1.0" class="flex flex-col items-center gap-3 py-2 text-center">
-                  <div class="size-10 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center">
-                    <PlaneIcon class="size-5 text-violet-500" />
-                  </div>
+              <!-- Clock action card -->
+              <div class="card p-6 space-y-5">
+                <!-- Live elapsed -->
+                <div class="flex items-center justify-between">
                   <div>
-                    <p class="font-medium text-slate-900 dark:text-slate-100">Full vacation day</p>
-                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                      You have a {{ todayVacation.vacationTypeName }} vacation today — no clocking needed. Enjoy!
+                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      Today
                     </p>
+                    <p class="text-4xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                      {{ (() => {
+                        const s = Math.floor(todayWorkedSeconds);
+                        const h = Math.floor(s / 3600);
+                        const m = Math.floor((s % 3600) / 60);
+                        const sec = s % 60;
+                        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+                      })() }}
+                    </p>
+                  </div>
+                  <!-- Daily flex -->
+                  <div class="text-right">
+                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                      Today's Δ
+                    </p>
+                    <p
+                      class="text-xl font-mono font-semibold tabular-nums"
+                      :class="todayFlexSeconds >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                    >
+                      {{ formatSeconds(Math.floor(todayFlexSeconds)) }}
+                    </p>
+                    <p class="text-xs text-slate-400 mt-0.5">vs {{ todayTargetHours }}h target</p>
                   </div>
                 </div>
 
-                <!-- Half-day vacation banner + simplified flow -->
-                <template v-else>
-                  <div v-if="todayVacation?.amount === 0.5" class="flex items-center gap-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-3">
-                    <SunIcon class="size-4 text-violet-500 shrink-0" />
-                    <p class="text-sm text-violet-800 dark:text-violet-200">
-                      Half-day {{ todayVacation.vacationTypeName }} vacation today — clock in and out only, no break required.
-                    </p>
-                  </div>
-
-                  <!-- Step progress indicator -->
-                  <div class="flex items-start justify-between">
-                    <template v-for="(type, index) in effectiveEventOrder" :key="type">
-                      <div class="flex flex-col items-center gap-1.5">
-                        <div :class="['size-7 rounded-full flex items-center justify-center border-2 transition-all',
-                          completedTypes.has(type)
-                            ? 'bg-emerald-500 border-emerald-500 text-white'
-                            : nextAction === type
-                            ? 'border-indigo-600 dark:border-indigo-400 text-indigo-600 dark:text-indigo-400'
-                            : 'border-slate-200 dark:border-slate-700 text-slate-400'
-                        ]">
-                          <CheckIcon v-if="completedTypes.has(type)" class="size-3.5" />
-                          <span v-else class="text-xs font-semibold leading-none">{{ index + 1 }}</span>
-                        </div>
-                        <span class="text-[11px] leading-tight text-center max-w-[52px]" :class="[
-                          completedTypes.has(type)
-                            ? 'text-emerald-600 dark:text-emerald-400 font-medium'
-                            : nextAction === type
-                            ? 'text-slate-900 dark:text-slate-100 font-medium'
-                            : 'text-slate-400 dark:text-slate-500'
-                        ]">{{ CLOCK_EVENT_LABELS[type] }}</span>
-                      </div>
-                      <div
-                        v-if="index < effectiveEventOrder.length - 1"
-                        class="flex-1 h-px mt-3.5 mx-1 transition-colors"
-                        :class="completedTypes.has(type) ? 'bg-emerald-400 dark:bg-emerald-600' : 'bg-slate-200 dark:bg-slate-700'"
-                      />
-                    </template>
-                  </div>
-
-                  <!-- Expected clock-out indicator -->
-                  <div
-                    v-if="expectedClockOut"
-                    class="flex items-center justify-center gap-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 px-4 py-2.5 text-sm"
+                <!-- Monthly flex balance -->
+                <div
+                  v-if="monthlyFlexHours !== null"
+                  class="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm"
+                  :class="monthlyFlexHours >= 0
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40'
+                    : 'bg-rose-50 dark:bg-rose-950/40'"
+                >
+                  <component
+                    :is="monthlyFlexHours >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                    class="size-4 shrink-0"
+                    :class="monthlyFlexHours >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+                  />
+                  <span class="text-slate-600 dark:text-slate-400">Monthly balance:</span>
+                  <span
+                    class="font-semibold font-mono"
+                    :class="monthlyFlexHours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                   >
-                    <TimerIcon class="size-4 text-indigo-500 shrink-0" />
-                    <span class="text-slate-600 dark:text-slate-400">
-                      Target clock-out:
-                    </span>
-                    <span class="font-semibold font-mono text-indigo-600 dark:text-indigo-400">{{ expectedClockOut }}</span>
-                  </div>
+                    {{ formatHours(monthlyFlexHours) }}
+                  </span>
+                  <span v-if="monthlyFlexHours < 0" class="text-slate-500 text-xs ml-1">below target</span>
+                </div>
 
-                  <!-- Day complete -->
-                  <div v-if="isDayComplete" class="flex flex-col items-center gap-3 py-2 text-center">
-                    <CheckCircleIcon class="size-10 text-emerald-500" />
-                    <div>
-                      <p class="font-medium text-slate-900 dark:text-slate-100">Day complete</p>
-                      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                        You've clocked out for today. See you tomorrow!
-                      </p>
-                    </div>
-                  </div>
+                <!-- On-break countdown -->
+                <div
+                  v-if="isOnBreak && breakMinutesRemaining !== null && breakMinutesRemaining > 0"
+                  class="flex items-center justify-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-4 py-2.5 text-sm"
+                >
+                  <CoffeeIcon class="size-4 text-amber-500 shrink-0" />
+                  <span class="text-slate-600 dark:text-slate-400">Break ends in</span>
+                  <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">
+                    {{ breakMinutesRemaining }}min
+                  </span>
+                </div>
 
-                  <!-- Active action -->
-                  <template v-else>
-                  <div class="flex items-center justify-center gap-4">
-                    <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
-                      <MinusIcon class="size-4" />
-                    </Button>
-                    <div class="text-center w-28">
-                      <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
-                        {{ selectedTime }}
-                      </p>
-                      <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ offsetLabel }}</p>
-                    </div>
-                    <Button variant="outline" size="icon" :disabled="minuteOffset >= 5" @click="adjustMinutes(1)">
-                      <PlusIcon class="size-4" />
-                    </Button>
-                  </div>
-
-                  <div v-if="showWfh" class="flex items-center gap-3">
-                    <Switch v-model="wfh" />
-                    <Label>Working from home today</Label>
-                  </div>
-
-                  <div v-if="showDescription" class="space-y-1.5">
-                    <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
-                    <textarea
-                      v-model="description"
-                      rows="3"
-                      class="input-field resize-none"
-                      placeholder="What did you work on today?"
-                    />
-                  </div>
-
-                  <div
-                    v-if="breakMinutesRemaining !== null && breakMinutesRemaining > 0"
-                    class="flex items-center justify-center gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 px-4 py-2.5 text-sm"
-                  >
-                    <CoffeeIcon class="size-4 text-amber-500 shrink-0" />
-                    <span class="text-slate-600 dark:text-slate-400">
-                      Break ends in
-                    </span>
-                    <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">{{ breakMinutesRemaining }}min</span>
-                  </div>
-
-                  <Button class="w-full" size="lg" :disabled="submitting || !breakMinimumReached" @click="submitClock">
-                    <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
-                    {{ CLOCK_EVENT_LABELS[nextAction!] }}
+                <!-- Time offset adjuster (only when an action is available) -->
+                <div
+                  v-if="canClockIn || canClockOut || canEndBreak"
+                  class="flex items-center justify-center gap-4"
+                >
+                  <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
+                    <MinusIcon class="size-4" />
                   </Button>
-                </template>
-                </template>
-              </div>
-            </div>
+                  <div class="text-center w-28">
+                    <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
+                      {{ selectedTime }}
+                    </p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ offsetLabel }}</p>
+                  </div>
+                  <Button variant="outline" size="icon" :disabled="minuteOffset >= 5" @click="adjustMinutes(1)">
+                    <PlusIcon class="size-4" />
+                  </Button>
+                </div>
 
-            <!-- Today's events table -->
-            <div class="card overflow-hidden">
-              <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's log</h2>
-              </div>
+                <!-- WFH toggle (only when clock-in is available) -->
+                <div v-if="canClockIn" class="flex items-center gap-3">
+                  <Switch v-model="wfh" />
+                  <Label>Working from home today</Label>
+                </div>
 
-              <div v-if="loadingEvents" class="divide-y divide-slate-100 dark:divide-slate-800">
-                <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse ml-auto" />
+                <!-- Description (only when clocked in and break not active) -->
+                <div v-if="canClockOut" class="space-y-1.5">
+                  <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
+                  <textarea
+                    v-model="description"
+                    rows="3"
+                    class="input-field resize-none"
+                    placeholder="What did you work on today?"
+                  />
+                </div>
+
+                <!-- Action buttons -->
+                <div class="grid gap-2" :class="isClockedIn ? 'grid-cols-2' : 'grid-cols-1'">
+                  <Button
+                    v-if="canClockIn"
+                    class="w-full"
+                    size="lg"
+                    :disabled="acting != null"
+                    @click="handleClockIn"
+                  >
+                    <Loader2Icon v-if="acting === 'clockIn'" class="size-4 animate-spin" />
+                    <ClockIcon v-else class="size-4" />
+                    Clock In
+                  </Button>
+
+                  <template v-if="isClockedIn">
+                    <Button
+                      v-if="isOnBreak"
+                      class="col-span-2 w-full"
+                      size="lg"
+                      variant="secondary"
+                      :disabled="acting != null || !breakMinimumReached"
+                      @click="handleEndBreak"
+                    >
+                      <Loader2Icon v-if="acting === 'endBreak'" class="size-4 animate-spin" />
+                      <CoffeeIcon v-else class="size-4" />
+                      End Break
+                    </Button>
+
+                    <template v-else>
+                      <Button
+                        variant="secondary"
+                        size="lg"
+                        :disabled="acting != null || !canStartBreak"
+                        @click="handleStartBreak"
+                      >
+                        <Loader2Icon v-if="acting === 'startBreak'" class="size-4 animate-spin" />
+                        <CoffeeIcon v-else class="size-4" />
+                        Start Break
+                      </Button>
+
+                      <Button
+                        size="lg"
+                        :disabled="acting != null || !canClockOut"
+                        @click="handleClockOut"
+                      >
+                        <Loader2Icon v-if="acting === 'clockOut'" class="size-4 animate-spin" />
+                        <CheckIcon v-else class="size-4" />
+                        Clock Out
+                      </Button>
+                    </template>
+                  </template>
                 </div>
               </div>
 
-              <Table v-else>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Event</TableHead>
-                    <TableHead class="text-right">Time</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableEmpty v-if="todayEvents.length === 0" :colspan="2">
-                    <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                    <p class="text-slate-500 dark:text-slate-400">No events yet today. Use the button above to clock in.</p>
-                  </TableEmpty>
-                  <TableRow v-for="event in todayEvents" :key="event.id">
-                    <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                      {{ eventLabel(event.type) }}
-                    </TableCell>
-                    <TableCell class="text-right font-mono text-slate-600 dark:text-slate-400">
-                      {{ formatTime(event.recordedAt) }}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow
-                    v-for="type in effectiveEventOrder.filter(t => !completedTypes.has(t))"
-                    :key="type"
-                    class="opacity-30"
-                  >
-                    <TableCell class="text-slate-500 dark:text-slate-400 italic">{{ CLOCK_EVENT_LABELS[type] }}</TableCell>
-                    <TableCell class="text-right text-slate-400">—</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
+              <!-- Today's sessions -->
+              <div class="card overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                  <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's sessions</h2>
+                </div>
 
+                <div v-if="loadingToday" class="divide-y divide-slate-100 dark:divide-slate-800">
+                  <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
+                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse" />
+                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse ml-auto" />
+                  </div>
+                </div>
+
+                <div v-else>
+                  <div
+                    v-if="!today || (today.closedSessions.length === 0 && !today.openSession)"
+                    class="flex flex-col items-center gap-2 py-8 text-center"
+                  >
+                    <ClockIcon class="size-8 text-slate-300 dark:text-slate-600" />
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                      No sessions yet. Use the button above to clock in.
+                    </p>
+                  </div>
+
+                  <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+                    <!-- Open session -->
+                    <div
+                      v-if="today?.openSession"
+                      class="flex items-center gap-3 px-4 py-3"
+                    >
+                      <span class="inline-flex size-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span class="text-sm font-mono text-slate-700 dark:text-slate-300 flex-1">
+                        {{ sessionTimeline(today.openSession) }}
+                      </span>
+                      <span
+                        class="text-xs px-2 py-0.5 rounded-full font-medium"
+                        :class="isOnBreak
+                          ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                          : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'"
+                      >
+                        {{ isOnBreak ? 'On break' : 'Active' }}
+                      </span>
+                    </div>
+
+                    <!-- Closed sessions -->
+                    <div
+                      v-for="session in today?.closedSessions"
+                      :key="session.id"
+                      class="flex items-center gap-3 px-4 py-3"
+                    >
+                      <span class="inline-flex size-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                      <span class="text-sm font-mono text-slate-700 dark:text-slate-300 flex-1">
+                        {{ sessionTimeline(session) }}
+                      </span>
+                      <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+                        Closed
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
           </TabsContent>
 
           <!-- ── History tab ─────────────────────────────────────────────── -->
           <TabsContent value="history">
             <div class="card overflow-hidden">
-
-              <!-- Loading skeleton -->
               <div v-if="loadingSummaries" class="divide-y divide-slate-100 dark:divide-slate-800">
                 <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
                   <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
@@ -670,16 +844,17 @@ onUnmounted(() => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Hours</TableHead>
-                    <TableHead>Timeline</TableHead>
+                    <TableHead>Δ</TableHead>
+                    <TableHead>Sessions</TableHead>
                     <TableHead class="text-center">WFH</TableHead>
                     <TableHead class="text-center">Vacation</TableHead>
                     <TableHead>Description</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableEmpty v-if="mergedHistory.length === 0" :colspan="6">
+                  <TableEmpty v-if="mergedHistory.length === 0" :colspan="7">
                     <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                    <p class="text-slate-500 dark:text-slate-400">No clocked days yet. Use the Today tab to clock in.</p>
+                    <p class="text-slate-500 dark:text-slate-400">No clocked days yet.</p>
                   </TableEmpty>
 
                   <template v-else v-for="row in mergedHistory" :key="row.data.date + '-' + row.kind">
@@ -691,16 +866,16 @@ onUnmounted(() => {
                       <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
                         {{ formatDate(row.data.date) }}
                       </TableCell>
-                      <TableCell :colspan="5">
+                      <TableCell :colspan="6">
                         <div class="flex items-center gap-2">
                           <StarIcon class="size-3.5 text-sky-500 shrink-0" />
                           <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
-                          <span class="text-xs text-slate-400 dark:text-slate-500">Public holiday</span>
+                          <span class="text-xs text-slate-400">Public holiday</span>
                         </div>
                       </TableCell>
                     </TableRow>
 
-                    <!-- Regular summary row -->
+                    <!-- Summary row -->
                     <TableRow v-else>
                       <!-- Date -->
                       <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
@@ -711,46 +886,61 @@ onUnmounted(() => {
                         >Today</span>
                       </TableCell>
 
-                      <!-- Hours badge -->
+                      <!-- Hours -->
                       <TableCell>
                         <span
-                          v-if="row.data.totalHours > 0"
+                          v-if="row.data.totalWorkedHours > 0"
                           class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
                         >
-                          {{ row.data.totalHours.toFixed(2) }}h
+                          {{ row.data.totalWorkedHours.toFixed(2) }}h
                         </span>
                         <span v-else class="text-slate-400 text-xs">—</span>
                       </TableCell>
 
-                      <!-- Timeline -->
-                      <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                        <template v-if="row.data.breakStart && row.data.breakEnd">
-                          {{ formatTime(row.data.clockIn) }} → {{ formatTime(row.data.breakStart) }}
-                          <CoffeeIcon class="inline size-3 mx-1 text-amber-400" />
-                          {{ formatTime(row.data.breakEnd) }} → {{ formatTime(row.data.clockOut) }}
+                      <!-- Flex delta -->
+                      <TableCell>
+                        <template v-if="flexDeltaForDay(row.data) !== null">
+                          <span
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold font-mono"
+                            :class="flexDeltaForDay(row.data)! >= 0
+                              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
+                          >
+                            <component
+                              :is="flexDeltaForDay(row.data)! >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                              class="size-3"
+                            />
+                            {{ formatHours(flexDeltaForDay(row.data)!) }}
+                          </span>
                         </template>
-                        <template v-else>
-                          {{ formatTime(row.data.clockIn) }} → {{ formatTime(row.data.clockOut) }}
-                        </template>
+                        <span v-else class="text-slate-400 text-xs">—</span>
                       </TableCell>
 
-                      <!-- WFH toggle -->
+                      <!-- Sessions timeline -->
+                      <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[220px] truncate">
+                        <div v-for="s in row.data.sessions.filter(s => s.status === 1)" :key="s.id" class="truncate">
+                          {{ sessionTimeline(s) }}
+                        </div>
+                        <span v-if="row.data.sessions.filter(s => s.status === 1).length === 0" class="text-slate-400">—</span>
+                      </TableCell>
+
+                      <!-- WFH -->
                       <TableCell class="text-center">
                         <div class="flex items-center justify-center gap-1.5">
                           <Switch
-                            :model-value="row.data.workedFromHome"
+                            :model-value="row.data.workDay?.workedFromHome ?? false"
                             :disabled="savingDate === row.data.date"
                             @update:model-value="toggleWfh(row.data)"
                           />
                           <component
-                            :is="row.data.workedFromHome ? HomeIcon : BuildingIcon"
+                            :is="(row.data.workDay?.workedFromHome ?? false) ? HomeIcon : BuildingIcon"
                             class="size-3.5"
-                            :class="row.data.workedFromHome ? 'text-indigo-500' : 'text-slate-400'"
+                            :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-indigo-500' : 'text-slate-400'"
                           />
                         </div>
                       </TableCell>
 
-                      <!-- Vacation badge -->
+                      <!-- Vacation -->
                       <TableCell class="text-center">
                         <span
                           v-if="row.data.vacationAmount === 1.0"
@@ -765,7 +955,7 @@ onUnmounted(() => {
                         <span v-else class="text-slate-400 text-xs">—</span>
                       </TableCell>
 
-                      <!-- Description (inline edit) -->
+                      <!-- Description -->
                       <TableCell class="max-w-[200px]">
                         <div v-if="editingDate === row.data.date" class="flex items-start gap-1.5">
                           <textarea
@@ -794,17 +984,14 @@ onUnmounted(() => {
                         <button
                           v-else
                           class="group flex cursor-pointer items-center gap-1.5 text-left w-full disabled:cursor-not-allowed"
-                          @click="row.data.clockOut ? startEdit(row.data) : undefined"
-                          :disabled="!row.data.clockOut"
+                          :disabled="row.data.sessions.every(s => s.status !== 1)"
+                          @click="row.data.sessions.some(s => s.status === 1) ? startEdit(row.data) : undefined"
                         >
-                          <span
-                            class="text-xs text-slate-600 dark:text-slate-400 truncate"
-                            :title="row.data.description ?? undefined"
-                          >
-                            {{ row.data.description || (row.data.clockOut ? "Add description…" : "—") }}
+                          <span class="text-xs text-slate-600 dark:text-slate-400 truncate" :title="row.data.workDay?.description ?? undefined">
+                            {{ row.data.workDay?.description || (row.data.sessions.some(s => s.status === 1) ? "Add description…" : "—") }}
                           </span>
                           <PencilIcon
-                            v-if="row.data.clockOut"
+                            v-if="row.data.sessions.some(s => s.status === 1)"
                             class="size-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 shrink-0"
                           />
                         </button>
@@ -829,7 +1016,7 @@ onUnmounted(() => {
 
         <div class="space-y-4 py-1">
           <p class="text-sm text-slate-500 dark:text-slate-400">
-            Fill in the times you need corrected and provide a reason. An admin will receive an email and can approve with one click.
+            Enter the session times you need recorded. An admin will receive an email and can approve with one click.
           </p>
 
           <div class="space-y-1.5">
@@ -839,8 +1026,12 @@ onUnmounted(() => {
 
           <div class="grid grid-cols-2 gap-3">
             <div class="space-y-1.5">
-              <Label class="text-xs text-slate-500">Clock In</Label>
+              <Label class="text-xs text-slate-500">Clock In <span class="text-destructive">*</span></Label>
               <Input v-model="adjForm.clockIn" type="time" />
+            </div>
+            <div class="space-y-1.5">
+              <Label class="text-xs text-slate-500">Clock Out <span class="text-destructive">*</span></Label>
+              <Input v-model="adjForm.clockOut" type="time" />
             </div>
             <div class="space-y-1.5">
               <Label class="text-xs text-slate-500">Break Start</Label>
@@ -850,12 +1041,8 @@ onUnmounted(() => {
               <Label class="text-xs text-slate-500">Break End</Label>
               <Input v-model="adjForm.breakEnd" type="time" />
             </div>
-            <div class="space-y-1.5">
-              <Label class="text-xs text-slate-500">Clock Out</Label>
-              <Input v-model="adjForm.clockOut" type="time" />
-            </div>
           </div>
-          <p class="text-xs text-slate-400">Leave blank any times that don't need changing.</p>
+          <p class="text-xs text-slate-400">Leave break blank if no break was taken.</p>
 
           <div class="space-y-1.5">
             <Label>Reason <span class="text-destructive">*</span></Label>
