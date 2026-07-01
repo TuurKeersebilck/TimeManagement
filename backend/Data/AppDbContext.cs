@@ -26,6 +26,7 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
     public DbSet<AppConfiguration> AppConfigurations => Set<AppConfiguration>();
     public DbSet<EmployeeTarget> EmployeeTargets => Set<EmployeeTarget>();
+    public DbSet<WorkdayTarget> WorkdayTargets => Set<WorkdayTarget>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
@@ -81,6 +82,32 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
         builder.Entity<AppConfiguration>(entity =>
         {
             entity.Property(e => e.MaxSessionHours).HasDefaultValue(10m);
+        });
+
+        builder.Entity<WorkdayTarget>(entity =>
+        {
+            // One global row per weekday (UserId IS NULL)
+            entity.HasIndex(e => e.DayOfWeek)
+                .IsUnique()
+                .HasFilter("\"UserId\" IS NULL")
+                .HasDatabaseName("IX_WorkdayTargets_DayOfWeek_Global");
+
+            // One per-employee row per weekday (UserId IS NOT NULL)
+            entity.HasIndex(e => new { e.UserId, e.DayOfWeek })
+                .IsUnique()
+                .HasFilter("\"UserId\" IS NOT NULL")
+                .HasDatabaseName("IX_WorkdayTargets_UserId_DayOfWeek");
+
+            // Seed global defaults: Mon–Fri = 8h, Sat–Sun = 0h
+            entity.HasData(
+                new WorkdayTarget { Id = 1, DayOfWeek = DayOfWeek.Monday,    Hours = 8m },
+                new WorkdayTarget { Id = 2, DayOfWeek = DayOfWeek.Tuesday,   Hours = 8m },
+                new WorkdayTarget { Id = 3, DayOfWeek = DayOfWeek.Wednesday, Hours = 8m },
+                new WorkdayTarget { Id = 4, DayOfWeek = DayOfWeek.Thursday,  Hours = 8m },
+                new WorkdayTarget { Id = 5, DayOfWeek = DayOfWeek.Friday,    Hours = 8m },
+                new WorkdayTarget { Id = 6, DayOfWeek = DayOfWeek.Saturday,  Hours = 0m },
+                new WorkdayTarget { Id = 7, DayOfWeek = DayOfWeek.Sunday,    Hours = 0m }
+            );
         });
 
         builder.Entity<TimeAdjustmentRequest>(entity =>

@@ -145,6 +145,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         await _context.BreakRecords.Where(b => b.WorkSession.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.WorkSessions.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.WorkDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.WorkdayTargets.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.TimeAdjustmentRequests.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.EmployeeVacationBalances.Where(b => b.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.VacationDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
@@ -599,6 +600,39 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
             return $"\"{value.Replace("\"", "\"\"")}\"";
         return value;
+    }
+
+    // ─── Workday targets (per-employee schedule) ──────────────────────────────
+
+    public async Task<IEnumerable<WorkdayTargetDto>> GetEmployeeWorkdayTargetsAsync(string userId, CancellationToken ct = default)
+    {
+        return await _context.WorkdayTargets
+            .Where(t => t.UserId == userId)
+            .OrderBy(t => t.DayOfWeek)
+            .Select(t => new WorkdayTargetDto { DayOfWeek = t.DayOfWeek, Hours = t.Hours })
+            .ToListAsync(ct);
+    }
+
+    public async Task<IEnumerable<WorkdayTargetDto>> SetEmployeeWorkdayTargetsAsync(
+        string userId, IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
+    {
+        var existing = await _context.WorkdayTargets
+            .Where(t => t.UserId == userId)
+            .ToListAsync(ct);
+
+        foreach (var dto in targets)
+        {
+            var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
+            if (row == null)
+            {
+                row = new WorkdayTarget { UserId = userId, DayOfWeek = dto.DayOfWeek };
+                _context.WorkdayTargets.Add(row);
+            }
+            row.Hours = dto.Hours;
+        }
+
+        await _context.SaveChangesAsync(ct);
+        return await GetEmployeeWorkdayTargetsAsync(userId, ct);
     }
 
     // ─── Vacation overview ────────────────────────────────────────────────────

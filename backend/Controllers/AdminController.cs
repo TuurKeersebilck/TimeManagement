@@ -142,6 +142,17 @@ public class AdminController(IAdminService adminService) : ControllerBase
         CancellationToken ct)
         => Ok(await _adminService.SetEmployeeTargetAsync(userId, dto, ct));
 
+    [HttpGet("employees/{userId}/workday-targets")]
+    public async Task<ActionResult<IEnumerable<WorkdayTargetDto>>> GetEmployeeWorkdayTargets(string userId, CancellationToken ct)
+        => Ok(await _adminService.GetEmployeeWorkdayTargetsAsync(userId, ct));
+
+    [HttpPut("employees/{userId}/workday-targets")]
+    public async Task<ActionResult<IEnumerable<WorkdayTargetDto>>> SetEmployeeWorkdayTargets(
+        string userId,
+        [FromBody] SetWorkdayTargetsDto dto,
+        CancellationToken ct)
+        => Ok(await _adminService.SetEmployeeWorkdayTargetsAsync(userId, dto.Targets, ct));
+
     [HttpGet("employees/{userId}/weekly-summary")]
     public async Task<ActionResult<IEnumerable<WeekSummaryDto>>> GetWeeklySummary(
         string userId,

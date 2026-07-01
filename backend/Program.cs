@@ -85,6 +85,7 @@ try
     builder.Services.AddScoped<IVacationService, VacationService>();
     builder.Services.AddScoped<ICalendarService, CalendarService>();
     builder.Services.AddScoped<INotificationService, NotificationService>();
+    builder.Services.AddScoped<IEffectiveTargetService, EffectiveTargetService>();
     builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();
     builder.Services.AddHostedService<MissedClockInReminderService>();
 
