@@ -184,9 +184,7 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
             {
                 var elapsed = (int)(effectiveTime - openBreak.BreakStart).TotalMinutes;
                 if (elapsed < minimumMinutes.Value)
-                    throw new ValidationException(
-                        $"Minimum break duration is {minimumMinutes.Value} minutes. " +
-                        $"Your break has only lasted {Math.Max(0, elapsed)} minute(s).");
+                    throw new BreakTooShortException(minimumMinutes.Value, Math.Max(0, elapsed));
             }
 
             openBreak.BreakEnd = effectiveTime;
