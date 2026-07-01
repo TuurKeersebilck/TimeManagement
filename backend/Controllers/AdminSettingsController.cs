@@ -19,9 +19,13 @@ public class AdminSettingsController(IPublicHolidayService service) : Controller
     public async Task<ActionResult<AppConfigurationDto>> SetCountry([FromBody] SetCountryDto dto, CancellationToken ct)
         => Ok(await service.SetCountryAsync(dto.CountryCode, ct));
 
+    [HttpGet("targets")]
+    public async Task<ActionResult<IEnumerable<WorkdayTargetDto>>> GetDefaultTargets(CancellationToken ct)
+        => Ok(await service.GetGlobalWorkdayTargetsAsync(ct));
+
     [HttpPut("targets")]
-    public async Task<ActionResult<AppConfigurationDto>> SetDefaultTargets([FromBody] SetDefaultTargetsDto dto, CancellationToken ct)
-        => Ok(await service.SetDefaultTargetsAsync(dto.DefaultDailyHours, dto.DefaultWeeklyHours, ct));
+    public async Task<ActionResult<IEnumerable<WorkdayTargetDto>>> SetDefaultTargets([FromBody] SetWorkdayTargetsDto dto, CancellationToken ct)
+        => Ok(await service.SetGlobalWorkdayTargetsAsync(dto.Targets, ct));
 
     [HttpPut("notification-email")]
     public async Task<ActionResult<AppConfigurationDto>> SetNotificationEmail([FromBody] SetNotificationEmailDto dto, CancellationToken ct)
