@@ -677,4 +677,85 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             })
             .ToListAsync(ct);
     }
+
+    // ── Time bank adjustments ─────────────────────────────────────────────────
+
+    public async Task<IEnumerable<TimeBankAdjustmentDto>> GetTimeBankAdjustmentsAsync(
+        string userId, int? year, int? month, CancellationToken ct = default)
+    {
+        var query = _context.TimeBankAdjustments
+            .Include(a => a.CreatedByUser)
+            .Where(a => a.UserId == userId)
+            .AsQueryable();
+
+        if (year.HasValue && month.HasValue)
+        {
+            var from = new DateOnly(year.Value, month.Value, 1);
+            var to = new DateOnly(year.Value, month.Value, DateTime.DaysInMonth(year.Value, month.Value));
+            query = query.Where(a => a.EffectiveDate >= from && a.EffectiveDate <= to);
+        }
+        else if (year.HasValue)
+        {
+            var from = new DateOnly(year.Value, 1, 1);
+            var to = new DateOnly(year.Value, 12, 31);
+            query = query.Where(a => a.EffectiveDate >= from && a.EffectiveDate <= to);
+        }
+
+        return await query
+            .OrderByDescending(a => a.EffectiveDate)
+            .ThenByDescending(a => a.CreatedAt)
+            .Select(a => new TimeBankAdjustmentDto
+            {
+                Id = a.Id,
+                UserId = a.UserId,
+                EffectiveDate = a.EffectiveDate,
+                Hours = a.Hours,
+                Reason = a.Reason,
+                CreatedByUserId = a.CreatedByUserId,
+                CreatedByName = a.CreatedByUser != null ? a.CreatedByUser.FullName : null,
+                CreatedAt = a.CreatedAt,
+            })
+            .ToListAsync(ct);
+    }
+
+    public async Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(
+        CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default)
+    {
+        var user = await _userManager.FindByIdAsync(dto.UserId)
+            ?? throw new ResourceNotFoundException("Employee not found.");
+
+        var adjustment = new TimeBankAdjustment
+        {
+            UserId = dto.UserId,
+            EffectiveDate = dto.EffectiveDate,
+            Hours = dto.Hours,
+            Reason = dto.Reason,
+            CreatedByUserId = adminUserId,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+
+        _context.TimeBankAdjustments.Add(adjustment);
+        await _context.SaveChangesAsync(ct);
+
+        return new TimeBankAdjustmentDto
+        {
+            Id = adjustment.Id,
+            UserId = adjustment.UserId,
+            EffectiveDate = adjustment.EffectiveDate,
+            Hours = adjustment.Hours,
+            Reason = adjustment.Reason,
+            CreatedByUserId = adjustment.CreatedByUserId,
+            CreatedByName = (await _userManager.FindByIdAsync(adminUserId))?.FullName,
+            CreatedAt = adjustment.CreatedAt,
+        };
+    }
+
+    public async Task DeleteTimeBankAdjustmentAsync(int id, CancellationToken ct = default)
+    {
+        var adjustment = await _context.TimeBankAdjustments.FindAsync([id], ct)
+            ?? throw new ResourceNotFoundException("Time bank adjustment not found.");
+
+        _context.TimeBankAdjustments.Remove(adjustment);
+        await _context.SaveChangesAsync(ct);
+    }
 }

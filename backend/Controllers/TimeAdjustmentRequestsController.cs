@@ -29,6 +29,16 @@ public class TimeAdjustmentRequestsController(
         return Ok(result);
     }
 
+    [HttpGet("mine")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+    public async Task<ActionResult<IEnumerable<AdjustmentRequestDto>>> GetMine(CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        return Ok(await service.GetUserRequestsAsync(user.Id, ct));
+    }
+
     [HttpGet]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<AdjustmentRequestDto>>> GetAll(CancellationToken ct)
@@ -55,6 +65,21 @@ public class TimeAdjustmentRequestsController(
         if (admin == null) return Unauthorized();
 
         await service.RejectAsync(id, admin.Id, ct);
+        return NoContent();
+    }
+
+    [HttpPut("admin/{userId}/{date}/direct-edit")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    public async Task<IActionResult> AdminDirectEdit(
+        string userId,
+        DateOnly date,
+        [FromBody] AdminDirectEditDto dto,
+        CancellationToken ct)
+    {
+        var admin = await GetCurrentUserAsync();
+        if (admin == null) return Unauthorized();
+
+        await service.AdminDirectEditAsync(userId, date, dto.Snapshot, admin.Id, ct);
         return NoContent();
     }
 
@@ -98,7 +123,6 @@ public class TimeAdjustmentRequestsController(
 
     private string BuildBackendUrl()
     {
-        // Prefer an explicit BACKEND_URL env var; fall back to the current request's origin
         var configured = configuration["BackendUrl"];
         if (!string.IsNullOrEmpty(configured))
             return configured;

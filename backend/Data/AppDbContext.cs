@@ -114,6 +114,10 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
         builder.Entity<TimeBankAdjustment>(entity =>
         {
             entity.HasIndex(e => new { e.UserId, e.EffectiveDate });
+            entity.HasOne(e => e.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.CreatedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<TimeAdjustmentRequest>(entity =>

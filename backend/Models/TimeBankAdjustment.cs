@@ -6,7 +6,6 @@ namespace TimeManagementBackend.Models;
 /// <summary>
 /// Admin-created adjustment to an employee's flex balance.
 /// Positive Hours = add time, negative Hours = deduct time.
-/// Minimal schema for #216 calculation; extended with Type/Reason/audit fields in #218.
 /// </summary>
 public class TimeBankAdjustment
 {
@@ -19,11 +18,23 @@ public class TimeBankAdjustment
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;
 
-    /// <summary>The month this adjustment is included in — determines which month's balance it affects.</summary>
+    /// <summary>The month this adjustment belongs to — determines which month's running balance is affected.</summary>
     [Required]
     public DateOnly EffectiveDate { get; set; }
 
-    /// <summary>Hours to add or subtract from the flex balance. Positive = bonus, negative = deduction.</summary>
+    /// <summary>Hours to add (positive) or deduct (negative) from the flex balance.</summary>
     [Required]
     public decimal Hours { get; set; }
+
+    [Required]
+    [MaxLength(2000)]
+    public string Reason { get; set; } = string.Empty;
+
+    /// <summary>Admin who created the adjustment. Nullable so deleting the admin doesn't cascade-delete adjustments.</summary>
+    public string? CreatedByUserId { get; set; }
+
+    [ForeignKey(nameof(CreatedByUserId))]
+    public User? CreatedByUser { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
 }

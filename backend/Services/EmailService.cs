@@ -45,15 +45,10 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         string toName,
         string requesterName,
         DateOnly date,
-        DateTimeOffset? requestedClockIn,
-        DateTimeOffset? requestedBreakStart,
-        DateTimeOffset? requestedBreakEnd,
-        DateTimeOffset? requestedClockOut,
+        string sessionsSummary,
         string reason,
         string approveLink)
     {
-        static string Fmt(DateTimeOffset? t) => t.HasValue ? t.Value.ToString("HH:mm") : "—";
-
         var message = new MimeMessage();
         message.From.Add(new MailboxAddress("Logr", config.From));
         message.To.Add(new MailboxAddress(toName, toEmail));
@@ -65,19 +60,14 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 <div style="font-family:sans-serif;max-width:520px;margin:0 auto">
                   <h2 style="color:#1e293b">Time Adjustment Request</h2>
                   <p style="color:#475569"><strong>{requesterName}</strong> has requested a time adjustment for <strong>{date:dddd, MMMM d yyyy}</strong>.</p>
-                  <table style="width:100%;border-collapse:collapse;margin:16px 0">
-                    <tr style="background:#f8fafc"><td style="padding:8px 12px;color:#64748b;font-size:13px">Clock In</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedClockIn)}</td></tr>
-                    <tr><td style="padding:8px 12px;color:#64748b;font-size:13px">Break Start</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedBreakStart)}</td></tr>
-                    <tr style="background:#f8fafc"><td style="padding:8px 12px;color:#64748b;font-size:13px">Break End</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedBreakEnd)}</td></tr>
-                    <tr><td style="padding:8px 12px;color:#64748b;font-size:13px">Clock Out</td><td style="padding:8px 12px;font-weight:600">{Fmt(requestedClockOut)}</td></tr>
-                  </table>
+                  <pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;font-size:13px;color:#334155;white-space:pre-wrap">{System.Net.WebUtility.HtmlEncode(sessionsSummary)}</pre>
                   <p style="color:#475569"><strong>Reason:</strong> {System.Net.WebUtility.HtmlEncode(reason)}</p>
                   <a href="{approveLink}"
                      style="display:inline-block;margin:16px 0;padding:12px 28px;background:#22c55e;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
                     Approve Request
                   </a>
                   <p style="color:#94a3b8;font-size:12px;margin-top:8px">
-                    Clicking approve will immediately update the employee's time log. This link expires in 7 days.
+                    Clicking approve will immediately update the employee's time log. This link expires in 30 days.
                   </p>
                 </div>
                 """
