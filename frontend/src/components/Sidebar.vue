@@ -53,6 +53,7 @@ const adminPersonalNav: NavItem[] = [
 const adminSectionNav: NavItem[] = [
   { name: "All Time Logs", to: "/admin/time-logs" },
   { name: "Adjustment Requests", to: "/admin/adjustment-requests" },
+  { name: "Settlements", to: "/admin/settlements" },
   { name: "Vacation Types", to: "/admin/vacation-types" },
   { name: "Employees", to: "/admin/employees" },
   { name: "Payroll Export", to: "/admin/export" },
