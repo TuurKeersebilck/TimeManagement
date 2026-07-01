@@ -6,6 +6,9 @@ public enum NotificationType
     AdjustmentRequest,
     AdjustmentApproved,
     AdjustmentRejected,
+    SessionInvalidated,
+    MonthlySettlement,
+    AdminHoursAdjusted,
 }
 
 public class Notification

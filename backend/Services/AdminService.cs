@@ -142,6 +142,9 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         // Delete all related data before removing the identity user record
         await _context.ClockEvents.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.BreakRecords.Where(b => b.WorkSession.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.WorkSessions.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.WorkDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.TimeAdjustmentRequests.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.EmployeeVacationBalances.Where(b => b.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.VacationDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
