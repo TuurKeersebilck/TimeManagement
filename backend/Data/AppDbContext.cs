@@ -14,6 +14,9 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
     }
 
     public DbSet<ClockEvent> ClockEvents => Set<ClockEvent>();
+    public DbSet<WorkSession> WorkSessions => Set<WorkSession>();
+    public DbSet<BreakRecord> BreakRecords => Set<BreakRecord>();
+    public DbSet<WorkDay> WorkDays => Set<WorkDay>();
     public DbSet<TimeAdjustmentRequest> TimeAdjustmentRequests => Set<TimeAdjustmentRequest>();
     public DbSet<VacationType> VacationTypes => Set<VacationType>();
     public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
@@ -48,6 +51,36 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
         {
             entity.HasIndex(e => new { e.UserId, e.Date });
             entity.HasIndex(e => new { e.UserId, e.Date, e.Type }).IsUnique();
+        });
+
+        builder.Entity<WorkSession>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Date });
+            // Enforce one open session per user at the DB level
+            entity.HasIndex(e => e.UserId)
+                .IsUnique()
+                .HasFilter("\"Status\" = 0")
+                .HasDatabaseName("IX_WorkSessions_UserId_Open");
+        });
+
+        builder.Entity<BreakRecord>(entity =>
+        {
+            entity.HasIndex(e => e.WorkSessionId);
+            // Enforce one open break per session at the DB level
+            entity.HasIndex(e => e.WorkSessionId)
+                .IsUnique()
+                .HasFilter("\"BreakEnd\" IS NULL")
+                .HasDatabaseName("IX_BreakRecords_WorkSessionId_Open");
+        });
+
+        builder.Entity<WorkDay>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Date }).IsUnique();
+        });
+
+        builder.Entity<AppConfiguration>(entity =>
+        {
+            entity.Property(e => e.MaxSessionHours).HasDefaultValue(10m);
         });
 
         builder.Entity<TimeAdjustmentRequest>(entity =>

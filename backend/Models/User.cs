@@ -11,4 +11,6 @@ public class User : IdentityUser
     public DateTimeOffset? CalendarTokenExpiresAt { get; set; }
     public ICollection<ClockEvent> ClockEvents { get; set; } = new List<ClockEvent>();
     public ICollection<TimeAdjustmentRequest> AdjustmentRequests { get; set; } = new List<TimeAdjustmentRequest>();
+    public ICollection<WorkSession> WorkSessions { get; set; } = new List<WorkSession>();
+    public ICollection<WorkDay> WorkDays { get; set; } = new List<WorkDay>();
 }
