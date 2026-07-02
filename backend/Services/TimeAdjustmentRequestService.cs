@@ -291,12 +291,9 @@ public class TimeAdjustmentRequestService(
             .Select(s => s.WorkSessionId!.Value)
             .ToHashSet();
 
-        // Invalidate sessions not in the snapshot
-        foreach (var session in existing.Where(s => !snapshotSessionIds.Contains(s.Id)))
-        {
-            session.Status = WorkSessionStatus.Invalidated;
-            session.ClockOut ??= session.ClockIn; // avoid null ClockOut on invalidated sessions
-        }
+        // Hard-delete sessions not in the snapshot so they never block settlement.
+        // BreakRecords cascade via the required FK (ReferentialAction.Cascade in migration).
+        db.WorkSessions.RemoveRange(existing.Where(s => !snapshotSessionIds.Contains(s.Id)));
 
         var now = DateTimeOffset.UtcNow;
 
@@ -309,10 +306,9 @@ public class TimeAdjustmentRequestService(
             if (sessionDto.WorkSessionId.HasValue)
             {
                 session = existing.First(s => s.Id == sessionDto.WorkSessionId.Value);
+                // Update effective times only — ServerStamps are immutable once set.
                 session.ClockIn = clockIn;
-                session.ClockInServerStamp = now;
                 session.ClockOut = clockOut;
-                session.ClockOutServerStamp = now;
                 session.Status = WorkSessionStatus.Closed;
             }
             else
@@ -328,7 +324,8 @@ public class TimeAdjustmentRequestService(
                     Status = WorkSessionStatus.Closed,
                 };
                 db.WorkSessions.Add(session);
-                await db.SaveChangesAsync(ct); // flush so we have session.Id for break FK
+                // No mid-loop SaveChanges: add breaks via navigation property so EF
+                // resolves the FK in a single SaveChanges call.
             }
 
             // Reconcile breaks for this session
@@ -337,11 +334,7 @@ public class TimeAdjustmentRequestService(
                 .Select(b => b.BreakRecordId!.Value)
                 .ToHashSet();
 
-            // Delete breaks not in the snapshot
-            var breaksToDelete = session.Breaks
-                .Where(b => !snapshotBreakIds.Contains(b.Id))
-                .ToList();
-            db.BreakRecords.RemoveRange(breaksToDelete);
+            db.BreakRecords.RemoveRange(session.Breaks.Where(b => !snapshotBreakIds.Contains(b.Id)).ToList());
 
             foreach (var breakDto in sessionDto.Breaks)
             {
@@ -350,17 +343,15 @@ public class TimeAdjustmentRequestService(
 
                 if (breakDto.BreakRecordId.HasValue)
                 {
-                    var existing_break = session.Breaks.First(b => b.Id == breakDto.BreakRecordId.Value);
-                    existing_break.BreakStart = bStart;
-                    existing_break.BreakStartServerStamp = now;
-                    existing_break.BreakEnd = bEnd;
-                    existing_break.BreakEndServerStamp = now;
+                    var existingBreak = session.Breaks.First(b => b.Id == breakDto.BreakRecordId.Value);
+                    // Update effective times only — ServerStamps are immutable once set.
+                    existingBreak.BreakStart = bStart;
+                    existingBreak.BreakEnd = bEnd;
                 }
                 else
                 {
-                    db.BreakRecords.Add(new BreakRecord
+                    session.Breaks.Add(new BreakRecord
                     {
-                        WorkSessionId = session.Id,
                         BreakStart = bStart,
                         BreakStartServerStamp = now,
                         BreakEnd = bEnd,
