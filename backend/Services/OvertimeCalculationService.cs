@@ -5,9 +5,7 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class OvertimeCalculationService(
-    AppDbContext db,
-    IEffectiveTargetService effectiveTargetService) : IOvertimeCalculationService
+public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationService
 {
     public async Task<OvertimeResultDto> CalculateAsync(
         string userId, int year, int month, CancellationToken ct = default)
@@ -43,6 +41,37 @@ public class OvertimeCalculationService(
             ?? config?.DefaultWeeklyOvertimeAllowanceHours
             ?? 0m;
 
+        var nonWorkingHolidayDates = await db.PublicHolidays
+            .Where(h => h.Date >= monthStart && h.Date <= endDate && !h.IsWorkingDay)
+            .Select(h => h.Date)
+            .ToHashSetAsync(ct);
+
+        var vacationTotalByDate = await db.VacationDays
+            .Where(v => v.UserId == userId && v.Date >= monthStart && v.Date <= endDate)
+            .GroupBy(v => v.Date)
+            .Select(g => new { Date = g.Key, Total = g.Sum(v => v.Amount) })
+            .ToDictionaryAsync(g => g.Date, g => g.Total, ct);
+
+        var workdayTargets = await db.WorkdayTargets
+            .Where(t => t.UserId == userId || t.UserId == null)
+            .ToListAsync(ct);
+
+        decimal GetEffectiveTarget(DateOnly d)
+        {
+            if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return 0;
+            if (nonWorkingHolidayDates.Contains(d)) return 0;
+
+            var leaveTotal = vacationTotalByDate.TryGetValue(d, out var amt) ? amt : 0m;
+            var leaveFraction = Math.Min(1.0m, leaveTotal);
+            if (leaveFraction >= 1.0m) return 0;
+
+            var effective = workdayTargets.FirstOrDefault(t => t.UserId == userId && t.DayOfWeek == d.DayOfWeek)
+                         ?? workdayTargets.FirstOrDefault(t => t.UserId == null && t.DayOfWeek == d.DayOfWeek);
+
+            if (effective == null || effective.Hours == 0) return 0;
+            return effective.Hours * (1 - leaveFraction);
+        }
+
         var sessionsByDate = sessions.GroupBy(s => s.Date).ToDictionary(g => g.Key, g => g.ToList());
 
         // ── Per-day calculation ───────────────────────────────────────────────────
@@ -52,7 +81,7 @@ public class OvertimeCalculationService(
 
         for (var date = monthStart; date <= endDate; date = date.AddDays(1))
         {
-            var targetHours = await effectiveTargetService.GetEffectiveTargetAsync(userId, date, ct);
+            var targetHours = GetEffectiveTarget(date);
             var targetMinutes = (long)Math.Round(targetHours * 60);
 
             var dayWorkedMinutes = 0L;

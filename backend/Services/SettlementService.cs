@@ -186,6 +186,7 @@ public class SettlementService(
     {
         return await db.MonthlySettlements
             .AsNoTracking()
+            .Include(s => s.User)
             .Include(s => s.ReviewedByUser)
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.Year)
