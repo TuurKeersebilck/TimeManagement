@@ -13,7 +13,6 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
     {
     }
 
-    public DbSet<ClockEvent> ClockEvents => Set<ClockEvent>();
     public DbSet<WorkSession> WorkSessions => Set<WorkSession>();
     public DbSet<BreakRecord> BreakRecords => Set<BreakRecord>();
     public DbSet<WorkDay> WorkDays => Set<WorkDay>();
@@ -48,12 +47,6 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
             entity.HasIndex(e => e.CalendarTokenHash)
                   .IsUnique()
                   .HasFilter("\"CalendarTokenHash\" IS NOT NULL");
-        });
-
-        builder.Entity<ClockEvent>(entity =>
-        {
-            entity.HasIndex(e => new { e.UserId, e.Date });
-            entity.HasIndex(e => new { e.UserId, e.Date, e.Type }).IsUnique();
         });
 
         builder.Entity<WorkSession>(entity =>
