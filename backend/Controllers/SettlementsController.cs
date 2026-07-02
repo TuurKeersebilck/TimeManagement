@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using TimeManagementBackend.Exceptions;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
@@ -23,6 +24,18 @@ public class SettlementsController(
     {
         var now = DateTime.UtcNow;
         return Ok(await settlementService.GetSettlementsAsync(year ?? now.Year, month ?? now.Month, ct));
+    }
+
+    [HttpPost("generate")]
+    public async Task<ActionResult<IEnumerable<MonthlySettlementDto>>> Generate(
+        [FromQuery] int year, [FromQuery] int month, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        if (year > now.Year || (year == now.Year && month >= now.Month))
+            throw new ValidationException("Settlements can only be generated for a completed month.");
+
+        await settlementService.GenerateForAllEmployeesAsync(year, month, ct);
+        return Ok(await settlementService.GetSettlementsAsync(year, month, ct));
     }
 
     [HttpGet("{id:int}")]
