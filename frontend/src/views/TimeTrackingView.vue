@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   workSessionService,
@@ -8,6 +8,7 @@ import {
   type WorkScheduleDto,
   type OvertimeResultDto,
   type WorkSessionDto,
+  type BreakRecordDto,
 } from "@/services/workSessionService";
 import { adjustmentRequestService } from "@/services/adjustmentRequestService";
 import { vacationService, type VacationDay } from "@/services/vacationService";
@@ -55,6 +56,7 @@ import {
   TrendingUpIcon,
   TrendingDownIcon,
   ScaleIcon,
+  XIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -284,15 +286,92 @@ function adjustMinutes(delta: number) {
   minuteOffset.value = Math.max(-5, Math.min(5, minuteOffset.value + delta));
 }
 
+interface AdjBreak {
+  breakRecordId?: number;
+  breakStart: string;
+  breakEnd: string;
+}
+
+interface AdjSession {
+  workSessionId?: number;
+  clockIn: string;
+  clockOut: string;
+  breaks: AdjBreak[];
+}
+
 function emptyAdjForm() {
   return {
     date: localDateString(new Date()),
-    clockIn: "",
-    breakStart: "",
-    breakEnd: "",
-    clockOut: "",
+    sessions: [{ clockIn: "", clockOut: "", breaks: [] as AdjBreak[] }] as AdjSession[],
     reason: "",
   };
+}
+
+function toTimeString(isoUtc: string): string {
+  if (!isoUtc) return "";
+  const d = new Date(isoUtc);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+const adjPrefilling = ref(false);
+
+async function prefillSessions(date: string) {
+  adjPrefilling.value = true;
+  try {
+    const data = await workSessionService.getSummaries(date, date);
+    const closed = data[0]?.sessions.filter((s) => s.status === "Closed") ?? [];
+    if (closed.length) {
+      adjForm.value.sessions = closed.map((s) => ({
+        workSessionId: s.id,
+        clockIn: toTimeString(s.clockIn),
+        clockOut: toTimeString(s.clockOut ?? ""),
+        breaks: (s.breaks as BreakRecordDto[])
+          .filter((b) => b.breakEnd !== null)
+          .map((b) => ({
+            breakRecordId: b.id,
+            breakStart: toTimeString(b.breakStart),
+            breakEnd: toTimeString(b.breakEnd!),
+          })),
+      }));
+    } else {
+      adjForm.value.sessions = [{ clockIn: "", clockOut: "", breaks: [] }];
+    }
+  } catch {
+    adjForm.value.sessions = [{ clockIn: "", clockOut: "", breaks: [] }];
+  } finally {
+    adjPrefilling.value = false;
+  }
+}
+
+async function openAdjustDialog() {
+  adjForm.value = emptyAdjForm();
+  showAdjustDialog.value = true;
+  await prefillSessions(adjForm.value.date);
+}
+
+watch(
+  () => adjForm.value.date,
+  async (newDate) => {
+    if (showAdjustDialog.value && newDate) await prefillSessions(newDate);
+  }
+);
+
+function addSession() {
+  adjForm.value.sessions.push({ clockIn: "", clockOut: "", breaks: [] });
+}
+
+function removeSession(idx: number) {
+  adjForm.value.sessions.splice(idx, 1);
+  if (adjForm.value.sessions.length === 0)
+    adjForm.value.sessions.push({ clockIn: "", clockOut: "", breaks: [] });
+}
+
+function addBreak(sessionIdx: number) {
+  adjForm.value.sessions[sessionIdx].breaks.push({ breakStart: "", breakEnd: "" });
+}
+
+function removeBreak(sessionIdx: number, breakIdx: number) {
+  adjForm.value.sessions[sessionIdx].breaks.splice(breakIdx, 1);
 }
 
 function toLocalIso(date: string, time: string): string {
@@ -485,17 +564,47 @@ async function submitAdjustmentRequest() {
     toast.error("Please provide a reason for the adjustment");
     return;
   }
-  if (!adjForm.value.clockIn || !adjForm.value.clockOut) {
-    toast.error("Clock-in and clock-out times are required");
+
+  if (adjForm.value.date > localDateString(new Date())) {
+    toast.error("Adjustment requests cannot be for future dates");
     return;
   }
 
-  const breaks = [];
-  if (adjForm.value.breakStart && adjForm.value.breakEnd) {
-    breaks.push({
-      breakStart: toLocalIso(adjForm.value.date, adjForm.value.breakStart),
-      breakEnd: toLocalIso(adjForm.value.date, adjForm.value.breakEnd),
-    });
+  for (const s of adjForm.value.sessions) {
+    if (!s.clockIn || !s.clockOut) {
+      toast.error("All sessions must have clock-in and clock-out times");
+      return;
+    }
+    if (s.clockIn >= s.clockOut) {
+      toast.error("Clock-out must be after clock-in for all sessions");
+      return;
+    }
+    for (const b of s.breaks) {
+      if (!b.breakStart || !b.breakEnd) {
+        toast.error("All breaks must have start and end times");
+        return;
+      }
+      if (b.breakStart >= b.breakEnd) {
+        toast.error("Break end must be after break start");
+        return;
+      }
+      if (b.breakStart < s.clockIn || b.breakEnd > s.clockOut) {
+        toast.error("Breaks must fall within the session's clock-in and clock-out times");
+        return;
+      }
+    }
+  }
+
+  if (adjForm.value.sessions.length > 1) {
+    const sorted = [...adjForm.value.sessions].sort((a, b) =>
+      a.clockIn.localeCompare(b.clockIn)
+    );
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (sorted[i].clockOut > sorted[i + 1].clockIn) {
+        toast.error("Sessions must not overlap");
+        return;
+      }
+    }
   }
 
   adjSubmitting.value = true;
@@ -503,13 +612,18 @@ async function submitAdjustmentRequest() {
     await adjustmentRequestService.create({
       date: adjForm.value.date,
       desiredDaySnapshot: {
-        sessions: [
-          {
-            clockIn: toLocalIso(adjForm.value.date, adjForm.value.clockIn),
-            clockOut: toLocalIso(adjForm.value.date, adjForm.value.clockOut),
-            breaks,
-          },
-        ],
+        sessions: adjForm.value.sessions.map((s) => ({
+          ...(s.workSessionId !== undefined && { workSessionId: s.workSessionId }),
+          clockIn: toLocalIso(adjForm.value.date, s.clockIn),
+          clockOut: toLocalIso(adjForm.value.date, s.clockOut),
+          breaks: s.breaks
+            .filter((b) => b.breakStart && b.breakEnd)
+            .map((b) => ({
+              ...(b.breakRecordId !== undefined && { breakRecordId: b.breakRecordId }),
+              breakStart: toLocalIso(adjForm.value.date, b.breakStart),
+              breakEnd: toLocalIso(adjForm.value.date, b.breakEnd),
+            })),
+        })),
       },
       reason: adjForm.value.reason.trim(),
     });
@@ -578,7 +692,7 @@ onUnmounted(() => {
               {{ new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) }}
             </p>
           </div>
-          <Button variant="outline" size="sm" @click="showAdjustDialog = true">
+          <Button variant="outline" size="sm" @click="openAdjustDialog">
             <SendIcon class="size-3.5" />
             Request adjustment
           </Button>
@@ -1039,14 +1153,14 @@ onUnmounted(() => {
 
     <!-- Adjustment request dialog -->
     <Dialog v-model:open="showAdjustDialog">
-      <DialogContent class="sm:max-w-[480px]">
+      <DialogContent class="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Request time adjustment</DialogTitle>
         </DialogHeader>
 
         <div class="space-y-4 py-1">
           <p class="text-sm text-slate-500 dark:text-slate-400">
-            Enter the session times you need recorded. An admin will receive an email and can approve with one click.
+            Enter the session times you need recorded. Existing sessions for the selected date are prefilled. An admin can approve with one click.
           </p>
 
           <div class="space-y-1.5">
@@ -1054,25 +1168,91 @@ onUnmounted(() => {
             <Input v-model="adjForm.date" type="date" class="cursor-pointer" />
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-1.5">
-              <Label class="text-xs text-slate-500">Clock In <span class="text-destructive">*</span></Label>
-              <Input v-model="adjForm.clockIn" type="time" />
+          <!-- Sessions -->
+          <div class="space-y-2">
+            <div v-if="adjPrefilling" class="flex items-center gap-2 text-xs text-slate-400 py-1">
+              <Loader2Icon class="size-3 animate-spin" />
+              Loading existing sessions…
             </div>
-            <div class="space-y-1.5">
-              <Label class="text-xs text-slate-500">Clock Out <span class="text-destructive">*</span></Label>
-              <Input v-model="adjForm.clockOut" type="time" />
-            </div>
-            <div class="space-y-1.5">
-              <Label class="text-xs text-slate-500">Break Start</Label>
-              <Input v-model="adjForm.breakStart" type="time" />
-            </div>
-            <div class="space-y-1.5">
-              <Label class="text-xs text-slate-500">Break End</Label>
-              <Input v-model="adjForm.breakEnd" type="time" />
-            </div>
+            <template v-else>
+              <div
+                v-for="(session, si) in adjForm.sessions"
+                :key="si"
+                class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2.5"
+              >
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Session {{ si + 1 }}
+                    <span v-if="session.workSessionId" class="text-slate-400">(prefilled)</span>
+                  </span>
+                  <Button
+                    v-if="adjForm.sessions.length > 1"
+                    size="icon"
+                    variant="ghost"
+                    class="size-6"
+                    @click="removeSession(si)"
+                  >
+                    <XIcon class="size-3" />
+                  </Button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="space-y-1">
+                    <Label class="text-xs text-slate-500">Clock In <span class="text-destructive">*</span></Label>
+                    <Input v-model="session.clockIn" type="time" />
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs text-slate-500">Clock Out <span class="text-destructive">*</span></Label>
+                    <Input v-model="session.clockOut" type="time" />
+                  </div>
+                </div>
+
+                <!-- Breaks -->
+                <div
+                  v-if="session.breaks.length"
+                  class="ml-2 pl-2.5 border-l-2 border-slate-100 dark:border-slate-800 space-y-2"
+                >
+                  <div
+                    v-for="(b, bi) in session.breaks"
+                    :key="bi"
+                    class="grid grid-cols-2 gap-2 items-end"
+                  >
+                    <div class="space-y-1">
+                      <Label class="text-xs text-slate-400">Break Start</Label>
+                      <Input v-model="b.breakStart" type="time" class="h-8 text-xs" />
+                    </div>
+                    <div class="flex gap-1 items-end">
+                      <div class="flex-1 space-y-1">
+                        <Label class="text-xs text-slate-400">Break End</Label>
+                        <Input v-model="b.breakEnd" type="time" class="h-8 text-xs" />
+                      </div>
+                      <Button size="icon" variant="ghost" class="size-8 shrink-0" @click="removeBreak(si, bi)">
+                        <XIcon class="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-7 text-xs text-slate-500 px-2"
+                  @click="addBreak(si)"
+                >
+                  + Add break
+                </Button>
+              </div>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-7 text-xs text-slate-500 px-2"
+                @click="addSession"
+              >
+                + Add session
+              </Button>
+            </template>
           </div>
-          <p class="text-xs text-slate-400">Leave break blank if no break was taken.</p>
 
           <div class="space-y-1.5">
             <Label>Reason <span class="text-destructive">*</span></Label>
@@ -1087,7 +1267,7 @@ onUnmounted(() => {
 
         <DialogFooter>
           <Button variant="outline" @click="showAdjustDialog = false">Cancel</Button>
-          <Button :disabled="adjSubmitting" @click="submitAdjustmentRequest">
+          <Button :disabled="adjSubmitting || adjPrefilling" @click="submitAdjustmentRequest">
             <Loader2Icon v-if="adjSubmitting" class="size-4 animate-spin" />
             Send request
           </Button>
