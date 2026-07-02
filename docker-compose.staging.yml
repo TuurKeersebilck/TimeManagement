@@ -46,7 +46,7 @@ services:
     image: timemanagement-frontend:staging
     restart: unless-stopped
     labels:
-      caddy: timemanagement.dev.home.arpa
+      caddy: timemanagement-staging.home.tuurk.org
       caddy.tls: internal
       caddy.reverse_proxy: "{{upstreams 80}}"
     networks:
