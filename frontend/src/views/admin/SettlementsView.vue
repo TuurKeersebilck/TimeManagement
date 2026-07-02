@@ -4,6 +4,7 @@ import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   settlementService,
   type MonthlySettlementDto,
+  type SettlementOutcome,
   OUTCOME_LABELS,
   STATUS_LABELS,
 } from "@/services/settlementService";
@@ -79,7 +80,7 @@ const detailOvertime = ref<OvertimeResultDto | null>(null);
 const loadingDetail = ref(false);
 
 // Confirm form
-const confirmOutcome = ref<0 | 1 | 2>(0);
+const confirmOutcome = ref<SettlementOutcome>("Paid");
 const confirmOvertimeOverride = ref<string>("");
 const confirmDeficitOverride = ref<string>("");
 const confirmNotes = ref("");
@@ -100,7 +101,7 @@ async function load() {
 
 async function openDetail(s: MonthlySettlementDto) {
   selected.value = s;
-  confirmOutcome.value = (s.outcome as 0 | 1 | 2) ?? 0;
+  confirmOutcome.value = s.outcome ?? "Paid";
   confirmOvertimeOverride.value = "";
   confirmDeficitOverride.value = "";
   confirmNotes.value = s.notes ?? "";
@@ -163,7 +164,7 @@ async function confirmSettlement() {
 // ─── CSV export ───────────────────────────────────────────────────────────────
 
 function exportCsv() {
-  const settled = settlements.value.filter((s) => s.status === 1);
+  const settled = settlements.value.filter((s) => s.status === "Settled");
   if (settled.length === 0) {
     toast.error("No settled records to export for this month.");
     return;
@@ -180,7 +181,7 @@ function exportCsv() {
         regular.toFixed(2),
         s.overtimeHours.toFixed(2),
         (regular + s.overtimeHours).toFixed(2),
-        OUTCOME_LABELS[s.outcome as 0 | 1 | 2] ?? "—",
+        s.outcome != null ? OUTCOME_LABELS[s.outcome] : "—",
         s.notes ?? "",
       ];
     }),
@@ -313,11 +314,11 @@ onMounted(load);
                 <TableCell>
                   <span
                     class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                    :class="s.status === 1
+                    :class="s.status === 'Settled'
                       ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                       : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'"
                   >
-                    <CheckCircleIcon v-if="s.status === 1" class="size-3" />
+                    <CheckCircleIcon v-if="s.status === 'Settled'" class="size-3" />
                     <ClockIcon v-else class="size-3" />
                     {{ STATUS_LABELS[s.status] }}
                   </span>
@@ -326,7 +327,7 @@ onMounted(load);
                 <!-- Outcome -->
                 <TableCell>
                   <span v-if="s.outcome !== null" class="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    {{ OUTCOME_LABELS[s.outcome as 0 | 1 | 2] }}
+                    {{ OUTCOME_LABELS[s.outcome!] }}
                   </span>
                   <span v-else class="text-slate-400 text-xs">—</span>
                 </TableCell>
@@ -334,7 +335,7 @@ onMounted(load);
                 <!-- Actions -->
                 <TableCell class="text-right">
                   <Button size="sm" variant="outline" @click="openDetail(s)">
-                    {{ s.status === 1 ? 'View' : 'Review' }}
+                    {{ s.status === "Settled" ? 'View' : 'Review' }}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -466,9 +467,9 @@ onMounted(load);
                 <Button
                   v-for="(label, val) in OUTCOME_LABELS"
                   :key="val"
-                  :variant="confirmOutcome === Number(val) ? 'default' : 'outline'"
+                  :variant="confirmOutcome === val ? 'default' : 'outline'"
                   size="sm"
-                  @click="confirmOutcome = Number(val) as 0 | 1 | 2"
+                  @click="confirmOutcome = val as SettlementOutcome"
                 >
                   {{ label }}
                 </Button>
@@ -521,7 +522,7 @@ onMounted(load);
         <DialogFooter>
           <Button variant="outline" @click="detailOpen = false">Close</Button>
           <Button
-            v-if="selected?.status !== 1"
+            v-if="selected?.status !== 'Settled'"
             :disabled="confirming"
             @click="confirmSettlement"
           >

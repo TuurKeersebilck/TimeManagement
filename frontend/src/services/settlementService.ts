@@ -1,7 +1,7 @@
 import api from "./api";
 
-export type SettlementOutcome = 0 | 1 | 2; // Paid=0 LeaveDeducted=1 Unpaid=2
-export type SettlementStatus = 0 | 1; // PendingReview=0 Settled=1
+export type SettlementOutcome = "Paid" | "LeaveDeducted" | "Unpaid";
+export type SettlementStatus = "PendingReview" | "Settled";
 
 export interface MonthlySettlementDto {
   id: number;
@@ -34,14 +34,14 @@ export interface ConfirmSettlementPayload {
 }
 
 export const OUTCOME_LABELS: Record<SettlementOutcome, string> = {
-  0: "Paid",
-  1: "Leave Deducted",
-  2: "Unpaid",
+  Paid: "Paid",
+  LeaveDeducted: "Leave Deducted",
+  Unpaid: "Unpaid",
 };
 
 export const STATUS_LABELS: Record<SettlementStatus, string> = {
-  0: "Pending Review",
-  1: "Settled",
+  PendingReview: "Pending Review",
+  Settled: "Settled",
 };
 
 export const settlementService = {

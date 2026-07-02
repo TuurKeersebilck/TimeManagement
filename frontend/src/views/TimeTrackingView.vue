@@ -948,10 +948,10 @@ onUnmounted(() => {
 
                       <!-- Sessions timeline -->
                       <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[220px] truncate">
-                        <div v-for="s in row.data.sessions.filter(s => s.status === 1)" :key="s.id" class="truncate">
+                        <div v-for="s in row.data.sessions.filter(s => s.status === 'Closed')" :key="s.id" class="truncate">
                           {{ sessionTimeline(s) }}
                         </div>
-                        <span v-if="row.data.sessions.filter(s => s.status === 1).length === 0" class="text-slate-400">—</span>
+                        <span v-if="row.data.sessions.filter(s => s.status === 'Closed').length === 0" class="text-slate-400">—</span>
                       </TableCell>
 
                       <!-- WFH -->
@@ -1014,14 +1014,14 @@ onUnmounted(() => {
                         <button
                           v-else
                           class="group flex cursor-pointer items-center gap-1.5 text-left w-full disabled:cursor-not-allowed"
-                          :disabled="row.data.sessions.every(s => s.status !== 1)"
-                          @click="row.data.sessions.some(s => s.status === 1) ? startEdit(row.data) : undefined"
+                          :disabled="row.data.sessions.every(s => s.status !== 'Closed')"
+                          @click="row.data.sessions.some(s => s.status === 'Closed') ? startEdit(row.data) : undefined"
                         >
                           <span class="text-xs text-slate-600 dark:text-slate-400 truncate" :title="row.data.workDay?.description ?? undefined">
-                            {{ row.data.workDay?.description || (row.data.sessions.some(s => s.status === 1) ? "Add description…" : "—") }}
+                            {{ row.data.workDay?.description || (row.data.sessions.some(s => s.status === 'Closed') ? "Add description…" : "—") }}
                           </span>
                           <PencilIcon
-                            v-if="row.data.sessions.some(s => s.status === 1)"
+                            v-if="row.data.sessions.some(s => s.status === 'Closed')"
                             class="size-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 shrink-0"
                           />
                         </button>

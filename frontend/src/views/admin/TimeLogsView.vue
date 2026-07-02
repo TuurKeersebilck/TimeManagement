@@ -481,7 +481,7 @@ onMounted(async () => {
                         v-for="(session, si) in row.data.sessions"
                         :key="si"
                         class="flex items-center gap-1 whitespace-nowrap"
-                        :class="session.status === 2 ? 'line-through opacity-40' : ''"
+                        :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
                       >
                         <template v-if="session.breaks.length">
                           {{ formatTime(session.clockIn) }} → {{ formatTime(session.breaks[0].breakStart) }}
@@ -613,7 +613,7 @@ onMounted(async () => {
                       v-for="(session, si) in log.sessions"
                       :key="si"
                       class="flex items-center gap-1 whitespace-nowrap"
-                      :class="session.status === 2 ? 'line-through opacity-40' : ''"
+                      :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
                     >
                       <template v-if="session.breaks.length">
                         {{ formatTime(session.clockIn) }} → {{ formatTime(session.breaks[0].breakStart) }}
