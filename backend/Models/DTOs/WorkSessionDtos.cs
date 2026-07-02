@@ -86,7 +86,7 @@ public class TodayLiveDto
     public int SessionId { get; set; }
     public DateTimeOffset ClockIn { get; set; }
 
-    /// <summary>Net worked minutes since clock-in, excluding closed breaks. Does not include ongoing break time.</summary>
+    /// <summary>Net worked minutes since clock-in, excluding both closed and ongoing break time.</summary>
     public double ElapsedMinutes { get; set; }
 
     public bool IsOnBreak { get; set; }
