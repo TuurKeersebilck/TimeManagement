@@ -32,6 +32,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   CheckCircleIcon,
   ClockIcon,
   AlertTriangleIcon,
@@ -40,6 +46,8 @@ import {
   ScaleIcon,
   DownloadIcon,
   Loader2Icon,
+  RefreshCwIcon,
+  InfoIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -67,6 +75,12 @@ const monthLabel = computed(() =>
     month: "long",
     year: "numeric",
   })
+);
+
+const canGenerate = computed(
+  () =>
+    selectedYear.value < now.getFullYear() ||
+    (selectedYear.value === now.getFullYear() && selectedMonth.value < now.getMonth() + 1)
 );
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -97,6 +111,32 @@ async function load() {
     toast.error(extractApiError(err, "Failed to load settlements"));
   } finally {
     loading.value = false;
+  }
+}
+
+const generating = ref(false);
+
+async function generateSettlements() {
+  if (!canGenerate.value) {
+    toast.error("Settlements can only be generated for a month that has fully ended.");
+    return;
+  }
+  generating.value = true;
+  const beforeCount = settlements.value.length;
+  try {
+    settlements.value = await settlementService.generate(selectedYear.value, selectedMonth.value);
+    const newCount = settlements.value.length - beforeCount;
+    toast.success(
+      newCount === 0
+        ? "Already up to date — no new settlements to generate"
+        : newCount === 1
+          ? "Generated 1 new settlement"
+          : `Generated ${newCount} new settlements`
+    );
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to generate settlements"));
+  } finally {
+    generating.value = false;
   }
 }
 
@@ -199,15 +239,52 @@ onMounted(load);
         <!-- Header -->
         <div class="flex items-center justify-between mb-8">
           <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Settlements</h1>
+            <div class="flex items-center gap-1.5">
+              <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Settlements</h1>
+              <TooltipProvider :delay-duration="100">
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <InfoIcon class="size-4 text-slate-400 dark:text-slate-500 cursor-pointer" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right" class="max-w-80 p-3 space-y-2 text-left">
+                    <p class="text-xs">
+                      A settlement closes out one employee's flex balance (overtime vs. deficit)
+                      for a completed month, based on hours worked against their target.
+                    </p>
+                    <p class="text-xs">
+                      <span class="font-semibold">Generate</span> computes this for every employee
+                      and creates a "Pending Review" record. <span class="font-semibold">Confirm</span>
+                      locks it in with an outcome (Paid / Leave Deducted / Unpaid).
+                    </p>
+                    <p class="text-xs">
+                      <span class="font-semibold">Payroll export impact:</span> once generated, the
+                      CSV splits Regular vs. Overtime hours for that employee/month. The Outcome and
+                      Notes columns only fill in after the settlement is confirmed — until then they're blank.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
               Review and confirm monthly time settlements
             </p>
           </div>
-          <Button variant="outline" size="sm" @click="exportCsv">
-            <DownloadIcon class="size-3.5" />
-            Export CSV
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              :disabled="generating"
+              @click="generateSettlements"
+            >
+              <Loader2Icon v-if="generating" class="size-3.5 animate-spin" />
+              <RefreshCwIcon v-else class="size-3.5" />
+              Generate settlements
+            </Button>
+            <Button variant="outline" size="sm" @click="exportCsv">
+              <DownloadIcon class="size-3.5" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
         <!-- Month navigation -->
@@ -247,7 +324,13 @@ onMounted(load);
               <TableEmpty v-if="settlements.length === 0" :colspan="8">
                 <ScaleIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
                 <p class="text-slate-500 dark:text-slate-400">
-                  No settlements generated for this month.
+                  No settlements yet for {{ monthLabel }}.
+                </p>
+                <p v-if="canGenerate" class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  Click "Generate settlements" above to create them.
+                </p>
+                <p v-else class="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                  Settlements are created automatically once this month ends.
                 </p>
               </TableEmpty>
 
@@ -437,7 +520,23 @@ onMounted(load);
 
             <!-- Outcome -->
             <div class="space-y-1.5">
-              <Label>Outcome</Label>
+              <div class="flex items-center gap-1.5">
+                <Label>Outcome</Label>
+                <TooltipProvider :delay-duration="100">
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
+                      <p class="text-xs">
+                        How you settled this balance with the employee. This doesn't change any
+                        hours — it's just a record of your decision, and it fills in the Outcome
+                        column in the payroll CSV once confirmed.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div class="flex gap-2">
                 <Button
                   v-for="(label, val) in OUTCOME_LABELS"
@@ -454,10 +553,26 @@ onMounted(load);
             <!-- Override hours -->
             <div class="grid grid-cols-2 gap-3">
               <div class="space-y-1.5">
-                <Label class="text-xs text-slate-500">
-                  Overtime hours
-                  <span class="font-normal ml-1">(leave blank to use computed {{ fmtHPlain(selected.overtimeHours) }})</span>
-                </Label>
+                <div class="flex items-center gap-1.5">
+                  <Label class="text-xs text-slate-500">
+                    Overtime hours
+                    <span class="font-normal ml-1">(leave blank to use computed {{ fmtHPlain(selected.overtimeHours) }})</span>
+                  </Label>
+                  <TooltipProvider :delay-duration="100">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
+                        <p class="text-xs">
+                          Only fill this in to correct the computed value. Whatever ends up here
+                          becomes permanent once confirmed, and is what the payroll CSV uses to
+                          split Regular vs. Overtime hours for this employee/month.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Input
                   v-model="confirmOvertimeOverride"
                   type="number"
@@ -467,10 +582,26 @@ onMounted(load);
                 />
               </div>
               <div class="space-y-1.5">
-                <Label class="text-xs text-slate-500">
-                  Deficit hours
-                  <span class="font-normal ml-1">(leave blank to use computed {{ fmtHPlain(selected.deficitHours) }})</span>
-                </Label>
+                <div class="flex items-center gap-1.5">
+                  <Label class="text-xs text-slate-500">
+                    Deficit hours
+                    <span class="font-normal ml-1">(leave blank to use computed {{ fmtHPlain(selected.deficitHours) }})</span>
+                  </Label>
+                  <TooltipProvider :delay-duration="100">
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer shrink-0" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
+                        <p class="text-xs">
+                          Only fill this in to correct the computed value. Unlike overtime hours,
+                          this is <span class="font-semibold">not</span> included in the payroll
+                          CSV — it's kept here purely for your own record.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <Input
                   v-model="confirmDeficitOverride"
                   type="number"
@@ -483,12 +614,27 @@ onMounted(load);
 
             <!-- Notes -->
             <div class="space-y-1.5">
-              <Label>Notes <span class="text-slate-400 font-normal ml-1">(optional)</span></Label>
+              <div class="flex items-center gap-1.5">
+                <Label>Notes <span class="text-slate-400 font-normal ml-1">(optional)</span></Label>
+                <TooltipProvider :delay-duration="100">
+                  <Tooltip>
+                    <TooltipTrigger as-child>
+                      <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
+                      <p class="text-xs">
+                        Internal only — the employee never sees this. It's visible here after
+                        confirming and included in the payroll CSV's Notes column.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <textarea
                 v-model="confirmNotes"
                 rows="2"
                 class="input-field resize-none text-sm"
-                placeholder="Any notes for the employee…"
+                placeholder="Internal note for this settlement…"
               />
             </div>
           </div>

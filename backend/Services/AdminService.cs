@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
 using TimeManagementBackend.Helpers;
@@ -562,10 +563,10 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 CsvEscape(emp.Name),
                 CsvEscape(emp.Email),
                 daysWorked,
-                regularHours.ToString("F2"),
-                overtimeHours.ToString("F2"),
-                totalHours.ToString("F2"),
-                vacDays.ToString("F1"),
+                regularHours.ToString("F2", CultureInfo.InvariantCulture),
+                overtimeHours.ToString("F2", CultureInfo.InvariantCulture),
+                totalHours.ToString("F2", CultureInfo.InvariantCulture),
+                vacDays.ToString("F1", CultureInfo.InvariantCulture),
                 CsvEscape(outcome),
                 CsvEscape(notes)
             ));
@@ -600,8 +601,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                     log.Date.DayOfWeek.ToString(),
                     FormatExportTime(session.ClockIn, timezoneOffsetMinutes),
                     FormatExportTime(session.ClockOut, timezoneOffsetMinutes),
-                    breakHours.ToString("F2"),
-                    session.Hours.ToString("F2"),
+                    breakHours.ToString("F2", CultureInfo.InvariantCulture),
+                    session.Hours.ToString("F2", CultureInfo.InvariantCulture),
                     log.WorkedFromHome ? "Yes" : "No",
                     CsvEscape(vacationCell),
                     CsvEscape(log.Description ?? "")
@@ -624,7 +625,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                     v.Date.ToString("yyyy-MM-dd"),
                     v.Date.DayOfWeek.ToString(),
                     CsvEscape(v.VacationTypeName),
-                    ((double)v.Amount).ToString("F1"),
+                    ((double)v.Amount).ToString("F1", CultureInfo.InvariantCulture),
                     CsvEscape(v.Note ?? "")
                 ));
             }
