@@ -4,23 +4,25 @@
 
 ### New Features
 
-- **Multi-session time tracking** — the entire clock engine has been rewritten around a WorkSession / BreakRecord model. A single day can now contain multiple sessions (e.g. split shifts), each with their own breaks. The old ClockEvent model is fully removed.
-- **Flex balance and overtime** — every closed day is scored against your per-weekday target. The dashboard and time-tracking view show your daily delta, and a running monthly flex balance so you always know where you stand. Days with an open session are excluded from the balance until you clock out.
-- **Monthly settlement workflow** — at the end of each month, admin generates a settlement for each employee. The settlement records total hours worked, overtime, deficit, and outcome (Paid / Leave Deducted / Unpaid). A blocker check prevents confirmation if any open sessions or pending adjustment requests remain. Settled months are locked and form the basis of the payroll CSV export.
-- **Payroll CSV export** — the admin Settlements screen now exports a properly structured CSV from the confirmed settlement data, including regular hours, overtime hours, total hours, outcome, and notes per employee.
-- **Break minimum enforcement** — a configurable minimum break duration (per employee or global) is enforced on the End Break button. A live countdown in M:SS ticks down; once the minimum is met, the elapsed time is shown and the button unlocks. The server re-validates on submission.
-- **Break elapsed and countdown display** — while on a break the interface shows how long the current break has been running, and if a minimum applies, counts down the remaining time before the button is enabled.
-- **Admin settlement screen** — admins can review each employee's monthly overtime / deficit breakdown, override hours if needed, add notes, choose an outcome, and confirm. The detail dialog shows per-day flex data alongside blockers.
-- **Adjustment request prefill** — when requesting a time adjustment, existing Closed sessions for the selected date are automatically loaded into the form. Supports multiple sessions and multiple breaks per session, with IDs carried through so the backend reconcile can match against existing records rather than treating everything as new.
-- **Background jobs** — a nightly job auto-invalidates sessions that were never closed (missed clock-out), and a separate job detects missed clock-in days and sends reminder emails.
-- **Per-weekday targets** — working hour targets are now set per day of the week (Mon–Fri individually) rather than a single daily/weekly number, allowing flexible schedules.
+- Multi-session time tracking — the entire clock engine has been rewritten around a WorkSession / BreakRecord model. A single day can now contain multiple sessions (e.g. split shifts), each with their own breaks. The old ClockEvent model is fully removed.
+- Flex balance and overtime — every closed day is scored against your per-weekday target. The dashboard and time-tracking view show your daily delta, and a running monthly flex balance so you always know where you stand. Days with an open session are excluded from the balance until you clock out.
+- Monthly settlement workflow — at the end of each month, admin generates a settlement for each employee. The settlement records total hours worked, overtime, deficit, and outcome (Paid / Leave Deducted / Unpaid). A blocker check prevents confirmation if any open sessions or pending adjustment requests remain. Settled months are locked and form the basis of the payroll CSV export.
+- Manual settlement generation — admins can generate settlements on demand for any completed month via a "Generate settlements" button, instead of waiting for the automatic nightly job. Safe to click repeatedly since it only fills in employees who don't have a settlement for that month yet.
+- Payroll CSV export — the admin Settlements screen now exports a properly structured CSV from the confirmed settlement data, including regular hours, overtime hours, total hours, outcome, and notes per employee.
+- Break minimum enforcement — a configurable minimum break duration (per employee or global) is enforced on the End Break button. A live countdown in M:SS ticks down; once the minimum is met, the elapsed time is shown and the button unlocks. The server re-validates on submission.
+- Break elapsed and countdown display — while on a break the interface shows how long the current break has been running, and if a minimum applies, counts down the remaining time before the button is enabled.
+- Admin settlement screen — admins can review each employee's monthly overtime / deficit breakdown, override hours if needed, add notes, choose an outcome, and confirm. The detail dialog shows per-day flex data alongside blockers.
+- Adjustment request prefill — when requesting a time adjustment, existing Closed sessions for the selected date are automatically loaded into the form. Supports multiple sessions and multiple breaks per session, with IDs carried through so the backend reconcile can match against existing records rather than treating everything as new.
+- Background jobs — a nightly job auto-invalidates sessions that were never closed (missed clock-out), and a separate job detects missed clock-in days and sends reminder emails.
+- Per-weekday targets — working hour targets are now set per day of the week (Mon–Fri individually) rather than a single daily/weekly number, allowing flexible schedules.
 
 ### Improvements
 
-- **Admin adjustment requests view** — the "Requested Times" column now parses the snapshot JSON and renders sessions and breaks as `HH:MM–HH:MM [break HH:MM–HH:MM]` instead of showing empty fields.
-- **Dashboard loading** — all data (summaries, schedule, vacation, holidays, overtime) now loads in parallel on mount; the loading state stays active until everything is ready, eliminating the flash where stat cards rendered before vacation and holiday context was available.
-- **`isClockedIn` priority on dashboard** — the status banner now correctly shows "Clocked in" even on weekends, rather than showing "Weekend" when you are actively working.
-- **MaxSessionHours raised to 13** — the maximum allowed session length is increased from 10 to 13 hours to accommodate long shifts.
+- Admin adjustment requests view — the "Requested Times" column now parses the snapshot JSON and renders sessions and breaks as `HH:MM–HH:MM [break HH:MM–HH:MM]` instead of showing empty fields.
+- Dashboard loading — all data (summaries, schedule, vacation, holidays, overtime) now loads in parallel on mount; the loading state stays active until everything is ready, eliminating the flash where stat cards rendered before vacation and holiday context was available.
+- `isClockedIn` priority on dashboard — the status banner now correctly shows "Clocked in" even on weekends, rather than showing "Weekend" when you are actively working.
+- MaxSessionHours raised to 13 — the maximum allowed session length is increased from 10 to 13 hours to accommodate long shifts.
+- Settlements page guidance — added an explanation of what a settlement is and how it affects payroll, plus tooltips on the Outcome, Overtime hours, Deficit hours, and Notes fields in the confirm dialog clarifying what each one actually does — e.g. deficit hours are record-only and excluded from the payroll CSV, and notes are never shown to the employee.
 
 ### Bug Fixes
 
@@ -33,6 +35,10 @@
 - Description and WFH toggle changes now correctly invalidate the shared summaries cache so other views don't serve stale data
 - Settlements detail dialog "Already settled" banner did not render for confirmed settlements
 - Adjustment request admin view referenced non-existent `requestedClockIn` / `requestedBreakStart` fields — replaced with correct snapshot parsing
+- Every `/api/work-sessions/*` request 404'd for every user — the frontend called the kebab-case route while the controller actually resolves to `/api/worksessions`
+- Rapidly double-clicking a confirm dialog's action button (e.g. approving an adjustment request) could fire it twice, with the second request hitting a backend guard like "already approved" — the dialog now disables itself while a confirmation is in flight
+- Changelog entries rendered literal `**asterisks**` instead of bold text in the What's New dialog
+- Payroll CSV numbers were formatted using the server's current culture — on a comma-decimal locale this produced values like `179,00`, corrupting the comma-delimited file by shifting every column after it
 
 ## [v0.4.2] - 2026-06-16
 
