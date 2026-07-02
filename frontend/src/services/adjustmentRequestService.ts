@@ -7,28 +7,43 @@ export interface AdjustmentRequest {
   userId: string;
   employeeName: string;
   date: string; // "yyyy-MM-dd"
-  requestedClockIn: string | null;
-  requestedBreakStart: string | null;
-  requestedBreakEnd: string | null;
-  requestedClockOut: string | null;
+  desiredDaySnapshot: string; // JSON string
   reason: string;
   status: AdjustmentRequestStatus;
   requestedAt: string;
   reviewedAt: string | null;
 }
 
+export interface SnapshotBreak {
+  breakRecordId?: number;
+  breakStart: string; // ISO 8601 with offset
+  breakEnd: string;
+}
+
+export interface SnapshotSession {
+  workSessionId?: number;
+  clockIn: string;
+  clockOut: string;
+  breaks: SnapshotBreak[];
+}
+
+export interface DesiredDaySnapshot {
+  sessions: SnapshotSession[];
+}
+
 export interface CreateAdjustmentRequestPayload {
   date: string;
-  requestedClockIn?: string;
-  requestedBreakStart?: string;
-  requestedBreakEnd?: string;
-  requestedClockOut?: string;
+  desiredDaySnapshot: DesiredDaySnapshot;
   reason: string;
 }
 
 export const adjustmentRequestService = {
   create(payload: CreateAdjustmentRequestPayload): Promise<AdjustmentRequest> {
     return api.post("/timeadjustmentrequests", payload).then((r) => r.data);
+  },
+
+  getMine(): Promise<AdjustmentRequest[]> {
+    return api.get("/timeadjustmentrequests/mine").then((r) => r.data);
   },
 
   getAll(): Promise<AdjustmentRequest[]> {

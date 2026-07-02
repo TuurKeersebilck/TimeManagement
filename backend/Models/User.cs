@@ -9,6 +9,9 @@ public class User : IdentityUser
     public bool IsDisabled { get; set; } = false;
     public string? CalendarTokenHash { get; set; }
     public DateTimeOffset? CalendarTokenExpiresAt { get; set; }
-    public ICollection<ClockEvent> ClockEvents { get; set; } = new List<ClockEvent>();
     public ICollection<TimeAdjustmentRequest> AdjustmentRequests { get; set; } = new List<TimeAdjustmentRequest>();
+    public ICollection<WorkSession> WorkSessions { get; set; } = new List<WorkSession>();
+    public ICollection<WorkDay> WorkDays { get; set; } = new List<WorkDay>();
+    public ICollection<TimeBankAdjustment> TimeBankAdjustments { get; set; } = new List<TimeBankAdjustment>();
+    public ICollection<MonthlySettlement> MonthlySettlements { get; set; } = new List<MonthlySettlement>();
 }

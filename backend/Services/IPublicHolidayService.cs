@@ -6,7 +6,8 @@ public interface IPublicHolidayService
 {
     Task<AppConfigurationDto> GetConfigurationAsync(CancellationToken ct = default);
     Task<AppConfigurationDto> SetCountryAsync(string countryCode, CancellationToken ct = default);
-    Task<AppConfigurationDto> SetDefaultTargetsAsync(decimal? dailyHours, decimal? weeklyHours, CancellationToken ct = default);
+    Task<IEnumerable<WorkdayTargetDto>> GetGlobalWorkdayTargetsAsync(CancellationToken ct = default);
+    Task<IEnumerable<WorkdayTargetDto>> SetGlobalWorkdayTargetsAsync(IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default);
     Task<IEnumerable<PublicHolidayDto>> GetHolidaysAsync(int year, CancellationToken ct = default);
     Task<IEnumerable<PublicHolidayDto>> RefreshHolidaysAsync(int year, CancellationToken ct = default);
     Task<PublicHolidayDto> AddCustomHolidayAsync(CreateHolidayDto dto, CancellationToken ct = default);

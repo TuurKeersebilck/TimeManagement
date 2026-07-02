@@ -120,6 +120,12 @@ const routes: Array<RouteRecordRaw> = [
     component: () => import("../views/admin/AdjustmentRequestsView.vue"),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: "/admin/settlements",
+    name: "admin-settlements",
+    component: () => import("../views/admin/SettlementsView.vue"),
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
 
   {
     path: "/account",

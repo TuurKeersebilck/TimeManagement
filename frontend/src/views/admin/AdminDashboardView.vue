@@ -59,10 +59,13 @@ const formatTime = (t?: string) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-const formatBreak = (log: AdminTimeLog) =>
-  log.breakStart && log.breakEnd
-    ? `${formatTime(log.breakStart)} – ${formatTime(log.breakEnd)}`
-    : "—";
+const firstBreak = (log: AdminTimeLog) =>
+  log.sessions.flatMap((s) => s.breaks).find((b) => b.breakStart) ?? null;
+
+const formatBreak = (log: AdminTimeLog) => {
+  const b = firstBreak(log);
+  return b ? `${formatTime(b.breakStart)} – ${formatTime(b.breakEnd)}` : "—";
+};
 
 // ─── Upcoming vacations (next 7 days) ─────────────────────────────────────────
 
@@ -95,7 +98,7 @@ onMounted(async () => {
   loading.value = true;
   try {
     const [logs, emps, vacations] = await Promise.all([
-      adminService.getAllTimeLogs(),
+      adminService.getAllTimeLogs({ dateFrom: todayStr, dateTo: todayStr }),
       adminService.getEmployees(),
       adminService.getAllVacationDays(),
     ]);
@@ -232,9 +235,9 @@ onMounted(async () => {
                     </p>
                   </div>
                   <div class="text-xs text-slate-500 dark:text-slate-400 shrink-0">
-                    {{ formatTime(log.clockIn) }} –
-                    {{ formatTime(log.clockOut) }}
-                    <span v-if="log.breakStart" class="ml-1 text-slate-400 dark:text-slate-500"
+                    {{ formatTime(log.sessions[0]?.clockIn) }} –
+                    {{ formatTime(log.sessions[log.sessions.length - 1]?.clockOut) }}
+                    <span v-if="log.sessions.some((s) => s.breaks.length)" class="ml-1 text-slate-400 dark:text-slate-500"
                       >(brk {{ formatBreak(log) }})</span
                     >
                   </div>

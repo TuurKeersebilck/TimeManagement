@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
 
@@ -9,7 +11,10 @@ namespace TimeManagementBackend.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
-public class AdminController(IAdminService adminService) : ControllerBase
+public class AdminController(
+    IAdminService adminService,
+    IOvertimeCalculationService overtimeService,
+    UserManager<User> userManager) : ApiControllerBase(userManager)
 {
     private readonly IAdminService _adminService = adminService;
 
@@ -142,12 +147,65 @@ public class AdminController(IAdminService adminService) : ControllerBase
         CancellationToken ct)
         => Ok(await _adminService.SetEmployeeTargetAsync(userId, dto, ct));
 
+    [HttpGet("employees/{userId}/workday-targets")]
+    public async Task<ActionResult<IEnumerable<WorkdayTargetDto>>> GetEmployeeWorkdayTargets(string userId, CancellationToken ct)
+        => Ok(await _adminService.GetEmployeeWorkdayTargetsAsync(userId, ct));
+
+    [HttpPut("employees/{userId}/workday-targets")]
+    public async Task<ActionResult<IEnumerable<WorkdayTargetDto>>> SetEmployeeWorkdayTargets(
+        string userId,
+        [FromBody] SetWorkdayTargetsDto dto,
+        CancellationToken ct)
+        => Ok(await _adminService.SetEmployeeWorkdayTargetsAsync(userId, dto.Targets, ct));
+
     [HttpGet("employees/{userId}/weekly-summary")]
     public async Task<ActionResult<IEnumerable<WeekSummaryDto>>> GetWeeklySummary(
         string userId,
         [FromQuery] int weeks = 8,
         CancellationToken ct = default)
         => Ok(await _adminService.GetEmployeeWeeklySummaryAsync(userId, weeks, ct));
+
+    [HttpGet("employees/{userId}/overtime")]
+    public async Task<ActionResult<OvertimeResultDto>> GetEmployeeOvertime(
+        string userId,
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        return Ok(await overtimeService.CalculateAsync(userId, year ?? now.Year, month ?? now.Month, ct));
+    }
+
+    // ─── Time bank adjustments ────────────────────────────────────────────────
+
+    [HttpGet("employees/{userId}/time-bank-adjustments")]
+    public async Task<ActionResult<IEnumerable<TimeBankAdjustmentDto>>> GetTimeBankAdjustments(
+        string userId,
+        [FromQuery] int? year,
+        [FromQuery] int? month,
+        CancellationToken ct)
+        => Ok(await _adminService.GetTimeBankAdjustmentsAsync(userId, year, month, ct));
+
+    [HttpPost("employees/{userId}/time-bank-adjustments")]
+    public async Task<ActionResult<TimeBankAdjustmentDto>> CreateTimeBankAdjustment(
+        string userId,
+        [FromBody] CreateTimeBankAdjustmentDto dto,
+        CancellationToken ct)
+    {
+        dto.UserId = userId;
+        var admin = await GetCurrentUserAsync();
+        if (admin == null) return Unauthorized();
+
+        var result = await _adminService.CreateTimeBankAdjustmentAsync(dto, admin.Id, ct);
+        return CreatedAtAction(nameof(GetTimeBankAdjustments), new { userId }, result);
+    }
+
+    [HttpDelete("time-bank-adjustments/{id:int}")]
+    public async Task<IActionResult> DeleteTimeBankAdjustment(int id, CancellationToken ct)
+    {
+        await _adminService.DeleteTimeBankAdjustmentAsync(id, ct);
+        return NoContent();
+    }
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 

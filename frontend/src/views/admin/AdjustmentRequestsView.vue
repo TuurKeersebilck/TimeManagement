@@ -5,6 +5,7 @@ import {
   adjustmentRequestService,
   type AdjustmentRequest,
   type AdjustmentRequestStatus,
+  type DesiredDaySnapshot,
 } from "@/services/adjustmentRequestService";
 import { useAppToast } from "@/composables/useAppToast";
 import {
@@ -85,6 +86,24 @@ function fmt(t: string | null): string {
   if (!t) return "—";
   const d = new Date(t);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatSnapshot(snapshotJson: string): string {
+  try {
+    const snap = JSON.parse(snapshotJson) as DesiredDaySnapshot;
+    return snap.sessions
+      .map((s, i) => {
+        const ci = fmt(s.clockIn);
+        const co = fmt(s.clockOut);
+        const breakStr = s.breaks.length
+          ? ` [${s.breaks.map((b) => `${fmt(b.breakStart)}–${fmt(b.breakEnd)}`).join(", ")}]`
+          : "";
+        return snap.sessions.length > 1 ? `S${i + 1}: ${ci}–${co}${breakStr}` : `${ci}–${co}${breakStr}`;
+      })
+      .join("  |  ");
+  } catch {
+    return "—";
+  }
 }
 
 function fmtDate(d: string): string {
@@ -211,10 +230,9 @@ onMounted(load);
                   {{ fmtDate(r.date) }}
                 </TableCell>
                 <TableCell
-                  class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap"
+                  class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[280px] truncate"
                 >
-                  {{ fmt(r.requestedClockIn) }} / {{ fmt(r.requestedBreakStart) }} /
-                  {{ fmt(r.requestedBreakEnd) }} / {{ fmt(r.requestedClockOut) }}
+                  {{ formatSnapshot(r.desiredDaySnapshot) }}
                 </TableCell>
                 <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
                   <div class="flex items-center gap-1.5 min-w-0">

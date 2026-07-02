@@ -22,6 +22,20 @@ defineProps<{
 }>();
 
 const open = defineModel<boolean>("open", { default: false });
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderItem(text: string): string {
+  return escapeHtml(text).replace(
+    /\*\*(.+?)\*\*/g,
+    '<strong class="font-semibold text-foreground">$1</strong>'
+  );
+}
 </script>
 
 <template>
@@ -59,7 +73,7 @@ const open = defineModel<boolean>("open", { default: false });
                 class="flex gap-2 text-sm text-foreground/80"
               >
                 <span class="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/50" />
-                {{ item }}
+                <span v-html="renderItem(item)" />
               </li>
             </ul>
           </div>

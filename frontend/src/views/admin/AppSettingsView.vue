@@ -526,6 +526,12 @@ const formatDate = (iso: string) =>
                   Save
                 </Button>
               </div>
+              <p
+                v-if="minimumBreakMinutes !== '' && parseInt(minimumBreakMinutes) < 15"
+                class="mt-2 text-xs text-amber-600 dark:text-amber-400"
+              >
+                Belgian labour law requires a minimum rest break of 15 minutes for employees working more than 6 hours.
+              </p>
             </div>
           </div>
         </section>

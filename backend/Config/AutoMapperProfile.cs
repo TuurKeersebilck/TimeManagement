@@ -8,6 +8,8 @@ public class AutoMapperProfile : Profile
 {
     public AutoMapperProfile()
     {
-        CreateMap<ClockEvent, ClockEventDto>();
+        CreateMap<WorkSession, WorkSessionDto>();
+        CreateMap<BreakRecord, BreakRecordDto>();
+        CreateMap<WorkDay, WorkDayDto>();
     }
 }

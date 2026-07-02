@@ -17,10 +17,13 @@ public class TimeAdjustmentRequest
     [Required]
     public DateOnly Date { get; set; }
 
-    public DateTimeOffset? RequestedClockIn { get; set; }
-    public DateTimeOffset? RequestedBreakStart { get; set; }
-    public DateTimeOffset? RequestedBreakEnd { get; set; }
-    public DateTimeOffset? RequestedClockOut { get; set; }
+    /// <summary>
+    /// JSON snapshot of the intended session state for this date.
+    /// Structure: { "sessions": [{ "workSessionId": int?, "clockIn": ISO, "clockOut": ISO,
+    ///   "breaks": [{ "breakRecordId": int?, "breakStart": ISO, "breakEnd": ISO }] }] }
+    /// </summary>
+    [Required]
+    public string DesiredDaySnapshot { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(2000)]

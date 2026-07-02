@@ -59,17 +59,27 @@ function toggle(section: string) {
             <div v-show="open.time" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Clock sequence</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Events must be submitted in order: <span class="font-medium text-slate-700 dark:text-slate-300">Clock in → Break start → Break end → Clock out</span>. You can't skip steps or go out of order.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Each session follows the order: <span class="font-medium text-slate-700 dark:text-slate-300">Clock in → Break start → Break end → Clock out</span>. You can't skip steps or go out of order. A day can contain multiple sessions — for example if you leave and return later in the day.</p>
               </div>
 
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">5-minute window</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Each clock event must be submitted within <span class="font-medium text-slate-700 dark:text-slate-300">5 minutes</span> of when it actually happened. If you miss this window, submit a <span class="font-medium text-slate-700 dark:text-slate-300">time adjustment request</span> with a reason — an admin will review and apply the correction.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Each clock event must be submitted within <span class="font-medium text-slate-700 dark:text-slate-300">5 minutes</span> of when it actually happened. If you miss this window, submit a <span class="font-medium text-slate-700 dark:text-slate-300">time adjustment request</span> — existing sessions for that day are pre-filled so you only need to correct what's wrong. An admin will review and apply the correction.</p>
+              </div>
+
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Break minimum</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">If a minimum break duration is configured for your account, the End Break button stays disabled until that minimum is met. A live countdown in M:SS ticks down while you're on break; once it reaches zero the button unlocks and switches to showing the elapsed time.</p>
+              </div>
+
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Flex balance</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Every completed day is compared against your per-weekday target hours. The time-tracking view shows a <span class="font-medium text-slate-700 dark:text-slate-300">daily delta</span> (how much over or under target you were) and a <span class="font-medium text-slate-700 dark:text-slate-300">running monthly flex balance</span>. Days with an open session are excluded from the balance until you clock out.</p>
               </div>
 
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Work from home</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Toggle the WFH flag when clocking out to mark the day as remote.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Toggle the WFH flag at any point during the day to mark it as remote. You can also change it after the fact from the time-tracking view.</p>
               </div>
 
               <div class="space-y-1.5">
@@ -255,14 +265,21 @@ function toggle(section: string) {
 
                 <div class="space-y-0.5">
                   <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Time logs & adjustment requests</p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">View all time logs across the team. Approve or reject adjustment requests from the dashboard or via the one-click link in the notification email. Approving applies the corrected times immediately.</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">View all work sessions across the team, with per-day flex deltas and session status. Approve or reject adjustment requests from the admin panel or via the one-click link in the notification email. Approving reconciles the submitted sessions against existing records and applies the correction immediately.</p>
+                </div>
+
+                <div class="border-t border-border" />
+
+                <div class="space-y-0.5">
+                  <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Monthly settlements</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">At the end of each month, generate a settlement per employee. The settlement summarises total hours worked, overtime, deficit, and lets you choose an outcome: <span class="font-medium text-slate-600 dark:text-slate-300">Paid</span>, <span class="font-medium text-slate-600 dark:text-slate-300">Leave Deducted</span>, or <span class="font-medium text-slate-600 dark:text-slate-300">Unpaid</span>. Confirmation is blocked if any open sessions or pending adjustment requests remain for that employee. Confirmed settlements are locked.</p>
                 </div>
 
                 <div class="border-t border-border" />
 
                 <div class="space-y-0.5">
                   <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Payroll export</p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">Download a CSV of worked hours for any month/year. Includes all clock events, total worked time, and WFH flags per employee.</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">Export a CSV from the Settlements screen for any confirmed month. The file includes regular hours, overtime hours, total hours, outcome, and notes per employee — sourced directly from the confirmed settlement data.</p>
                 </div>
 
                 <div class="border-t border-border" />
@@ -283,7 +300,7 @@ function toggle(section: string) {
 
                 <div class="space-y-0.5">
                   <p class="text-sm font-medium text-slate-700 dark:text-slate-300">App settings</p>
-                  <p class="text-sm text-slate-500 dark:text-slate-400">Set global defaults for daily/weekly hour targets and minimum break duration (overridable per employee). Configure the notification email address and toggle whether missed clock-in reminders and adjustment request emails are sent.</p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400">Set global defaults for per-weekday hour targets (Mon–Fri individually) and minimum break duration — both overridable per employee. Configure the notification email address and toggle whether missed clock-in reminders and adjustment request emails are sent.</p>
                 </div>
               </div>
             </div>

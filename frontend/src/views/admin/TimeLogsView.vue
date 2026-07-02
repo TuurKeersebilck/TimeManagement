@@ -475,15 +475,25 @@ onMounted(async () => {
                   <TableCell class="font-medium text-slate-900 dark:text-slate-100">
                     {{ formatDate(row.data.date) }}
                   </TableCell>
-                  <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                    <template v-if="row.data.breakStart && row.data.breakEnd">
-                      {{ formatTime(row.data.clockIn) }} → {{ formatTime(row.data.breakStart) }}
-                      <CoffeeIcon class="inline size-3 mx-1 text-amber-400" />
-                      {{ formatTime(row.data.breakEnd) }} → {{ formatTime(row.data.clockOut) }}
-                    </template>
-                    <template v-else>
-                      {{ formatTime(row.data.clockIn) }} → {{ formatTime(row.data.clockOut) }}
-                    </template>
+                  <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
+                    <div v-if="row.data.sessions.length" class="flex flex-col gap-0.5">
+                      <div
+                        v-for="(session, si) in row.data.sessions"
+                        :key="si"
+                        class="flex items-center gap-1 whitespace-nowrap"
+                        :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
+                      >
+                        <template v-if="session.breaks.length">
+                          {{ formatTime(session.clockIn) }} → {{ formatTime(session.breaks[0].breakStart) }}
+                          <CoffeeIcon class="shrink-0 size-3 text-amber-400" />
+                          {{ formatTime(session.breaks[session.breaks.length - 1].breakEnd) }} → {{ formatTime(session.clockOut) }}
+                        </template>
+                        <template v-else>
+                          {{ formatTime(session.clockIn) }} → {{ formatTime(session.clockOut) }}
+                        </template>
+                      </div>
+                    </div>
+                    <span v-else class="text-slate-400">—</span>
                   </TableCell>
                   <TableCell>
                     <span
@@ -597,15 +607,25 @@ onMounted(async () => {
                 <TableCell class="font-medium text-slate-900 dark:text-slate-100">
                   {{ formatDate(log.date) }}
                 </TableCell>
-                <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                  <template v-if="log.breakStart && log.breakEnd">
-                    {{ formatTime(log.clockIn) }} → {{ formatTime(log.breakStart) }}
-                    <CoffeeIcon class="inline size-3 mx-1 text-amber-400" />
-                    {{ formatTime(log.breakEnd) }} → {{ formatTime(log.clockOut) }}
-                  </template>
-                  <template v-else>
-                    {{ formatTime(log.clockIn) }} → {{ formatTime(log.clockOut) }}
-                  </template>
+                <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
+                  <div v-if="log.sessions.length" class="flex flex-col gap-0.5">
+                    <div
+                      v-for="(session, si) in log.sessions"
+                      :key="si"
+                      class="flex items-center gap-1 whitespace-nowrap"
+                      :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
+                    >
+                      <template v-if="session.breaks.length">
+                        {{ formatTime(session.clockIn) }} → {{ formatTime(session.breaks[0].breakStart) }}
+                        <CoffeeIcon class="shrink-0 size-3 text-amber-400" />
+                        {{ formatTime(session.breaks[session.breaks.length - 1].breakEnd) }} → {{ formatTime(session.clockOut) }}
+                      </template>
+                      <template v-else>
+                        {{ formatTime(session.clockIn) }} → {{ formatTime(session.clockOut) }}
+                      </template>
+                    </div>
+                  </div>
+                  <span v-else class="text-slate-400">—</span>
                 </TableCell>
                 <TableCell>
                   <span

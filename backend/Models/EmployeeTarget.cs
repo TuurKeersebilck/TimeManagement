@@ -10,4 +10,8 @@ public class EmployeeTarget
     public decimal? WeeklyHours { get; set; }
     /// <summary>Per-employee minimum break duration in minutes. Null = use global default.</summary>
     public int? MinimumBreakMinutes { get; set; }
+    /// <summary>Per-employee daily overtime allowance in hours before a compliance flag fires. Null = use global default.</summary>
+    public decimal? DailyOvertimeAllowanceHours { get; set; }
+    /// <summary>Per-employee weekly overtime allowance in hours before a compliance flag fires. Null = use global default.</summary>
+    public decimal? WeeklyOvertimeAllowanceHours { get; set; }
 }
