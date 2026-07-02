@@ -416,7 +416,7 @@ onMounted(load);
 
           <!-- Already settled -->
           <div
-            v-if="selected.status === 1"
+            v-if="selected.status === 'Settled'"
             class="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 px-4 py-3"
           >
             <div class="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-medium text-sm">
