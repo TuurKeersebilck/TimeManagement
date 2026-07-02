@@ -60,4 +60,8 @@ export const settlementService = {
   getEmployeeHistory(userId: string): Promise<MonthlySettlementDto[]> {
     return api.get(`/settlements/employee/${userId}`).then((r) => r.data);
   },
+
+  generate(year: number, month: number): Promise<MonthlySettlementDto[]> {
+    return api.post("/settlements/generate", null, { params: { year, month } }).then((r) => r.data);
+  },
 };
