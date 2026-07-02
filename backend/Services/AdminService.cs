@@ -115,10 +115,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .Where(s => s.Status == WorkSessionStatus.Closed && s.Date >= weekStart && s.Date <= weekEnd)
             .ToListAsync(ct);
 
-        var weekdays = s_weekdays;
         var allWorkdayTargets = await _context.WorkdayTargets
             .AsNoTracking()
-            .Where(t => weekdays.Contains(t.DayOfWeek))
             .ToListAsync(ct);
         var globalWorkdayTargets = allWorkdayTargets.Where(t => t.UserId == null).ToList();
 
@@ -388,10 +386,9 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .Where(s => s.UserId == userId && s.Status == WorkSessionStatus.Closed && s.Date >= from && s.Date <= to)
             .ToListAsync(ct);
 
-        var weekdays = s_weekdays;
         var workdayTargets = await _context.WorkdayTargets
             .AsNoTracking()
-            .Where(t => (t.UserId == userId || t.UserId == null) && weekdays.Contains(t.DayOfWeek))
+            .Where(t => t.UserId == userId || t.UserId == null)
             .ToListAsync(ct);
         var perEmployee = workdayTargets.Where(t => t.UserId == userId).ToList();
         var globals = workdayTargets.Where(t => t.UserId == null).ToList();
