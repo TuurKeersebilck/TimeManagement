@@ -121,7 +121,13 @@ namespace TimeManagementBackend.Migrations
                     b.Property<decimal?>("DefaultDailyHours")
                         .HasColumnType("numeric");
 
+                    b.Property<decimal?>("DefaultDailyOvertimeAllowanceHours")
+                        .HasColumnType("numeric");
+
                     b.Property<decimal?>("DefaultWeeklyHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("DefaultWeeklyOvertimeAllowanceHours")
                         .HasColumnType("numeric");
 
                     b.Property<bool>("EnableAdjustmentRequestEmails")
@@ -129,6 +135,11 @@ namespace TimeManagementBackend.Migrations
 
                     b.Property<bool>("EnableMissedClockInEmails")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal>("MaxSessionHours")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric")
+                        .HasDefaultValue(13m);
 
                     b.Property<int?>("MinimumBreakMinutes")
                         .HasColumnType("integer");
@@ -142,7 +153,7 @@ namespace TimeManagementBackend.Migrations
                     b.ToTable("AppConfigurations");
                 });
 
-            modelBuilder.Entity("TimeManagementBackend.Models.ClockEvent", b =>
+            modelBuilder.Entity("TimeManagementBackend.Models.BreakRecord", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -150,41 +161,29 @@ namespace TimeManagementBackend.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTimeOffset>("ActualAt")
+                    b.Property<DateTimeOffset?>("BreakEnd")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateOnly>("Date")
-                        .HasColumnType("date");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTimeOffset>("RecordedAt")
+                    b.Property<DateTimeOffset?>("BreakEndServerStamp")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("TimeZoneId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<DateTimeOffset>("BreakStart")
+                        .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("Type")
+                    b.Property<DateTimeOffset>("BreakStartServerStamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("WorkSessionId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<bool>("WorkedFromHome")
-                        .HasColumnType("boolean");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "Date");
+                    b.HasIndex("WorkSessionId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_BreakRecords_WorkSessionId_Open")
+                        .HasFilter("\"BreakEnd\" IS NULL");
 
-                    b.HasIndex("UserId", "Date", "Type")
-                        .IsUnique();
-
-                    b.ToTable("ClockEvents");
+                    b.ToTable("BreakRecords");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.EmployeeInvite", b =>
@@ -240,6 +239,9 @@ namespace TimeManagementBackend.Migrations
                     b.Property<decimal?>("DailyHours")
                         .HasColumnType("numeric");
 
+                    b.Property<decimal?>("DailyOvertimeAllowanceHours")
+                        .HasColumnType("numeric");
+
                     b.Property<int?>("MinimumBreakMinutes")
                         .HasColumnType("integer");
 
@@ -248,6 +250,9 @@ namespace TimeManagementBackend.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal?>("WeeklyHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("WeeklyOvertimeAllowanceHours")
                         .HasColumnType("numeric");
 
                     b.HasKey("Id");
@@ -283,6 +288,64 @@ namespace TimeManagementBackend.Migrations
                         .IsUnique();
 
                     b.ToTable("EmployeeVacationBalances");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.MonthlySettlement", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("DeficitHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("NetBalanceHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int?>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("OvertimeHours")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UserId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("MonthlySettlements");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.Notification", b =>
@@ -402,6 +465,10 @@ namespace TimeManagementBackend.Migrations
                     b.Property<DateOnly>("Date")
                         .HasColumnType("date");
 
+                    b.Property<string>("DesiredDaySnapshot")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTimeOffset>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -411,18 +478,6 @@ namespace TimeManagementBackend.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<DateTimeOffset>("RequestedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("RequestedBreakEnd")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("RequestedBreakStart")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("RequestedClockIn")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTimeOffset?>("RequestedClockOut")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ReviewedAt")
@@ -452,6 +507,44 @@ namespace TimeManagementBackend.Migrations
                     b.HasIndex("UserId", "Date");
 
                     b.ToTable("TimeAdjustmentRequests");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.TimeBankAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("EffectiveDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("Hours")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("UserId", "EffectiveDate");
+
+                    b.ToTable("TimeBankAdjustments");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.User", b =>
@@ -586,6 +679,154 @@ namespace TimeManagementBackend.Migrations
                     b.ToTable("VacationTypes");
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkDay", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("WorkedFromHome")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Date")
+                        .IsUnique();
+
+                    b.ToTable("WorkDays");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTimeOffset>("ClockIn")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ClockInServerStamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ClockOut")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ClockOutServerStamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_WorkSessions_UserId_Open")
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("UserId", "Date");
+
+                    b.ToTable("WorkSessions");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkdayTarget", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Hours")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("UserId")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DayOfWeek")
+                        .IsUnique()
+                        .HasDatabaseName("IX_WorkdayTargets_DayOfWeek_Global")
+                        .HasFilter("\"UserId\" IS NULL");
+
+                    b.HasIndex("UserId", "DayOfWeek")
+                        .IsUnique()
+                        .HasDatabaseName("IX_WorkdayTargets_UserId_DayOfWeek")
+                        .HasFilter("\"UserId\" IS NOT NULL");
+
+                    b.ToTable("WorkdayTargets");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            DayOfWeek = 1,
+                            Hours = 8m
+                        },
+                        new
+                        {
+                            Id = 2,
+                            DayOfWeek = 2,
+                            Hours = 8m
+                        },
+                        new
+                        {
+                            Id = 3,
+                            DayOfWeek = 3,
+                            Hours = 8m
+                        },
+                        new
+                        {
+                            Id = 4,
+                            DayOfWeek = 4,
+                            Hours = 8m
+                        },
+                        new
+                        {
+                            Id = 5,
+                            DayOfWeek = 5,
+                            Hours = 8m
+                        },
+                        new
+                        {
+                            Id = 6,
+                            DayOfWeek = 6,
+                            Hours = 0m
+                        },
+                        new
+                        {
+                            Id = 7,
+                            DayOfWeek = 0,
+                            Hours = 0m
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserClaim<string>", b =>
                 {
                     b.HasOne("TimeManagementBackend.Models.User", null)
@@ -613,15 +854,15 @@ namespace TimeManagementBackend.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("TimeManagementBackend.Models.ClockEvent", b =>
+            modelBuilder.Entity("TimeManagementBackend.Models.BreakRecord", b =>
                 {
-                    b.HasOne("TimeManagementBackend.Models.User", "User")
-                        .WithMany("ClockEvents")
-                        .HasForeignKey("UserId")
+                    b.HasOne("TimeManagementBackend.Models.WorkSession", "WorkSession")
+                        .WithMany("Breaks")
+                        .HasForeignKey("WorkSessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("User");
+                    b.Navigation("WorkSession");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.EmployeeInvite", b =>
@@ -665,6 +906,24 @@ namespace TimeManagementBackend.Migrations
                     b.Navigation("VacationType");
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.MonthlySettlement", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany("MonthlySettlements")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedByUser");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.Notification", b =>
                 {
                     b.HasOne("TimeManagementBackend.Models.User", "RecipientUser")
@@ -705,6 +964,24 @@ namespace TimeManagementBackend.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.TimeBankAdjustment", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany("TimeBankAdjustments")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.VacationDay", b =>
                 {
                     b.HasOne("TimeManagementBackend.Models.User", "User")
@@ -724,16 +1001,58 @@ namespace TimeManagementBackend.Migrations
                     b.Navigation("VacationType");
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkDay", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany("WorkDays")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkSession", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany("WorkSessions")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkdayTarget", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.User", b =>
                 {
                     b.Navigation("AdjustmentRequests");
 
-                    b.Navigation("ClockEvents");
+                    b.Navigation("MonthlySettlements");
+
+                    b.Navigation("TimeBankAdjustments");
+
+                    b.Navigation("WorkDays");
+
+                    b.Navigation("WorkSessions");
                 });
 
             modelBuilder.Entity("TimeManagementBackend.Models.VacationType", b =>
                 {
                     b.Navigation("EmployeeBalances");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.WorkSession", b =>
+                {
+                    b.Navigation("Breaks");
                 });
 #pragma warning restore 612, 618
         }

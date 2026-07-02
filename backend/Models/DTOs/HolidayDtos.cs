@@ -44,10 +44,18 @@ public class SetNotificationTogglesDto
     public bool EnableMissedClockInEmails { get; set; }
 }
 
-public class SetDefaultTargetsDto
+/// <summary>One entry in a Mon–Sun workday target schedule.</summary>
+public class WorkdayTargetDto
 {
-    public decimal? DefaultDailyHours { get; set; }
-    public decimal? DefaultWeeklyHours { get; set; }
+    public DayOfWeek DayOfWeek { get; set; }
+    public decimal Hours { get; set; }
+}
+
+/// <summary>Payload for setting the global or per-employee workday target schedule.</summary>
+public class SetWorkdayTargetsDto
+{
+    /// <summary>Must contain exactly one entry per weekday (7 entries).</summary>
+    public List<WorkdayTargetDto> Targets { get; set; } = [];
 }
 
 public class SetMinimumBreakMinutesDto

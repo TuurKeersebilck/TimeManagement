@@ -32,4 +32,13 @@ public interface IAdminService
     Task<EmployeeTargetDto> GetEmployeeTargetAsync(string userId, CancellationToken ct = default);
     Task<EmployeeTargetDto> SetEmployeeTargetAsync(string userId, SetEmployeeTargetDto dto, CancellationToken ct = default);
     Task<IEnumerable<WeekSummaryDto>> GetEmployeeWeeklySummaryAsync(string userId, int weeks, CancellationToken ct = default);
+
+    // Workday targets (per-employee schedule)
+    Task<IEnumerable<WorkdayTargetDto>> GetEmployeeWorkdayTargetsAsync(string userId, CancellationToken ct = default);
+    Task<IEnumerable<WorkdayTargetDto>> SetEmployeeWorkdayTargetsAsync(string userId, IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default);
+
+    // Time bank adjustments
+    Task<IEnumerable<TimeBankAdjustmentDto>> GetTimeBankAdjustmentsAsync(string userId, int? year, int? month, CancellationToken ct = default);
+    Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default);
+    Task DeleteTimeBankAdjustmentAsync(int id, CancellationToken ct = default);
 }

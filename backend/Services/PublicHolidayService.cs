@@ -21,22 +21,35 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         return ToConfigDto(config);
     }
 
-    public async Task<AppConfigurationDto> SetDefaultTargetsAsync(decimal? dailyHours, decimal? weeklyHours, CancellationToken ct = default)
+    public async Task<IEnumerable<WorkdayTargetDto>> GetGlobalWorkdayTargetsAsync(CancellationToken ct = default)
     {
-        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
-        if (config == null)
+        return await db.WorkdayTargets
+            .Where(t => t.UserId == null)
+            .OrderBy(t => t.DayOfWeek)
+            .Select(t => new WorkdayTargetDto { DayOfWeek = t.DayOfWeek, Hours = t.Hours })
+            .ToListAsync(ct);
+    }
+
+    public async Task<IEnumerable<WorkdayTargetDto>> SetGlobalWorkdayTargetsAsync(
+        IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
+    {
+        var existing = await db.WorkdayTargets
+            .Where(t => t.UserId == null)
+            .ToListAsync(ct);
+
+        foreach (var dto in targets)
         {
-            config = new AppConfiguration { DefaultDailyHours = dailyHours, DefaultWeeklyHours = weeklyHours };
-            db.AppConfigurations.Add(config);
-        }
-        else
-        {
-            config.DefaultDailyHours = dailyHours;
-            config.DefaultWeeklyHours = weeklyHours;
+            var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
+            if (row == null)
+            {
+                row = new WorkdayTarget { DayOfWeek = dto.DayOfWeek };
+                db.WorkdayTargets.Add(row);
+            }
+            row.Hours = dto.Hours;
         }
 
         await db.SaveChangesAsync(ct);
-        return ToConfigDto(config);
+        return await GetGlobalWorkdayTargetsAsync(ct);
     }
 
     public async Task<AppConfigurationDto> SetNotificationEmailAsync(string? email, CancellationToken ct = default)

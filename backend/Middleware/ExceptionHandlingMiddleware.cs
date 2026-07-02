@@ -30,6 +30,33 @@ public class ExceptionHandlingMiddleware
 
     private Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+        // SettlementBlockedException returns a structured list of blockers so the frontend can display them.
+        if (exception is Exceptions.SettlementBlockedException sbe)
+        {
+            _logger.LogWarning("Settlement confirm blocked: {Count} blocker(s).", sbe.Blockers.Count);
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            context.Response.ContentType = "application/json";
+            var blocked = JsonSerializer.Serialize(
+                new { code = "SETTLEMENT_BLOCKED", blockers = sbe.Blockers },
+                options);
+            return context.Response.WriteAsync(blocked);
+        }
+
+        // BreakTooShortException gets a structured payload so the frontend can render a countdown.
+        if (exception is Exceptions.BreakTooShortException bts)
+        {
+            _logger.LogWarning("Break too short: required {Required} min, elapsed {Elapsed} min",
+                bts.RequiredMinutes, bts.ElapsedMinutes);
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            context.Response.ContentType = "application/json";
+            var structured = JsonSerializer.Serialize(
+                new { code = "BREAK_TOO_SHORT", requiredMinutes = bts.RequiredMinutes, elapsedMinutes = bts.ElapsedMinutes },
+                options);
+            return context.Response.WriteAsync(structured);
+        }
+
         HttpStatusCode statusCode;
         string message;
 
@@ -65,7 +92,7 @@ public class ExceptionHandlingMiddleware
 
         var payload = JsonSerializer.Serialize(
             new ErrorResponseDto { Message = message },
-            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+            options);
 
         context.Response.StatusCode = (int)statusCode;
         context.Response.ContentType = "application/json";

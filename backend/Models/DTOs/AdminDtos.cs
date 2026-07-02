@@ -6,14 +6,27 @@ public class AdminDaySummaryDto
     public string EmployeeName { get; set; } = string.Empty;
     public string EmployeeEmail { get; set; } = string.Empty;
     public DateOnly Date { get; set; }
-    public DateTimeOffset? ClockIn { get; set; }
-    public DateTimeOffset? BreakStart { get; set; }
-    public DateTimeOffset? BreakEnd { get; set; }
-    public DateTimeOffset? ClockOut { get; set; }
     public double TotalHours { get; set; }
     public string? Description { get; set; }
-    public bool IsComplete { get; set; }
     public bool WorkedFromHome { get; set; }
+    public bool HasOpenSession { get; set; }
+    public bool HasInvalidatedSession { get; set; }
+    public List<AdminSessionDto> Sessions { get; set; } = [];
+}
+
+public class AdminSessionDto
+{
+    public DateTimeOffset ClockIn { get; set; }
+    public DateTimeOffset? ClockOut { get; set; }
+    public WorkSessionStatus Status { get; set; }
+    public double Hours { get; set; }
+    public List<AdminBreakDto> Breaks { get; set; } = [];
+}
+
+public class AdminBreakDto
+{
+    public DateTimeOffset BreakStart { get; set; }
+    public DateTimeOffset? BreakEnd { get; set; }
 }
 
 public class EmployeeDto
