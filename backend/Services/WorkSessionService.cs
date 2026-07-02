@@ -240,7 +240,11 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
             .Where(b => b.BreakEnd != null)
             .Sum(b => (b.BreakEnd!.Value - b.BreakStart).TotalMinutes);
 
-        var elapsedMinutes = (now - session.ClockIn).TotalMinutes - closedBreakMinutes;
+        var ongoingBreakMinutes = openBreakStart.HasValue
+            ? (now - openBreakStart.Value).TotalMinutes
+            : 0;
+
+        var elapsedMinutes = (now - session.ClockIn).TotalMinutes - closedBreakMinutes - ongoingBreakMinutes;
 
         return new TodayLiveDto
         {
