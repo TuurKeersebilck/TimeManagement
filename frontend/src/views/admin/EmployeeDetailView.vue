@@ -605,16 +605,16 @@ onMounted(async () => {
                 {{ fmtH(s.netBalanceHours) }}
               </span>
               <span class="text-xs text-slate-500 dark:text-slate-400">
-                {{ s.outcome !== null ? OUTCOME_LABELS[s.outcome as 0 | 1 | 2] : '—' }}
+                {{ s.outcome !== null ? OUTCOME_LABELS[s.outcome!] : '—' }}
               </span>
               <div class="ml-auto flex items-center gap-2">
                 <span
                   class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                  :class="s.status === 1
+                  :class="s.status === 'Settled'
                     ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
                     : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'"
                 >
-                  <CheckCircleIcon v-if="s.status === 1" class="size-3" />
+                  <CheckCircleIcon v-if="s.status === 'Settled'" class="size-3" />
                   <ClockIcon v-else class="size-3" />
                   {{ STATUS_LABELS[s.status] }}
                 </span>

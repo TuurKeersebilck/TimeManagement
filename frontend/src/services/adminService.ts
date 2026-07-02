@@ -8,7 +8,7 @@ export interface AdminBreak {
 export interface AdminSession {
   clockIn: string;
   clockOut?: string;
-  status: number; // 0=Open, 1=Closed, 2=Invalidated
+  status: "Open" | "Closed" | "Invalidated";
   hours: number;
   breaks: AdminBreak[];
 }

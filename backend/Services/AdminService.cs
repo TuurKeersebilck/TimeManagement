@@ -84,7 +84,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                         {
                             ClockIn = s.ClockIn,
                             ClockOut = s.ClockOut,
-                            Status = (int)s.Status,
+                            Status = s.Status,
                             Hours = CalcSessionHours(s),
                             Breaks = s.Breaks
                                 .OrderBy(b => b.BreakStart)
@@ -460,7 +460,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                         {
                             ClockIn = s.ClockIn,
                             ClockOut = s.ClockOut,
-                            Status = (int)s.Status,
+                            Status = s.Status,
                             Hours = CalcSessionHours(s),
                             Breaks = s.Breaks
                                 .OrderBy(b => b.BreakStart)

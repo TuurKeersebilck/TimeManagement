@@ -18,7 +18,7 @@ public class AdminSessionDto
 {
     public DateTimeOffset ClockIn { get; set; }
     public DateTimeOffset? ClockOut { get; set; }
-    public int Status { get; set; } // 0=Open, 1=Closed, 2=Invalidated
+    public WorkSessionStatus Status { get; set; }
     public double Hours { get; set; }
     public List<AdminBreakDto> Breaks { get; set; } = [];
 }

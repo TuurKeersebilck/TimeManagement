@@ -2,7 +2,7 @@ import api from "./api";
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
-export type WorkSessionStatus = 0 | 1 | 2; // Open=0 Closed=1 Invalidated=2
+export type WorkSessionStatus = "Open" | "Closed" | "Invalidated";
 
 // ── Response DTOs ──────────────────────────────────────────────────────────────
 
