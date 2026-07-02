@@ -121,7 +121,7 @@ export const workSessionService = {
       workedFromHome,
       timeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone,
     };
-    return api.post("/work-sessions/clock-in", payload).then((r) => r.data);
+    return api.post("/worksessions/clock-in", payload).then((r) => r.data);
   },
 
   clockOut(offsetMinutes = 0, description?: string): Promise<WorkSessionDto> {
@@ -129,42 +129,42 @@ export const workSessionService = {
       recordedAt: recordedAt(offsetMinutes),
       description: description?.trim() || undefined,
     };
-    return api.post("/work-sessions/clock-out", payload).then((r) => r.data);
+    return api.post("/worksessions/clock-out", payload).then((r) => r.data);
   },
 
   startBreak(): Promise<BreakRecordDto> {
-    return api.post("/work-sessions/break/start").then((r) => r.data);
+    return api.post("/worksessions/break/start").then((r) => r.data);
   },
 
   endBreak(offsetMinutes = 0): Promise<BreakRecordDto> {
     const payload: EndBreakPayload = { recordedAt: recordedAt(offsetMinutes) };
-    return api.post("/work-sessions/break/end", payload).then((r) => r.data);
+    return api.post("/worksessions/break/end", payload).then((r) => r.data);
   },
 
   getToday(): Promise<TodayStatusDto> {
-    return api.get("/work-sessions/today").then((r) => r.data);
+    return api.get("/worksessions/today").then((r) => r.data);
   },
 
 getSummaries(dateFrom?: string, dateTo?: string): Promise<WorkDaySummaryDto[]> {
     return api
-      .get("/work-sessions/summaries", { params: { dateFrom, dateTo } })
+      .get("/worksessions/summaries", { params: { dateFrom, dateTo } })
       .then((r) => r.data);
   },
 
   getMySchedule(): Promise<WorkScheduleDto> {
-    return api.get("/work-sessions/my-schedule").then((r) => r.data);
+    return api.get("/worksessions/my-schedule").then((r) => r.data);
   },
 
   getOvertime(year?: number, month?: number): Promise<OvertimeResultDto> {
     const now = new Date();
     return api
-      .get("/work-sessions/overtime", {
+      .get("/worksessions/overtime", {
         params: { year: year ?? now.getFullYear(), month: month ?? now.getMonth() + 1 },
       })
       .then((r) => r.data);
   },
 
   updateDay(date: string, payload: UpdateWorkDayPayload): Promise<WorkDayDto> {
-    return api.patch(`/work-sessions/${date}`, payload).then((r) => r.data);
+    return api.patch(`/worksessions/${date}`, payload).then((r) => r.data);
   },
 };
