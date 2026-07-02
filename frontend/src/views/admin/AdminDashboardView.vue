@@ -98,7 +98,7 @@ onMounted(async () => {
   loading.value = true;
   try {
     const [logs, emps, vacations] = await Promise.all([
-      adminService.getAllTimeLogs(),
+      adminService.getAllTimeLogs({ dateFrom: todayStr, dateTo: todayStr }),
       adminService.getEmployees(),
       adminService.getAllVacationDays(),
     ]);
