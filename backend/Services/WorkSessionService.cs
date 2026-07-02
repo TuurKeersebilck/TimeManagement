@@ -17,10 +17,9 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
     {
         var serverStamp = TruncateToMinute(DateTimeOffset.UtcNow);
         var effectiveTime = ResolveEffectiveTime(dto.RecordedAt, serverStamp);
-        var date = DateOnly.FromDateTime(effectiveTime.UtcDateTime);
-
-        if (dto.TimeZoneId != null)
-            ValidateLocalDate(dto.RecordedAt ?? effectiveTime, dto.TimeZoneId, date);
+        var date = dto.TimeZoneId != null
+            ? ResolveLocalDate(effectiveTime, dto.TimeZoneId)
+            : DateOnly.FromDateTime(effectiveTime.UtcDateTime);
 
         await using var tx = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, ct);
@@ -384,20 +383,16 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
             : serverStamp;
     }
 
-    private static void ValidateLocalDate(DateTimeOffset recordedAt, string timeZoneId, DateOnly expectedDate)
+    private static DateOnly ResolveLocalDate(DateTimeOffset utcTime, string timeZoneId)
     {
         try
         {
             var tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-            var localTime = TimeZoneInfo.ConvertTimeFromUtc(recordedAt.UtcDateTime, tz);
-            var derivedDate = DateOnly.FromDateTime(localTime);
-            if (derivedDate != expectedDate)
-                throw new ValidationException(
-                    "The submitted local date does not match the date derived from your timezone and timestamp.");
+            return DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utcTime.UtcDateTime, tz));
         }
         catch (TimeZoneNotFoundException)
         {
-            // Unknown timezone ID — skip validation rather than rejecting legitimate events
+            return DateOnly.FromDateTime(utcTime.UtcDateTime);
         }
     }
 

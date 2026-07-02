@@ -817,6 +817,16 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var adjustment = await _context.TimeBankAdjustments.FindAsync([id], ct)
             ?? throw new ResourceNotFoundException("Time bank adjustment not found.");
 
+        var hasSettledMonth = await _context.MonthlySettlements.AnyAsync(
+            s => s.UserId == adjustment.UserId
+              && s.Year == adjustment.EffectiveDate.Year
+              && s.Month == adjustment.EffectiveDate.Month
+              && s.Status == SettlementStatus.Settled, ct);
+
+        if (hasSettledMonth)
+            throw new ValidationException(
+                "Cannot delete a time bank adjustment from a month that has already been settled.");
+
         _context.TimeBankAdjustments.Remove(adjustment);
         await _context.SaveChangesAsync(ct);
     }
