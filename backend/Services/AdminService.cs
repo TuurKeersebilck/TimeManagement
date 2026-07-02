@@ -13,37 +13,48 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     private readonly AppDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
 
+    private static double CalcSessionHours(WorkSession s)
+    {
+        if (s.Status != WorkSessionStatus.Closed || !s.ClockOut.HasValue) return 0;
+        var raw = (s.ClockOut.Value - s.ClockIn).TotalHours;
+        var breakHours = s.Breaks
+            .Where(b => b.BreakEnd.HasValue)
+            .Sum(b => (b.BreakEnd!.Value - b.BreakStart).TotalHours);
+        return Math.Max(0, raw - breakHours);
+    }
+
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
-        var query = _context.ClockEvents
+        var sessionQuery = _context.WorkSessions
             .AsNoTracking()
-            .Include(e => e.User)
+            .Include(s => s.User)
+            .Include(s => s.Breaks)
             .AsQueryable();
 
         if (!string.IsNullOrEmpty(userId))
-            query = query.Where(e => e.UserId == userId);
+            sessionQuery = sessionQuery.Where(s => s.UserId == userId);
         if (dateFrom.HasValue)
-            query = query.Where(e => e.Date >= dateFrom.Value);
+            sessionQuery = sessionQuery.Where(s => s.Date >= dateFrom.Value);
         if (dateTo.HasValue)
-            query = query.Where(e => e.Date <= dateTo.Value);
+            sessionQuery = sessionQuery.Where(s => s.Date <= dateTo.Value);
 
-        var events = await query.ToListAsync(ct);
+        var sessions = await sessionQuery.ToListAsync(ct);
 
-        return events
-            .GroupBy(e => new { e.UserId, e.Date })
+        var userIdList = sessions.Select(s => s.UserId).Distinct().ToList();
+        var dateList = sessions.Select(s => s.Date).Distinct().ToList();
+
+        var workDays = await _context.WorkDays
+            .AsNoTracking()
+            .Where(d => userIdList.Contains(d.UserId) && dateList.Contains(d.Date))
+            .ToListAsync(ct);
+
+        return sessions
+            .GroupBy(s => new { s.UserId, s.Date })
             .Select(g =>
             {
                 var first = g.First();
-                var clockIn = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn);
-                var breakStart = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart);
-                var breakEnd = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd);
-                var clockOut = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut);
-                var isComplete = clockIn != null && breakStart != null && breakEnd != null && clockOut != null;
-                var totalHours = clockIn != null && clockOut != null
-                    ? TimeCalculationHelper.CalculateWorkedHours(
-                        clockIn.RecordedAt, clockOut.RecordedAt,
-                        breakStart?.RecordedAt, breakEnd?.RecordedAt)
-                    : 0.0;
+                var workDay = workDays.FirstOrDefault(d => d.UserId == g.Key.UserId && d.Date == g.Key.Date);
+                var totalHours = g.Where(s => s.Status == WorkSessionStatus.Closed).Sum(CalcSessionHours);
 
                 return new AdminDaySummaryDto
                 {
@@ -51,14 +62,25 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                     EmployeeName = first.User.FullName,
                     EmployeeEmail = first.User.Email ?? string.Empty,
                     Date = g.Key.Date,
-                    ClockIn = clockIn?.RecordedAt,
-                    BreakStart = breakStart?.RecordedAt,
-                    BreakEnd = breakEnd?.RecordedAt,
-                    ClockOut = clockOut?.RecordedAt,
                     TotalHours = totalHours,
-                    Description = clockOut?.Description,
-                    IsComplete = isComplete,
-                    WorkedFromHome = clockIn?.WorkedFromHome ?? false,
+                    Description = workDay?.Description,
+                    WorkedFromHome = workDay?.WorkedFromHome ?? false,
+                    HasOpenSession = g.Any(s => s.Status == WorkSessionStatus.Open),
+                    HasInvalidatedSession = g.Any(s => s.Status == WorkSessionStatus.Invalidated),
+                    Sessions = g
+                        .OrderBy(s => s.ClockIn)
+                        .Select(s => new AdminSessionDto
+                        {
+                            ClockIn = s.ClockIn,
+                            ClockOut = s.ClockOut,
+                            Status = (int)s.Status,
+                            Hours = CalcSessionHours(s),
+                            Breaks = s.Breaks
+                                .OrderBy(b => b.BreakStart)
+                                .Select(b => new AdminBreakDto { BreakStart = b.BreakStart, BreakEnd = b.BreakEnd })
+                                .ToList(),
+                        })
+                        .ToList(),
                 };
             })
             .OrderByDescending(s => s.Date)
@@ -76,30 +98,23 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .OrderBy(u => u.FullName)
             .ToListAsync(ct);
 
-        var weekEvents = await _context.ClockEvents
+        var weekSessions = await _context.WorkSessions
             .AsNoTracking()
-            .Where(e => e.Date >= weekStart && e.Date <= weekEnd)
+            .Include(s => s.Breaks)
+            .Where(s => s.Status == WorkSessionStatus.Closed && s.Date >= weekStart && s.Date <= weekEnd)
             .ToListAsync(ct);
 
         var targets = await _context.EmployeeTargets
             .AsNoTracking()
             .ToListAsync(ct);
 
+        var weeklyByUser = weekSessions
+            .GroupBy(s => s.UserId)
+            .ToDictionary(g => g.Key, g => (decimal)g.Sum(CalcSessionHours));
+
         return users.Select(u =>
         {
-            var userEvents = weekEvents.Where(e => e.UserId == u.Id);
-            var weeklyLogged = (decimal)userEvents
-                .GroupBy(e => e.Date)
-                .Sum(g =>
-                {
-                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedAt;
-                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedAt;
-                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedAt;
-                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedAt;
-                    return ci.HasValue && co.HasValue
-                        ? TimeCalculationHelper.CalculateWorkedHours(ci.Value, co.Value, bs, be)
-                        : 0.0;
-                });
+            var weeklyLogged = weeklyByUser.TryGetValue(u.Id, out var h) ? h : 0m;
 
             var target = targets.FirstOrDefault(t => t.UserId == u.Id);
             var resolvedWeekly = target?.WeeklyHours ?? config?.DefaultWeeklyHours;
@@ -141,7 +156,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             throw new Exceptions.ValidationException("Employee must be disabled before permanent deletion.");
 
         // Delete all related data before removing the identity user record
-        await _context.ClockEvents.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.BreakRecords.Where(b => b.WorkSession.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.WorkSessions.Where(s => s.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.WorkDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
@@ -355,28 +369,19 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var from = weekRanges[0].Start;
         var to = weekRanges[^1].End;
 
-        var events = await _context.ClockEvents
+        var sessions = await _context.WorkSessions
             .AsNoTracking()
-            .Where(e => e.UserId == userId && e.Date >= from && e.Date <= to)
+            .Include(s => s.Breaks)
+            .Where(s => s.UserId == userId && s.Status == WorkSessionStatus.Closed && s.Date >= from && s.Date <= to)
             .ToListAsync(ct);
 
         var target = await GetEmployeeTargetAsync(userId, ct);
 
         return weekRanges.Select(w =>
         {
-            var weekEvents = events.Where(e => e.Date >= w.Start && e.Date <= w.End);
-            var hoursLogged = (decimal)weekEvents
-                .GroupBy(e => e.Date)
-                .Sum(g =>
-                {
-                    var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn)?.RecordedAt;
-                    var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut)?.RecordedAt;
-                    var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart)?.RecordedAt;
-                    var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd)?.RecordedAt;
-                    return ci.HasValue && co.HasValue
-                        ? TimeCalculationHelper.CalculateWorkedHours(ci.Value, co.Value, bs, be)
-                        : 0.0;
-                });
+            var hoursLogged = (decimal)sessions
+                .Where(s => s.Date >= w.Start && s.Date <= w.End)
+                .Sum(CalcSessionHours);
 
             // ISO week number
             var jan1 = new DateOnly(w.Start.Year, 1, 1);
@@ -399,41 +404,53 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var dateFrom = new DateOnly(year, month, 1);
         var dateTo = dateFrom.AddMonths(1).AddDays(-1);
 
-        var eventsQuery = _context.ClockEvents
+        var sessionsQuery = _context.WorkSessions
             .AsNoTracking()
-            .Include(e => e.User)
-            .Where(e => e.Date >= dateFrom && e.Date <= dateTo);
+            .Include(s => s.User)
+            .Include(s => s.Breaks)
+            .Where(s => s.Status == WorkSessionStatus.Closed && s.Date >= dateFrom && s.Date <= dateTo);
 
         if (!string.IsNullOrEmpty(userId))
-            eventsQuery = eventsQuery.Where(e => e.UserId == userId);
+            sessionsQuery = sessionsQuery.Where(s => s.UserId == userId);
 
-        var rawEvents = await eventsQuery.ToListAsync(ct);
+        var rawSessions = await sessionsQuery.ToListAsync(ct);
 
-        var logs = rawEvents
-            .GroupBy(e => new { e.UserId, e.Date })
+        var userIdListCsv = rawSessions.Select(s => s.UserId).Distinct().ToList();
+        var dateListCsv = rawSessions.Select(s => s.Date).Distinct().ToList();
+        var workDaysCsv = await _context.WorkDays
+            .AsNoTracking()
+            .Where(d => userIdListCsv.Contains(d.UserId) && dateListCsv.Contains(d.Date))
+            .ToListAsync(ct);
+
+        var logs = rawSessions
+            .GroupBy(s => new { s.UserId, s.Date })
             .Select(g =>
             {
                 var first = g.First();
-                var ci = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockIn);
-                var bs = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakStart);
-                var be = g.FirstOrDefault(e => e.Type == Models.ClockEventType.BreakEnd);
-                var co = g.FirstOrDefault(e => e.Type == Models.ClockEventType.ClockOut);
+                var workDay = workDaysCsv.FirstOrDefault(d => d.UserId == g.Key.UserId && d.Date == g.Key.Date);
                 return new AdminDaySummaryDto
                 {
                     UserId = g.Key.UserId,
                     EmployeeName = first.User.FullName,
                     EmployeeEmail = first.User.Email ?? string.Empty,
                     Date = g.Key.Date,
-                    ClockIn = ci?.RecordedAt,
-                    BreakStart = bs?.RecordedAt,
-                    BreakEnd = be?.RecordedAt,
-                    ClockOut = co?.RecordedAt,
-                    TotalHours = ci != null && co != null
-                        ? TimeCalculationHelper.CalculateWorkedHours(ci.RecordedAt, co.RecordedAt, bs?.RecordedAt, be?.RecordedAt)
-                        : 0.0,
-                    Description = co?.Description,
-                    IsComplete = ci != null && bs != null && be != null && co != null,
-                    WorkedFromHome = ci?.WorkedFromHome ?? false,
+                    TotalHours = g.Sum(CalcSessionHours),
+                    Description = workDay?.Description,
+                    WorkedFromHome = workDay?.WorkedFromHome ?? false,
+                    Sessions = g
+                        .OrderBy(s => s.ClockIn)
+                        .Select(s => new AdminSessionDto
+                        {
+                            ClockIn = s.ClockIn,
+                            ClockOut = s.ClockOut,
+                            Status = (int)s.Status,
+                            Hours = CalcSessionHours(s),
+                            Breaks = s.Breaks
+                                .OrderBy(b => b.BreakStart)
+                                .Select(b => new AdminBreakDto { BreakStart = b.BreakStart, BreakEnd = b.BreakEnd })
+                                .ToList(),
+                        })
+                        .ToList(),
                 };
             })
             .OrderBy(s => s.EmployeeName)
@@ -519,34 +536,35 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         sb.AppendLine();
         sb.AppendLine("DAILY DETAIL");
-        sb.AppendLine("Employee,Email,Date,Day,Clock In,Break Start,Break End,Clock Out,Break Duration (h),Net Hours,WFH,Vacation,Description");
+        sb.AppendLine("Employee,Email,Date,Day,Clock In,Clock Out,Break Duration (h),Net Hours,WFH,Vacation,Description");
 
         foreach (var log in logs)
         {
-            var breakHours = log.BreakStart.HasValue && log.BreakEnd.HasValue
-                ? (log.BreakEnd.Value - log.BreakStart.Value).TotalHours
-                : 0.0;
-
             var dayVacs = vacationLookup.TryGetValue((log.UserId, log.Date), out var vl) ? vl : null;
             var vacationCell = dayVacs != null
                 ? string.Join("; ", dayVacs.Select(v => $"{(v.Amount == 1.0m ? "Full" : "Half")} ({v.VacationTypeName})"))
                 : "";
 
-            sb.AppendLine(string.Join(",",
-                CsvEscape(log.EmployeeName),
-                CsvEscape(log.EmployeeEmail),
-                log.Date.ToString("yyyy-MM-dd"),
-                log.Date.DayOfWeek.ToString(),
-                FormatExportTime(log.ClockIn, timezoneOffsetMinutes),
-                FormatExportTime(log.BreakStart, timezoneOffsetMinutes),
-                FormatExportTime(log.BreakEnd, timezoneOffsetMinutes),
-                FormatExportTime(log.ClockOut, timezoneOffsetMinutes),
-                breakHours.ToString("F2"),
-                log.TotalHours.ToString("F2"),
-                log.WorkedFromHome ? "Yes" : "No",
-                CsvEscape(vacationCell),
-                CsvEscape(log.Description ?? "")
-            ));
+            foreach (var session in log.Sessions)
+            {
+                var breakHours = session.Breaks
+                    .Where(b => b.BreakEnd.HasValue)
+                    .Sum(b => (b.BreakEnd!.Value - b.BreakStart).TotalHours);
+
+                sb.AppendLine(string.Join(",",
+                    CsvEscape(log.EmployeeName),
+                    CsvEscape(log.EmployeeEmail),
+                    log.Date.ToString("yyyy-MM-dd"),
+                    log.Date.DayOfWeek.ToString(),
+                    FormatExportTime(session.ClockIn, timezoneOffsetMinutes),
+                    FormatExportTime(session.ClockOut, timezoneOffsetMinutes),
+                    breakHours.ToString("F2"),
+                    session.Hours.ToString("F2"),
+                    log.WorkedFromHome ? "Yes" : "No",
+                    CsvEscape(vacationCell),
+                    CsvEscape(log.Description ?? "")
+                ));
+            }
         }
 
         // ── Section 3: Vacation Days ────────────────────────────────────────

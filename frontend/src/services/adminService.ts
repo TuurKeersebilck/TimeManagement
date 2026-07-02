@@ -1,18 +1,29 @@
 import apiClient from "./api";
 
+export interface AdminBreak {
+  breakStart: string;
+  breakEnd?: string;
+}
+
+export interface AdminSession {
+  clockIn: string;
+  clockOut?: string;
+  status: number; // 0=Open, 1=Closed, 2=Invalidated
+  hours: number;
+  breaks: AdminBreak[];
+}
+
 export interface AdminTimeLog {
   userId: string;
   employeeName: string;
   employeeEmail: string;
   date: string;
-  clockIn?: string;
-  breakStart?: string;
-  breakEnd?: string;
-  clockOut?: string;
-  description?: string;
   totalHours: number;
-  isComplete: boolean;
+  description?: string;
   workedFromHome: boolean;
+  hasOpenSession: boolean;
+  hasInvalidatedSession: boolean;
+  sessions: AdminSession[];
 }
 
 export interface Employee {
