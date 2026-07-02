@@ -23,6 +23,17 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return Math.Max(0, raw - breakHours);
     }
 
+    private static readonly DayOfWeek[] s_weekdays =
+        [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
+
+    private static decimal SumWeeklyTarget(List<WorkdayTarget> perEmployee, List<WorkdayTarget> globals)
+        => s_weekdays.Sum(day =>
+        {
+            var emp = perEmployee.FirstOrDefault(t => t.DayOfWeek == day);
+            if (emp != null) return emp.Hours;
+            return globals.FirstOrDefault(t => t.DayOfWeek == day)?.Hours ?? 0m;
+        });
+
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
         var sessionQuery = _context.WorkSessions
@@ -104,9 +115,11 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .Where(s => s.Status == WorkSessionStatus.Closed && s.Date >= weekStart && s.Date <= weekEnd)
             .ToListAsync(ct);
 
-        var targets = await _context.EmployeeTargets
+        var allWorkdayTargets = await _context.WorkdayTargets
             .AsNoTracking()
+            .Where(t => s_weekdays.Contains(t.DayOfWeek))
             .ToListAsync(ct);
+        var globalWorkdayTargets = allWorkdayTargets.Where(t => t.UserId == null).ToList();
 
         var weeklyByUser = weekSessions
             .GroupBy(s => s.UserId)
@@ -115,9 +128,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return users.Select(u =>
         {
             var weeklyLogged = weeklyByUser.TryGetValue(u.Id, out var h) ? h : 0m;
-
-            var target = targets.FirstOrDefault(t => t.UserId == u.Id);
-            var resolvedWeekly = target?.WeeklyHours ?? config?.DefaultWeeklyHours;
+            var userWorkdays = allWorkdayTargets.Where(t => t.UserId == u.Id).ToList();
+            var resolvedWeekly = (decimal?)SumWeeklyTarget(userWorkdays, globalWorkdayTargets);
 
             return new EmployeeDto
             {
@@ -375,7 +387,13 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .Where(s => s.UserId == userId && s.Status == WorkSessionStatus.Closed && s.Date >= from && s.Date <= to)
             .ToListAsync(ct);
 
-        var target = await GetEmployeeTargetAsync(userId, ct);
+        var workdayTargets = await _context.WorkdayTargets
+            .AsNoTracking()
+            .Where(t => (t.UserId == userId || t.UserId == null) && s_weekdays.Contains(t.DayOfWeek))
+            .ToListAsync(ct);
+        var perEmployee = workdayTargets.Where(t => t.UserId == userId).ToList();
+        var globals = workdayTargets.Where(t => t.UserId == null).ToList();
+        var weeklyTarget = (decimal?)SumWeeklyTarget(perEmployee, globals);
 
         return weekRanges.Select(w =>
         {
@@ -384,7 +402,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 .Sum(CalcSessionHours);
 
             // ISO week number
-            var jan1 = new DateOnly(w.Start.Year, 1, 1);
             var weekNum = (w.Start.DayOfYear - 1) / 7 + 1;
 
             return new WeekSummaryDto
@@ -392,7 +409,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 WeekLabel = $"W{weekNum}",
                 WeekStart = w.Start.ToString("yyyy-MM-dd"),
                 HoursLogged = Math.Round(hoursLogged, 2),
-                Target = target.ResolvedWeeklyHours,
+                Target = weeklyTarget,
             };
         });
     }
@@ -488,6 +505,16 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             })
             .ToListAsync(ct);
 
+        var settlementsQuery = _context.MonthlySettlements
+            .AsNoTracking()
+            .Where(s => s.Year == year && s.Month == month);
+
+        if (!string.IsNullOrEmpty(userId))
+            settlementsQuery = settlementsQuery.Where(s => s.UserId == userId);
+
+        var settlements = await settlementsQuery.ToListAsync(ct);
+        var settlementByUser = settlements.ToDictionary(s => s.UserId);
+
         var sb = new System.Text.StringBuilder();
         var monthName = new System.Globalization.CultureInfo("en-GB").DateTimeFormat.GetMonthName(month);
 
@@ -497,7 +524,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         // ── Section 1: Summary ──────────────────────────────────────────────
         sb.AppendLine("SUMMARY");
-        sb.AppendLine("Name,Email,Days Worked,Total Hours,Vacation Days");
+        sb.AppendLine("Name,Email,Days Worked,Regular Hours,Overtime Hours,Total Hours,Vacation Days,Outcome,Notes");
 
         var vacsByEmployee = vacations.GroupBy(v => v.UserId).ToDictionary(g => g.Key, g => g.ToList());
 
@@ -526,7 +553,23 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 ? vList.Sum(v => (double)v.Amount)
                 : 0.0;
 
-            sb.AppendLine($"{CsvEscape(emp.Name)},{CsvEscape(emp.Email)},{daysWorked},{totalHours:F2},{vacDays:F1}");
+            settlementByUser.TryGetValue(emp.UserId, out var settlement);
+            var overtimeHours = (double)(settlement?.OvertimeHours ?? 0m);
+            var regularHours = Math.Max(0, totalHours - overtimeHours);
+            var outcome = settlement?.Outcome.HasValue == true ? settlement.Outcome!.Value.ToString() : "";
+            var notes = settlement?.Notes ?? "";
+
+            sb.AppendLine(string.Join(",",
+                CsvEscape(emp.Name),
+                CsvEscape(emp.Email),
+                daysWorked,
+                regularHours.ToString("F2"),
+                overtimeHours.ToString("F2"),
+                totalHours.ToString("F2"),
+                vacDays.ToString("F1"),
+                CsvEscape(outcome),
+                CsvEscape(notes)
+            ));
         }
 
         // ── Section 2: Daily Detail ─────────────────────────────────────────

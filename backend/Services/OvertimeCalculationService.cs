@@ -58,6 +58,19 @@ public class OvertimeCalculationService(
             var dayWorkedMinutes = 0L;
             if (sessionsByDate.TryGetValue(date, out var daySessions))
             {
+                // Day still in progress — exclude from balance to avoid a false deficit.
+                if (daySessions.Any(s => s.Status == WorkSessionStatus.Open))
+                {
+                    perDay.Add(new PerDayOvertimeDto
+                    {
+                        Date = date,
+                        WorkedHours = 0,
+                        TargetHours = targetHours,
+                        FlexDelta = 0,
+                    });
+                    continue;
+                }
+
                 foreach (var s in daySessions.Where(s => s.Status == WorkSessionStatus.Closed))
                 {
                     var breakMinutes = s.Breaks
