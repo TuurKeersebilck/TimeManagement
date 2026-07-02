@@ -11,6 +11,7 @@ export interface ConfirmOptions {
 }
 
 const isOpen = ref(false);
+const isConfirming = ref(false);
 const options = ref<ConfirmOptions | null>(null);
 
 export function useConfirmDialog() {
@@ -20,16 +21,23 @@ export function useConfirmDialog() {
   };
 
   const handleConfirm = async () => {
-    await options.value?.onConfirm();
-    isOpen.value = false;
-    options.value = null;
+    if (isConfirming.value) return;
+    isConfirming.value = true;
+    try {
+      await options.value?.onConfirm();
+      isOpen.value = false;
+      options.value = null;
+    } finally {
+      isConfirming.value = false;
+    }
   };
 
   const handleCancel = () => {
+    if (isConfirming.value) return;
     options.value?.onCancel?.();
     isOpen.value = false;
     options.value = null;
   };
 
-  return { confirm, isOpen, options, handleConfirm, handleCancel };
+  return { confirm, isOpen, isConfirming, options, handleConfirm, handleCancel };
 }

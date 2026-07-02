@@ -9,8 +9,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Loader2Icon } from "lucide-vue-next";
 
-const { isOpen, options, handleConfirm, handleCancel } = useConfirmDialog();
+const { isOpen, isConfirming, options, handleConfirm, handleCancel } = useConfirmDialog();
 </script>
 
 <template>
@@ -21,13 +22,15 @@ const { isOpen, options, handleConfirm, handleCancel } = useConfirmDialog();
         <AlertDialogDescription>{{ options?.message }}</AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <Button variant="outline" @click="handleCancel">
+        <Button variant="outline" :disabled="isConfirming" @click="handleCancel">
           {{ options?.cancelLabel ?? "Cancel" }}
         </Button>
         <Button
           :variant="options?.variant === 'destructive' ? 'destructive' : 'default'"
+          :disabled="isConfirming"
           @click="handleConfirm"
         >
+          <Loader2Icon v-if="isConfirming" class="size-3.5 animate-spin" />
           {{ options?.confirmLabel ?? "Confirm" }}
         </Button>
       </AlertDialogFooter>
