@@ -9,6 +9,7 @@ import {
   STATUS_LABELS,
 } from "@/services/settlementService";
 import { workSessionService, type OvertimeResultDto } from "@/services/workSessionService";
+import { adminService } from "@/services/adminService";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
 import {
@@ -163,38 +164,12 @@ async function confirmSettlement() {
 
 // ─── CSV export ───────────────────────────────────────────────────────────────
 
-function exportCsv() {
-  const settled = settlements.value.filter((s) => s.status === "Settled");
-  if (settled.length === 0) {
-    toast.error("No settled records to export for this month.");
-    return;
+async function exportCsv() {
+  try {
+    await adminService.downloadPayrollExport(selectedYear.value, selectedMonth.value);
+  } catch {
+    toast.error("Failed to export payroll CSV");
   }
-
-  const rows = [
-    ["Employee", "Regular Hours", "Overtime Hours", "Total Hours", "Outcome", "Notes"],
-    ...settled.map((s) => {
-      const regular = Math.max(0, s.netBalanceHours >= 0
-        ? s.overtimeHours > 0 ? s.netBalanceHours - s.overtimeHours : s.netBalanceHours
-        : s.netBalanceHours + s.deficitHours);
-      return [
-        s.employeeName,
-        regular.toFixed(2),
-        s.overtimeHours.toFixed(2),
-        (regular + s.overtimeHours).toFixed(2),
-        s.outcome != null ? OUTCOME_LABELS[s.outcome] : "—",
-        s.notes ?? "",
-      ];
-    }),
-  ];
-
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `settlements-${selectedYear.value}-${String(selectedMonth.value).padStart(2, "0")}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -446,7 +421,7 @@ onMounted(load);
           >
             <div class="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-medium text-sm">
               <CheckCircleIcon class="size-4" />
-              Settled — {{ OUTCOME_LABELS[selected.outcome as 0 | 1 | 2] }}
+              Settled — {{ OUTCOME_LABELS[selected.outcome!] }}
             </div>
             <p v-if="selected.reviewedByName" class="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
               Confirmed by {{ selected.reviewedByName }} on {{ selected.reviewedAt ? new Date(selected.reviewedAt).toLocaleDateString() : '—' }}

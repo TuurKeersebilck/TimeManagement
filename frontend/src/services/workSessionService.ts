@@ -37,13 +37,6 @@ export interface TodayStatusDto {
   workDay: WorkDayDto | null;
 }
 
-export interface TodayLiveDto {
-  sessionId: number;
-  clockIn: string; // UTC ISO
-  elapsedMinutes: number;
-  isOnBreak: boolean;
-  breakStartedAt: string | null;
-}
 
 export interface WorkDaySummaryDto {
   date: string; // "yyyy-MM-dd"
@@ -152,11 +145,7 @@ export const workSessionService = {
     return api.get("/work-sessions/today").then((r) => r.data);
   },
 
-  getTodayLive(): Promise<TodayLiveDto | null> {
-    return api.get("/work-sessions/today-live").then((r) => r.data ?? null);
-  },
-
-  getSummaries(dateFrom?: string, dateTo?: string): Promise<WorkDaySummaryDto[]> {
+getSummaries(dateFrom?: string, dateTo?: string): Promise<WorkDaySummaryDto[]> {
     return api
       .get("/work-sessions/summaries", { params: { dateFrom, dateTo } })
       .then((r) => r.data);

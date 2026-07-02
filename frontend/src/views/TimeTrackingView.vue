@@ -168,9 +168,10 @@ const breakRemainingSeconds = computed<number | null>(() => {
   return remaining > 0 ? remaining : 0;
 });
 
-const breakMinimumReached = computed(
-  () => breakRemainingSeconds.value === null || breakRemainingSeconds.value <= 0
-);
+const breakMinimumReached = computed(() => {
+  if (schedule.value === null) return false;
+  return breakRemainingSeconds.value === null || breakRemainingSeconds.value <= 0;
+});
 
 function formatMmSs(totalSeconds: number): string {
   const s = Math.ceil(totalSeconds);
@@ -527,7 +528,7 @@ async function saveDescription(date: string) {
     await workSessionService.updateDay(date, {
       description: editingDescription.value.trim() || undefined,
     });
-    // Refresh summaries to reflect update
+    clearSummariesCache();
     summaries.value = await workSessionService.getSummaries();
     editingDate.value = null;
     toast.success("Description saved");
@@ -544,6 +545,7 @@ async function toggleWfh(summary: WorkDaySummaryDto) {
     await workSessionService.updateDay(summary.date, {
       workedFromHome: !(summary.workDay?.workedFromHome ?? false),
     });
+    clearSummariesCache();
     summaries.value = await workSessionService.getSummaries();
     toast.success(
       !(summary.workDay?.workedFromHome ?? false)

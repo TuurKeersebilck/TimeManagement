@@ -27,6 +27,9 @@ const todayVacationAmount = ref<number | null>(null);
 const todayVacationTypeName = ref<string | null>(null);
 const todayHoliday = ref<PublicHoliday | null>(null);
 const monthlyFlexHours = ref<number | null>(null);
+const pageLoading = ref(true);
+
+const isLoading = computed(() => loading.value || pageLoading.value);
 
 function localDateString(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -107,12 +110,12 @@ const weeklyProgress = computed(() =>
 );
 
 const todayStatus = computed(() => {
-  if (loading.value) return null;
+  if (isLoading.value) return null;
   if (todayVacationAmount.value === 1.0) return "vacation";
   if (todayVacationAmount.value === 0.5 && !hasLoggedToday.value) return "half-vacation";
   if (todayHoliday.value) return "holiday";
-  if (isWeekend.value) return "weekend";
   if (isClockedIn.value) return "clocked-in";
+  if (isWeekend.value) return "weekend";
   if (!hasLoggedToday.value) return "not-logged";
   if (todayTargetHours.value != null && todayHours.value >= todayTargetHours.value)
     return "target-reached";
@@ -128,10 +131,10 @@ function formatHours(h: number): string {
 }
 
 onMounted(async () => {
-  await fetchSummaries();
   const today = localDateString(new Date());
 
-  const [scheduleResult, vacationResult, yearHolidays, overtimeResult] = await Promise.allSettled([
+  const [, scheduleResult, vacationResult, yearHolidays, overtimeResult] = await Promise.allSettled([
+    fetchSummaries(),
     workSessionService.getMySchedule(),
     vacationService.getVacationForDate(today),
     holidayService.getHolidays(new Date().getFullYear()),
@@ -153,6 +156,8 @@ onMounted(async () => {
   if (overtimeResult.status === "fulfilled") {
     monthlyFlexHours.value = overtimeResult.value.runningBalanceHours;
   }
+
+  pageLoading.value = false;
 });
 </script>
 
@@ -263,10 +268,10 @@ onMounted(async () => {
               <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Today</p>
             </div>
             <p class="text-3xl font-bold font-mono text-foreground">
-              <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
+              <span v-if="isLoading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ todayHours.toFixed(2) }}h</span>
             </p>
-            <template v-if="!loading && todayTargetHours != null && todayTargetHours > 0">
+            <template v-if="!isLoading && todayTargetHours != null && todayTargetHours > 0">
               <div class="mt-2 w-full bg-muted rounded-full h-1.5">
                 <div
                   :class="['h-1.5 rounded-full transition-all', todayProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
@@ -284,10 +289,10 @@ onMounted(async () => {
               <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This week</p>
             </div>
             <p class="text-3xl font-bold font-mono text-foreground">
-              <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
+              <span v-if="isLoading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisWeek }}h</span>
             </p>
-            <template v-if="!loading && weeklyTarget != null">
+            <template v-if="!isLoading && weeklyTarget != null">
               <div class="mt-2 w-full bg-muted rounded-full h-1.5">
                 <div
                   :class="['h-1.5 rounded-full transition-all', weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
@@ -305,7 +310,7 @@ onMounted(async () => {
               <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This month</p>
             </div>
             <p class="text-3xl font-bold font-mono text-foreground">
-              <span v-if="loading" class="animate-pulse text-muted-foreground/40">--</span>
+              <span v-if="isLoading" class="animate-pulse text-muted-foreground/40">--</span>
               <span v-else>{{ totalHoursThisMonth }}h</span>
             </p>
           </div>
@@ -321,13 +326,13 @@ onMounted(async () => {
             </div>
             <p
               class="text-3xl font-bold font-mono"
-              :class="monthlyFlexHours === null || loading
+              :class="monthlyFlexHours === null || isLoading
                 ? 'text-muted-foreground/40'
                 : monthlyFlexHours >= 0
                   ? 'text-emerald-600 dark:text-emerald-400'
                   : 'text-rose-600 dark:text-rose-400'"
             >
-              <span v-if="loading" class="animate-pulse">--</span>
+              <span v-if="isLoading" class="animate-pulse">--</span>
               <span v-else-if="monthlyFlexHours === null">—</span>
               <span v-else>{{ formatHours(monthlyFlexHours) }}</span>
             </p>
