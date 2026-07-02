@@ -33,6 +33,6 @@ public class AppConfiguration
     /// <summary>Global weekly overtime allowance in hours before a compliance flag fires. Null = no allowance (flag at target).</summary>
     public decimal? DefaultWeeklyOvertimeAllowanceHours { get; set; }
 
-    /// <summary>Open sessions exceeding this duration (hours) are auto-invalidated by the background job. Default 10h.</summary>
-    public decimal MaxSessionHours { get; set; } = 10m;
+    /// <summary>Open sessions exceeding this duration (hours) are auto-invalidated by the background job. Default 13h (above Belgian legal daily max).</summary>
+    public decimal MaxSessionHours { get; set; } = 13m;
 }

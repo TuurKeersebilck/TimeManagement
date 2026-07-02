@@ -76,7 +76,7 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
 
         builder.Entity<AppConfiguration>(entity =>
         {
-            entity.Property(e => e.MaxSessionHours).HasDefaultValue(10m);
+            entity.Property(e => e.MaxSessionHours).HasDefaultValue(13m);
         });
 
         builder.Entity<WorkdayTarget>(entity =>
