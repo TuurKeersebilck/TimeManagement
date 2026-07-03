@@ -39,6 +39,6 @@ public interface IAdminService
 
     // Time bank adjustments
     Task<IEnumerable<TimeBankAdjustmentDto>> GetTimeBankAdjustmentsAsync(string userId, int? year, int? month, CancellationToken ct = default);
-    Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default);
+    Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(string userId, CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default);
     Task DeleteTimeBankAdjustmentAsync(int id, CancellationToken ct = default);
 }

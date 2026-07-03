@@ -69,6 +69,23 @@ export interface AdminVacationDay {
   note?: string;
 }
 
+export interface TimeBankAdjustment {
+  id: number;
+  userId: string;
+  effectiveDate: string; // "YYYY-MM-DD"
+  hours: number;
+  reason: string;
+  createdByUserId?: string | null;
+  createdByName?: string | null;
+  createdAt: string;
+}
+
+export interface CreateTimeBankAdjustmentInput {
+  effectiveDate: string; // "YYYY-MM-DD"
+  hours: number;
+  reason: string;
+}
+
 export const adminService = {
   async getAllTimeLogs(params?: {
     userId?: string;
@@ -135,5 +152,31 @@ export const adminService = {
       params: filters,
     });
     return response.data;
+  },
+
+  async getTimeBankAdjustments(
+    userId: string,
+    filters?: { year?: number; month?: number }
+  ): Promise<TimeBankAdjustment[]> {
+    const response = await apiClient.get<TimeBankAdjustment[]>(
+      `/admin/employees/${userId}/time-bank-adjustments`,
+      { params: filters }
+    );
+    return response.data;
+  },
+
+  async createTimeBankAdjustment(
+    userId: string,
+    data: CreateTimeBankAdjustmentInput
+  ): Promise<TimeBankAdjustment> {
+    const response = await apiClient.post<TimeBankAdjustment>(
+      `/admin/employees/${userId}/time-bank-adjustments`,
+      data
+    );
+    return response.data;
+  },
+
+  async deleteTimeBankAdjustment(id: number): Promise<void> {
+    await apiClient.delete(`/admin/time-bank-adjustments/${id}`);
   },
 };

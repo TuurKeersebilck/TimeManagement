@@ -192,11 +192,10 @@ public class AdminController(
         [FromBody] CreateTimeBankAdjustmentDto dto,
         CancellationToken ct)
     {
-        dto.UserId = userId;
         var admin = await GetCurrentUserAsync();
         if (admin == null) return Unauthorized();
 
-        var result = await _adminService.CreateTimeBankAdjustmentAsync(dto, admin.Id, ct);
+        var result = await _adminService.CreateTimeBankAdjustmentAsync(userId, dto, admin.Id, ct);
         return CreatedAtAction(nameof(GetTimeBankAdjustments), new { userId }, result);
     }
 

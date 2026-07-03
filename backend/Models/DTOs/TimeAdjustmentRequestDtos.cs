@@ -75,10 +75,6 @@ public class AdjustmentRequestDto
 public class CreateTimeBankAdjustmentDto
 {
     [Required]
-    [MaxLength(2000)]
-    public string UserId { get; set; } = string.Empty;
-
-    [Required]
     public DateOnly EffectiveDate { get; set; }
 
     [Required]
