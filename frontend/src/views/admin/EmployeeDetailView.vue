@@ -8,7 +8,9 @@ import {
   type AdminVacationDay,
   type EmployeeTarget,
   type WeekSummary,
+  type TimeBankAdjustment,
 } from "../../services/adminService";
+import { extractApiError } from "@/utils/apiError";
 import {
   vacationTypeService,
   type VacationType,
@@ -33,6 +35,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import WeeklyHoursChart from "@/components/WeeklyHoursChart.vue";
 import { useTheme } from "@/composables/useTheme";
 import {
@@ -45,6 +53,7 @@ import {
   ClockIcon,
   CheckCircleIcon,
   ScaleIcon,
+  InfoIcon,
 } from "lucide-vue-next";
 import {
   settlementService,
@@ -258,7 +267,80 @@ onMounted(async () => {
     .then((data) => { settlementHistory.value = data; })
     .catch(() => { /* non-critical */ })
     .finally(() => { loadingSettlements.value = false; });
+
+  // Load flex balance adjustments in background (non-blocking)
+  loadAdjustments();
 });
+
+// ─── Flex balance adjustments ──────────────────────────────────────────────────
+
+const adjustments = ref<TimeBankAdjustment[]>([]);
+const loadingAdjustments = ref(false);
+const adjustmentDialogVisible = ref(false);
+const savingAdjustment = ref(false);
+const adjustmentForm = ref({ effectiveDate: "", hours: "", reason: "" });
+
+async function loadAdjustments() {
+  loadingAdjustments.value = true;
+  try {
+    adjustments.value = await adminService.getTimeBankAdjustments(userId);
+  } catch {
+    /* non-critical */
+  } finally {
+    loadingAdjustments.value = false;
+  }
+}
+
+function openAddAdjustment() {
+  const today = new Date();
+  const firstOfNextMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1));
+  adjustmentForm.value = {
+    effectiveDate: firstOfNextMonth.toISOString().slice(0, 10),
+    hours: "",
+    reason: "",
+  };
+  adjustmentDialogVisible.value = true;
+}
+
+async function saveAdjustment() {
+  const hours = parseFloat(adjustmentForm.value.hours);
+  if (!adjustmentForm.value.effectiveDate || isNaN(hours) || hours === 0 || !adjustmentForm.value.reason.trim()) {
+    return;
+  }
+  savingAdjustment.value = true;
+  try {
+    const created = await adminService.createTimeBankAdjustment(userId, {
+      effectiveDate: adjustmentForm.value.effectiveDate,
+      hours,
+      reason: adjustmentForm.value.reason.trim(),
+    });
+    adjustments.value.unshift(created);
+    toast.success("Flex balance adjustment added");
+    adjustmentDialogVisible.value = false;
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to add adjustment"));
+  } finally {
+    savingAdjustment.value = false;
+  }
+}
+
+function removeAdjustment(adjustment: TimeBankAdjustment) {
+  confirm({
+    title: "Delete adjustment",
+    message: `Delete the ${adjustment.hours > 0 ? "+" : ""}${adjustment.hours}h adjustment for ${displayDate(adjustment.effectiveDate)}?`,
+    confirmLabel: "Delete",
+    variant: "destructive",
+    onConfirm: async () => {
+      try {
+        await adminService.deleteTimeBankAdjustment(adjustment.id);
+        adjustments.value = adjustments.value.filter((a) => a.id !== adjustment.id);
+        toast.success("Adjustment deleted");
+      } catch (err) {
+        toast.error(extractApiError(err, "Failed to delete adjustment"));
+      }
+    },
+  });
+}
 </script>
 
 <template>
@@ -622,6 +704,83 @@ onMounted(async () => {
             </div>
           </div>
         </div>
+
+        <!-- Flex balance adjustments section -->
+        <div class="mt-6" v-if="!loading">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-1.5">
+              <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <ScaleIcon class="size-4" />
+                Flex balance adjustments
+              </h2>
+              <TooltipProvider :delay-duration="100">
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" class="max-w-72 p-2.5 text-left">
+                    <p class="text-xs">
+                      Manually add or deduct hours from a specific month's flex balance —
+                      e.g. carry forward a deficit from last month so it must be made up this
+                      month, or grant extra flex hours. Positive hours add to the balance,
+                      negative hours are subtracted. Adjustments can't be deleted once that
+                      month's settlement is confirmed.
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Button variant="outline" size="sm" @click="openAddAdjustment">
+              <PlusIcon class="size-3.5" />
+              Add adjustment
+            </Button>
+          </div>
+
+          <div v-if="loadingAdjustments" class="card divide-y divide-slate-100 dark:divide-slate-800">
+            <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-40 animate-pulse flex-1" />
+              <div class="h-5 bg-slate-200 dark:bg-slate-700 rounded w-14 animate-pulse" />
+            </div>
+          </div>
+
+          <div v-else-if="adjustments.length === 0" class="card text-center py-8">
+            <ScaleIcon class="size-6 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+            <p class="text-sm text-slate-500 dark:text-slate-400">No manual adjustments yet.</p>
+          </div>
+
+          <div v-else class="card divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+            <div
+              v-for="a in adjustments"
+              :key="a.id"
+              class="flex items-center gap-3 px-4 py-3"
+            >
+              <span class="text-sm font-medium text-slate-900 dark:text-slate-100 w-24 shrink-0">
+                {{ displayDate(a.effectiveDate) }}
+              </span>
+              <span
+                class="text-xs font-mono px-1.5 py-0.5 rounded shrink-0"
+                :class="a.hours >= 0
+                  ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
+              >
+                {{ a.hours > 0 ? '+' : '' }}{{ a.hours }}h
+              </span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 truncate flex-1 min-w-0">
+                {{ a.reason }}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                @click="removeAdjustment(a)"
+                class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"
+                title="Delete"
+              >
+                <Trash2Icon class="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -668,6 +827,62 @@ onMounted(async () => {
           >
             <Loader2Icon v-if="saving" class="size-4 animate-spin" />
             {{ editingBalance ? "Save changes" : "Assign" }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Add flex balance adjustment dialog -->
+    <Dialog v-model:open="adjustmentDialogVisible">
+      <DialogContent class="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>Add flex balance adjustment</DialogTitle>
+        </DialogHeader>
+
+        <div class="flex flex-col gap-4 py-2">
+          <div class="space-y-1.5">
+            <Label>Effective date <span class="text-destructive">*</span></Label>
+            <Input v-model="adjustmentForm.effectiveDate" type="date" />
+            <p class="text-xs text-slate-400 dark:text-slate-500">
+              Any date within the target month — determines which month's balance this affects.
+            </p>
+          </div>
+          <div class="space-y-1.5">
+            <Label>Hours <span class="text-destructive">*</span></Label>
+            <Input
+              v-model="adjustmentForm.hours"
+              type="number"
+              step="0.25"
+              placeholder="e.g. 3 to add, -3 to deduct"
+            />
+            <p class="text-xs text-slate-400 dark:text-slate-500">
+              Positive adds to the flex balance, negative deducts from it.
+            </p>
+          </div>
+          <div class="space-y-1.5">
+            <Label>Reason <span class="text-destructive">*</span></Label>
+            <textarea
+              v-model="adjustmentForm.reason"
+              rows="2"
+              class="input-field resize-none text-sm"
+              placeholder="e.g. Carry forward June deficit"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="adjustmentDialogVisible = false">Cancel</Button>
+          <Button
+            @click="saveAdjustment"
+            :disabled="
+              savingAdjustment ||
+              !adjustmentForm.effectiveDate ||
+              !adjustmentForm.hours ||
+              !adjustmentForm.reason.trim()
+            "
+          >
+            <Loader2Icon v-if="savingAdjustment" class="size-4 animate-spin" />
+            Add adjustment
           </Button>
         </DialogFooter>
       </DialogContent>

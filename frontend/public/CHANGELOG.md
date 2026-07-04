@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.6.0] - 2026-07-03
+
+### New Features
+
+- Flex balance adjustments — admins can carry a deficit or surplus into another month for an employee from the employee detail page, a UI for the existing TimeBankAdjustment model which previously had none.
+
+### Bug Fixes
+
+- The time bank adjustment endpoint always rejected requests with a 400 — the DTO's UserId field was marked required but the client never sends it (it comes from the route), so model validation failed before the request ever reached the handler.
+
 ## [v0.5.0] - 2026-07-02
 
 ### New Features

@@ -781,14 +781,14 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     }
 
     public async Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(
-        CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default)
+        string userId, CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default)
     {
-        var user = await _userManager.FindByIdAsync(dto.UserId)
+        var user = await _userManager.FindByIdAsync(userId)
             ?? throw new ResourceNotFoundException("Employee not found.");
 
         var adjustment = new TimeBankAdjustment
         {
-            UserId = dto.UserId,
+            UserId = userId,
             EffectiveDate = dto.EffectiveDate,
             Hours = dto.Hours,
             Reason = dto.Reason,
