@@ -213,12 +213,25 @@ public class VacationsController(
 
     [HttpGet("team")]
     public async Task<ActionResult<IEnumerable<AdminVacationDayDto>>> GetTeamVacationDays(
-        [FromQuery] int? vacationTypeId,
         [FromQuery] int? year,
         [FromQuery] int? month,
         CancellationToken ct)
     {
-        var days = await _adminService.GetAllVacationDaysAsync(null, vacationTypeId, year, month, ct);
+        var days = await _adminService.GetAllVacationDaysAsync(null, null, year, month, ct);
+
+        // Non-admins may only see who is off and when — not the vacation type or note
+        if (!User.IsInRole("Admin"))
+        {
+            days = days.Select(d => new AdminVacationDayDto
+            {
+                Id = d.Id,
+                UserId = d.UserId,
+                EmployeeName = d.EmployeeName,
+                Date = d.Date,
+                Amount = d.Amount,
+            });
+        }
+
         return Ok(days);
     }
 

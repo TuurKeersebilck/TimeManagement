@@ -61,6 +61,34 @@
   --ring: #F59E0B;
 }
 
+/* ── Employee identity colors (team calendars) ────────────────────────────────
+   Fixed 8-slot categorical palette; an employee is assigned a slot by hashing
+   their user id (src/lib/employeeColors.ts) so their color is stable across
+   sessions and views. Dark values are the same hues re-stepped for the dark
+   surface — keep both lists in the same slot order. */
+
+:root {
+  --employee-color-1: #2a78d6;
+  --employee-color-2: #1baf7a;
+  --employee-color-3: #eda100;
+  --employee-color-4: #008300;
+  --employee-color-5: #4a3aa7;
+  --employee-color-6: #e34948;
+  --employee-color-7: #e87ba4;
+  --employee-color-8: #eb6834;
+}
+
+.dark {
+  --employee-color-1: #3987e5;
+  --employee-color-2: #199e70;
+  --employee-color-3: #c98500;
+  --employee-color-4: #008300;
+  --employee-color-5: #9085e9;
+  --employee-color-6: #e66767;
+  --employee-color-7: #d55181;
+  --employee-color-8: #d95926;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

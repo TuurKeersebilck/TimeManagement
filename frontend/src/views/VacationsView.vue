@@ -15,6 +15,7 @@ import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { employeeColor } from "@/lib/employeeColors";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
@@ -620,7 +621,7 @@ onMounted(async () => {
                         <div
                           v-for="entry in teamVacationsByDate.get(cell.iso)!.slice(0, 2)"
                           :key="`team-${entry.id}`"
-                          :style="{ borderLeftColor: entry.vacationTypeColor ?? '#6366f1' }"
+                          :style="{ borderLeftColor: employeeColor(entry.userId) }"
                           class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50"
                         >
                           {{ entry.employeeName.split(" ")[0] }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>

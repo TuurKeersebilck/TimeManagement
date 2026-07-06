@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-vue-next";
 import type { VacationDay, TeamVacationDay } from "@/services/vacationService";
 import { holidayService, type PublicHoliday } from "@/services/holidayService";
+import { employeeColor } from "@/lib/employeeColors";
 
 const props = defineProps<{
   open: boolean;
@@ -256,9 +257,9 @@ const vacationTypes = computed(() => {
                           >
                             <span
                               class="w-1.5 h-1.5 rounded-full shrink-0 inline-block opacity-60"
-                              :style="{ backgroundColor: entry.vacationTypeColor ?? '#94a3b8' }"
+                              :style="{ backgroundColor: employeeColor(entry.userId) }"
                             />
-                            {{ entry.employeeName.split(" ")[0] }} · {{ entry.vacationTypeName }}<span v-if="entry.amount === 0.5"> ½</span>
+                            {{ entry.employeeName.split(" ")[0] }}<template v-if="entry.vacationTypeName"> · {{ entry.vacationTypeName }}</template><span v-if="entry.amount === 0.5"> ½</span>
                           </p>
                         </template>
                       </TooltipContent>
