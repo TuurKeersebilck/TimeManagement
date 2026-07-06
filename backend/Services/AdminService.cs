@@ -107,7 +107,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         var users = await _context.Users
             .AsNoTracking()
-            .Where(u => u.Role == UserRole.Employee)
             .OrderBy(u => u.FullName)
             .ToListAsync(ct);
 
@@ -137,6 +136,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Id = u.Id,
                 FullName = u.FullName,
                 Email = u.Email ?? string.Empty,
+                Role = u.Role,
                 WeeklyHoursLogged = Math.Round(weeklyLogged, 2),
                 ResolvedWeeklyTarget = resolvedWeekly,
                 IsDisabled = u.IsDisabled,

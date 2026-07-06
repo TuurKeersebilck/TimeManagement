@@ -30,6 +30,7 @@ export interface Employee {
   id: string;
   fullName: string;
   email: string;
+  role: "Employee" | "Admin";
   weeklyHoursLogged: number;
   resolvedWeeklyTarget?: number | null;
   isDisabled: boolean;

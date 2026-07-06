@@ -103,7 +103,8 @@ onMounted(async () => {
       adminService.getAllVacationDays(),
     ]);
     allLogs.value = logs;
-    employees.value = emps;
+    // Admins don't track time, so they shouldn't count toward "logged" / "not logged" stats.
+    employees.value = emps.filter((e) => e.role === "Employee");
     upcomingVacations.value = vacations;
   } catch {
     toast.error("Failed to load dashboard data");
