@@ -110,7 +110,9 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
 
     public async Task<BreakRecordDto> StartBreakAsync(string userId, CancellationToken ct = default)
     {
-        var serverStamp = TruncateToMinute(DateTimeOffset.UtcNow);
+        // Not truncated to the minute: break-start never reconciles a client time, and
+        // truncation made the live break counter start with up to 59s already elapsed
+        var serverStamp = DateTimeOffset.UtcNow;
 
         await using var tx = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, ct);
@@ -174,6 +176,11 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
 
             var openBreak = session.Breaks.FirstOrDefault(b => b.BreakEnd == null)
                 ?? throw new ValidationException("You are not on a break.");
+
+            // BreakStart has seconds precision while end stamps are minute-truncated, so a
+            // break ended within its starting minute would otherwise get a negative duration
+            if (effectiveTime < openBreak.BreakStart)
+                effectiveTime = openBreak.BreakStart;
 
             var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
             var target = await db.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == userId, ct);
