@@ -30,6 +30,15 @@ public class TimeBankAdjustment
     [MaxLength(2000)]
     public string Reason { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Settlement that auto-created this adjustment as a carry-forward, if any.
+    /// Settlement-sourced adjustments cannot be deleted manually.
+    /// </summary>
+    public int? SourceSettlementId { get; set; }
+
+    [ForeignKey(nameof(SourceSettlementId))]
+    public MonthlySettlement? SourceSettlement { get; set; }
+
     /// <summary>Admin who created the adjustment. Nullable so deleting the admin doesn't cascade-delete adjustments.</summary>
     public string? CreatedByUserId { get; set; }
 

@@ -92,6 +92,7 @@ public class TimeBankAdjustmentDto
     public DateOnly EffectiveDate { get; set; }
     public decimal Hours { get; set; }
     public string Reason { get; set; } = string.Empty;
+    public int? SourceSettlementId { get; set; }
     public string? CreatedByUserId { get; set; }
     public string? CreatedByName { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

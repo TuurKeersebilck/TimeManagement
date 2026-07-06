@@ -769,7 +769,15 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
               <span class="text-sm text-slate-600 dark:text-slate-400 truncate flex-1 min-w-0">
                 {{ a.reason }}
               </span>
+              <span
+                v-if="a.sourceSettlementId != null"
+                class="text-[10px] font-medium uppercase tracking-wide px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0"
+                title="Created automatically by confirming a monthly settlement — cannot be deleted manually"
+              >
+                Settlement
+              </span>
               <Button
+                v-else
                 variant="ghost"
                 size="icon"
                 @click="removeAdjustment(a)"

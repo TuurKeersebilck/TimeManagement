@@ -4,7 +4,6 @@ import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   settlementService,
   type MonthlySettlementDto,
-  type SettlementOutcome,
   OUTCOME_LABELS,
   STATUS_LABELS,
 } from "@/services/settlementService";
@@ -94,12 +93,34 @@ const selected = ref<MonthlySettlementDto | null>(null);
 const detailOvertime = ref<OvertimeResultDto | null>(null);
 const loadingDetail = ref(false);
 
-// Confirm form
-const confirmOutcome = ref<SettlementOutcome>("Paid");
-const confirmOvertimeOverride = ref<string>("");
-const confirmDeficitOverride = ref<string>("");
+// Confirm form — allocation of the month's balance. The admin has full control:
+// all three fields are always available; any mismatch with the computed balance
+// is surfaced as a hint, never a blocker.
+const payOutInput = ref<string>("");
+const carryOverInput = ref<string>("");
+const deductInput = ref<string>("");
 const confirmNotes = ref("");
 const confirming = ref(false);
+
+function parseHours(v: string): number {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+const payOutHours = computed(() => parseHours(payOutInput.value));
+const carryOverHours = computed(() => parseHours(carryOverInput.value));
+const deductHours = computed(() => parseHours(deductInput.value));
+// Signed carry sent to the backend: carry over adds, deduct subtracts
+const carrySigned = computed(() => carryOverHours.value - deductHours.value);
+// Difference between the computed balance and what the admin allocated
+const allocationDiff = computed(() =>
+  selected.value
+    ? selected.value.netBalanceHours - (payOutHours.value + carrySigned.value)
+    : 0
+);
+const allocationValid = computed(
+  () => payOutHours.value >= 0 && carryOverHours.value >= 0 && deductHours.value >= 0
+);
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
@@ -142,9 +163,11 @@ async function generateSettlements() {
 
 async function openDetail(s: MonthlySettlementDto) {
   selected.value = s;
-  confirmOutcome.value = s.outcome ?? "Paid";
-  confirmOvertimeOverride.value = "";
-  confirmDeficitOverride.value = "";
+  // Sensible defaults: overtime months prefill a full pay-out, deficit months a full deduction —
+  // both freely editable
+  payOutInput.value = s.netBalanceHours > 0 ? String(s.netBalanceHours) : "";
+  carryOverInput.value = "";
+  deductInput.value = s.netBalanceHours < 0 ? String(-s.netBalanceHours) : "";
   confirmNotes.value = s.notes ?? "";
   detailOpen.value = true;
   loadingDetail.value = true;
@@ -169,17 +192,12 @@ async function openDetail(s: MonthlySettlementDto) {
 // ─── Confirm ─────────────────────────────────────────────────────────────────
 
 async function confirmSettlement() {
-  if (!selected.value) return;
+  if (!selected.value || !allocationValid.value) return;
   confirming.value = true;
   try {
     await settlementService.confirm(selected.value.id, {
-      outcome: confirmOutcome.value,
-      overtimeHoursOverride: confirmOvertimeOverride.value
-        ? parseFloat(confirmOvertimeOverride.value)
-        : undefined,
-      deficitHoursOverride: confirmDeficitOverride.value
-        ? parseFloat(confirmDeficitOverride.value)
-        : undefined,
+      paidOutHours: payOutHours.value,
+      carryForwardHours: carrySigned.value,
       notes: confirmNotes.value.trim() || undefined,
     });
     toast.success(`Settlement confirmed for ${selected.value.employeeName}`);
@@ -254,12 +272,14 @@ onMounted(load);
                     <p class="text-xs">
                       <span class="font-semibold">Generate</span> computes this for every employee
                       and creates a "Pending Review" record. <span class="font-semibold">Confirm</span>
-                      locks it in with an outcome (Paid / Leave Deducted / Unpaid).
+                      locks in where the balance goes: paid out via payroll, carried over to next
+                      month's flex balance, or forfeited/forgiven.
                     </p>
                     <p class="text-xs">
                       <span class="font-semibold">Payroll export impact:</span> once generated, the
-                      CSV splits Regular vs. Overtime hours for that employee/month. The Outcome and
-                      Notes columns only fill in after the settlement is confirmed — until then they're blank.
+                      CSV splits Regular vs. Overtime hours for that employee/month. After confirming,
+                      the Overtime Paid column shows only the paid-out portion, and carried hours are
+                      applied to next month automatically — no manual flex adjustment needed.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -506,6 +526,15 @@ onMounted(load);
               <CheckCircleIcon class="size-4" />
               Settled — {{ OUTCOME_LABELS[selected.outcome!] }}
             </div>
+            <p
+              v-if="selected.paidOutHours !== null || selected.carriedForwardHours !== null"
+              class="text-xs text-emerald-700 dark:text-emerald-300 mt-1 font-mono"
+            >
+              <template v-if="(selected.paidOutHours ?? 0) > 0">{{ fmtHPlain(selected.paidOutHours!) }} paid out</template>
+              <template v-if="(selected.paidOutHours ?? 0) > 0 && (selected.carriedForwardHours ?? 0) !== 0"> · </template>
+              <template v-if="(selected.carriedForwardHours ?? 0) !== 0">{{ fmtH(selected.carriedForwardHours!) }} carried to next month</template>
+              <template v-if="(selected.paidOutHours ?? 0) === 0 && (selected.carriedForwardHours ?? 0) === 0">nothing paid out or carried</template>
+            </p>
             <p v-if="selected.reviewedByName" class="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
               Confirmed by {{ selected.reviewedByName }} on {{ selected.reviewedAt ? new Date(selected.reviewedAt).toLocaleDateString() : '—' }}
             </p>
@@ -518,98 +547,80 @@ onMounted(load);
           <div v-else class="space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4">
             <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Confirm settlement</p>
 
-            <!-- Outcome -->
-            <div class="space-y-1.5">
+            <!-- Allocation: three fields, always available — admin has full control -->
+            <div class="space-y-3">
               <div class="flex items-center gap-1.5">
-                <Label>Outcome</Label>
+                <Label>Allocate {{ fmtH(selected.netBalanceHours) }} balance</Label>
                 <TooltipProvider :delay-duration="100">
                   <Tooltip>
                     <TooltipTrigger as-child>
                       <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer" />
                     </TooltipTrigger>
-                    <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
+                    <TooltipContent side="top" class="max-w-72 p-2.5 text-left">
                       <p class="text-xs">
-                        How you settled this balance with the employee. This doesn't change any
-                        hours — it's just a record of your decision, and it fills in the Outcome
-                        column in the payroll CSV once confirmed.
+                        <span class="font-semibold">Pay out</span> appears in the payroll CSV's
+                        Overtime Paid column. <span class="font-semibold">Carry over</span> is added
+                        to the employee's flex balance next month; <span class="font-semibold">Deduct</span>
+                        starts next month in deficit. Both are applied automatically as a flex
+                        adjustment. Anything unallocated is simply forfeited or forgiven.
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div class="flex gap-2">
-                <Button
-                  v-for="(label, val) in OUTCOME_LABELS"
-                  :key="val"
-                  :variant="confirmOutcome === val ? 'default' : 'outline'"
-                  size="sm"
-                  @click="confirmOutcome = val as SettlementOutcome"
-                >
-                  {{ label }}
-                </Button>
-              </div>
-            </div>
-
-            <!-- Override hours -->
-            <div class="grid grid-cols-2 gap-3">
-              <div class="space-y-1.5">
-                <div class="flex items-center gap-1.5">
-                  <Label class="text-xs text-slate-500">
-                    Overtime hours
-                    <span class="font-normal ml-1">(leave blank to use computed {{ fmtHPlain(selected.overtimeHours) }})</span>
-                  </Label>
-                  <TooltipProvider :delay-duration="100">
-                    <Tooltip>
-                      <TooltipTrigger as-child>
-                        <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer shrink-0" />
-                      </TooltipTrigger>
-                      <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
-                        <p class="text-xs">
-                          Only fill this in to correct the computed value. Whatever ends up here
-                          becomes permanent once confirmed, and is what the payroll CSV uses to
-                          split Regular vs. Overtime hours for this employee/month.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+              <div class="grid grid-cols-3 gap-3">
+                <div class="space-y-1.5">
+                  <Label class="text-xs text-slate-500">Pay out (h)</Label>
+                  <Input
+                    v-model="payOutInput"
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    placeholder="e.g. 2.5"
+                  />
                 </div>
-                <Input
-                  v-model="confirmOvertimeOverride"
-                  type="number"
-                  step="0.25"
-                  min="0"
-                  placeholder="e.g. 2.5"
-                />
-              </div>
-              <div class="space-y-1.5">
-                <div class="flex items-center gap-1.5">
-                  <Label class="text-xs text-slate-500">
-                    Deficit hours
-                    <span class="font-normal ml-1">(leave blank to use computed {{ fmtHPlain(selected.deficitHours) }})</span>
-                  </Label>
-                  <TooltipProvider :delay-duration="100">
-                    <Tooltip>
-                      <TooltipTrigger as-child>
-                        <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer shrink-0" />
-                      </TooltipTrigger>
-                      <TooltipContent side="top" class="max-w-64 p-2.5 text-left">
-                        <p class="text-xs">
-                          Only fill this in to correct the computed value. Unlike overtime hours,
-                          this is <span class="font-semibold">not</span> included in the payroll
-                          CSV — it's kept here purely for your own record.
-                        </p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                <div class="space-y-1.5">
+                  <Label class="text-xs text-slate-500">Carry over to next month (h)</Label>
+                  <Input
+                    v-model="carryOverInput"
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    placeholder="e.g. 1.0"
+                  />
                 </div>
-                <Input
-                  v-model="confirmDeficitOverride"
-                  type="number"
-                  step="0.25"
-                  min="0"
-                  placeholder="e.g. 1.0"
-                />
+                <div class="space-y-1.5">
+                  <Label class="text-xs text-slate-500">Deduct from next month (h)</Label>
+                  <Input
+                    v-model="deductInput"
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    placeholder="e.g. 6.0"
+                  />
+                </div>
               </div>
+              <p
+                v-if="!allocationValid"
+                class="text-xs font-mono text-rose-600 dark:text-rose-400 font-semibold"
+              >
+                Hours cannot be negative — use the Deduct field to start next month in deficit.
+              </p>
+              <p
+                v-else-if="Math.abs(allocationDiff) > 0.001"
+                class="text-xs font-mono text-amber-600 dark:text-amber-400"
+              >
+                <template v-if="allocationDiff > 0">
+                  {{ fmtHPlain(allocationDiff) }} of the balance unallocated — it will be
+                  {{ selected.netBalanceHours >= 0 ? 'forfeited (unpaid)' : 'forgiven' }}.
+                </template>
+                <template v-else>
+                  Allocating {{ fmtHPlain(-allocationDiff) }} more than the computed balance.
+                </template>
+              </p>
+              <p v-else class="text-xs font-mono text-slate-500 dark:text-slate-400">
+                Allocation matches the computed balance.
+              </p>
             </div>
 
             <!-- Notes -->
@@ -644,7 +655,7 @@ onMounted(load);
           <Button variant="outline" @click="detailOpen = false">Close</Button>
           <Button
             v-if="selected?.status !== 'Settled'"
-            :disabled="confirming"
+            :disabled="confirming || !allocationValid"
             @click="confirmSettlement"
           >
             <Loader2Icon v-if="confirming" class="size-4 animate-spin" />
