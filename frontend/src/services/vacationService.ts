@@ -60,34 +60,40 @@ export interface VacationRangeResult {
 }
 
 export const vacationService = {
-  async getBalances(year?: number): Promise<VacationBalance[]> {
-    const res = await apiClient.get<VacationBalance[]>("/vacations/balances", {
+  async getBalances(year?: number, employeeId?: string): Promise<VacationBalance[]> {
+    const url = employeeId ? `/vacations/employees/${employeeId}/balances` : "/vacations/balances";
+    const res = await apiClient.get<VacationBalance[]>(url, {
       params: year !== undefined ? { year } : undefined,
     });
     return res.data;
   },
 
-  async getVacationDays(): Promise<VacationDay[]> {
-    const res = await apiClient.get<VacationDay[]>("/vacations");
+  async getVacationDays(employeeId?: string): Promise<VacationDay[]> {
+    const url = employeeId ? `/vacations/employees/${employeeId}` : "/vacations";
+    const res = await apiClient.get<VacationDay[]>(url);
     return res.data;
   },
 
-  async create(data: CreateVacationDayDto): Promise<VacationDay> {
-    const res = await apiClient.post<VacationDay>("/vacations", data);
+  async create(data: CreateVacationDayDto, employeeId?: string): Promise<VacationDay> {
+    const url = employeeId ? `/vacations/employees/${employeeId}` : "/vacations";
+    const res = await apiClient.post<VacationDay>(url, data);
     return res.data;
   },
 
-  async update(id: number, data: CreateVacationDayDto): Promise<VacationDay> {
-    const res = await apiClient.put<VacationDay>(`/vacations/${id}`, data);
+  async update(id: number, data: CreateVacationDayDto, employeeId?: string): Promise<VacationDay> {
+    const url = employeeId ? `/vacations/employees/${employeeId}/${id}` : `/vacations/${id}`;
+    const res = await apiClient.put<VacationDay>(url, data);
     return res.data;
   },
 
-  async delete(id: number): Promise<void> {
-    await apiClient.delete(`/vacations/${id}`);
+  async delete(id: number, employeeId?: string): Promise<void> {
+    const url = employeeId ? `/vacations/employees/${employeeId}/${id}` : `/vacations/${id}`;
+    await apiClient.delete(url);
   },
 
-  async createRange(data: CreateVacationRangeDto): Promise<VacationRangeResult> {
-    const res = await apiClient.post<VacationRangeResult>("/vacations/range", data);
+  async createRange(data: CreateVacationRangeDto, employeeId?: string): Promise<VacationRangeResult> {
+    const url = employeeId ? `/vacations/employees/${employeeId}/range` : "/vacations/range";
+    const res = await apiClient.post<VacationRangeResult>(url, data);
     return res.data;
   },
 

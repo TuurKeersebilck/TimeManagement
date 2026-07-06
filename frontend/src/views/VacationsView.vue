@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   vacationService,
@@ -9,6 +10,7 @@ import {
   type TeamVacationDay,
 } from "../services/vacationService";
 import { holidayService, type PublicHoliday } from "../services/holidayService";
+import { adminService, type Employee } from "../services/adminService";
 import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
@@ -40,7 +42,9 @@ import {
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
-const { currentUser } = useAuth();
+const { currentUser, isAdmin } = useAuth();
+const route = useRoute();
+const router = useRouter();
 
 // ─── Data state ───────────────────────────────────────────────────────────────
 
@@ -49,6 +53,43 @@ const vacationDays = ref<VacationDay[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
 const teamVacationDays = ref<TeamVacationDay[]>([]);
 const loading = ref(false);
+
+// ─── Admin: manage on behalf of an employee ──────────────────────────────────
+
+const employees = ref<Employee[]>([]);
+const selectedEmployeeId = ref<string>(
+  typeof route.query.employeeId === "string" && route.query.employeeId ? route.query.employeeId : "own"
+);
+
+// undefined => acting on the admin's own vacation days
+const actingEmployeeId = computed(() =>
+  isAdmin.value && selectedEmployeeId.value !== "own" ? selectedEmployeeId.value : undefined
+);
+
+const actingEmployeeName = computed(
+  () => employees.value.find((e) => e.id === selectedEmployeeId.value)?.fullName
+);
+
+watch(selectedEmployeeId, (id) => {
+  router.replace({ query: { ...route.query, employeeId: id === "own" ? undefined : id } });
+  loadVacationAndBalances();
+});
+
+const loadVacationAndBalances = async () => {
+  loading.value = true;
+  try {
+    const [b, d] = await Promise.all([
+      vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value),
+      vacationService.getVacationDays(actingEmployeeId.value),
+    ]);
+    balances.value = b;
+    vacationDays.value = d;
+  } catch {
+    toast.error("Failed to load vacation data");
+  } finally {
+    loading.value = false;
+  }
+};
 
 // ─── Year overlay ─────────────────────────────────────────────────────────────
 
@@ -141,9 +182,10 @@ const vacationsByDate = computed(() => {
 });
 
 const teamVacationsByDate = computed(() => {
+  const ownerId = actingEmployeeId.value ?? currentUser.value?.id;
   const map = new Map<string, TeamVacationDay[]>();
   for (const d of teamVacationDays.value) {
-    if (d.userId === currentUser.value?.id) continue;
+    if (d.userId === ownerId) continue;
     if (!map.has(d.date)) map.set(d.date, []);
     map.get(d.date)!.push(d);
   }
@@ -314,12 +356,16 @@ const savePopover = async () => {
     const { vacationTypeId, startDate, endDate, amount, note } = popoverForm.value;
 
     if (isPopoverEditMode.value) {
-      const updated = await vacationService.update(popoverEditingId.value!, {
-        vacationTypeId: parseInt(vacationTypeId),
-        date: startDate,
-        amount: parseFloat(amount),
-        note: note.trim() || undefined,
-      });
+      const updated = await vacationService.update(
+        popoverEditingId.value!,
+        {
+          vacationTypeId: parseInt(vacationTypeId),
+          date: startDate,
+          amount: parseFloat(amount),
+          note: note.trim() || undefined,
+        },
+        actingEmployeeId.value
+      );
       const idx = vacationDays.value.findIndex((d) => d.id === popoverEditingId.value);
       if (idx !== -1) vacationDays.value[idx] = updated;
       toast.success("Vacation day updated");
@@ -330,17 +376,20 @@ const savePopover = async () => {
         amount: parseFloat(amount),
         note: note.trim() || undefined,
       };
-      const created = await vacationService.create(payload);
+      const created = await vacationService.create(payload, actingEmployeeId.value);
       vacationDays.value.unshift(created);
       toast.success("Vacation day planned");
     } else {
-      const result = await vacationService.createRange({
-        vacationTypeId: parseInt(vacationTypeId),
-        startDate,
-        endDate,
-        amount: parseFloat(amount),
-        note: note.trim() || undefined,
-      });
+      const result = await vacationService.createRange(
+        {
+          vacationTypeId: parseInt(vacationTypeId),
+          startDate,
+          endDate,
+          amount: parseFloat(amount),
+          note: note.trim() || undefined,
+        },
+        actingEmployeeId.value
+      );
       vacationDays.value.unshift(...result.created);
       const skipped = result.skippedWeekends + result.skippedHolidays + result.skippedExisting;
       toast.success(
@@ -350,7 +399,7 @@ const savePopover = async () => {
       );
     }
 
-    balances.value = await vacationService.getBalances(new Date().getFullYear());
+    balances.value = await vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value);
     closePopover();
   } catch (err: unknown) {
     toast.error(extractApiError(err, "Failed to save vacation"));
@@ -379,9 +428,9 @@ const deleteDay = (day: VacationDay) => {
     variant: "destructive",
     onConfirm: async () => {
       try {
-        await vacationService.delete(day.id);
+        await vacationService.delete(day.id, actingEmployeeId.value);
         vacationDays.value = vacationDays.value.filter((d) => d.id !== day.id);
-        balances.value = await vacationService.getBalances(new Date().getFullYear());
+        balances.value = await vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value);
         toast.success("Vacation day removed");
       } catch {
         toast.error("Failed to delete");
@@ -397,16 +446,18 @@ onMounted(async () => {
   try {
     const year = new Date().getFullYear();
     const month = new Date().getMonth() + 1;
-    const [b, d, h, t] = await Promise.all([
-      vacationService.getBalances(new Date().getFullYear()),
-      vacationService.getVacationDays(),
+    const [b, d, h, t, emps] = await Promise.all([
+      vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value),
+      vacationService.getVacationDays(actingEmployeeId.value),
       holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
       vacationService.getTeamVacationDays({ year, month }).catch(() => [] as TeamVacationDay[]),
+      isAdmin.value ? adminService.getEmployees() : Promise.resolve([] as Employee[]),
     ]);
     balances.value = b;
     vacationDays.value = d;
     holidays.value = h;
     teamVacationDays.value = t;
+    employees.value = emps;
   } catch {
     toast.error("Failed to load vacation data");
   } finally {
@@ -420,11 +471,32 @@ onMounted(async () => {
     <div class="p-6 lg:p-8">
       <div class="max-w-5xl mx-auto">
         <!-- Header -->
-        <div class="mb-6">
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Vacations</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Plan your vacation and see when your team is off
-          </p>
+        <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              {{ actingEmployeeName ? `${actingEmployeeName}'s vacation` : "Vacations" }}
+            </h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              {{
+                actingEmployeeName
+                  ? `Manage vacation on behalf of ${actingEmployeeName}`
+                  : "Plan your vacation and see when your team is off"
+              }}
+            </p>
+          </div>
+
+          <!-- Admin: act on behalf of an employee -->
+          <Select v-if="isAdmin" v-model="selectedEmployeeId">
+            <SelectTrigger class="w-56">
+              <SelectValue placeholder="Manage my own vacation" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="own">Manage my own vacation</SelectItem>
+              <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
+                {{ emp.fullName }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div class="max-w-4xl">

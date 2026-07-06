@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using TimeManagementBackend.Exceptions;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
@@ -110,6 +111,101 @@ public class VacationsController(
         if (user == null) return Unauthorized();
 
         await _service.DeleteVacationDayAsync(user.Id, id, ct);
+        return NoContent();
+    }
+
+    // ─── Admin: manage vacation days on behalf of an employee ─────────────────
+
+    [HttpGet("employees/{userId}/balances")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IEnumerable<VacationBalanceDto>>> GetEmployeeBalances(
+        string userId, [FromQuery] int? year, CancellationToken ct)
+    {
+        var balances = await _service.GetMyBalancesAsync(userId, year, ct);
+        return Ok(balances);
+    }
+
+    [HttpGet("employees/{userId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<IEnumerable<VacationDayDto>>> GetEmployeeVacationDays(string userId, CancellationToken ct)
+    {
+        var days = await _service.GetMyVacationDaysAsync(userId, ct);
+        return Ok(days);
+    }
+
+    [HttpPost("employees/{userId}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<VacationDayDto>> CreateEmployeeVacationDay(
+        string userId, [FromBody] CreateVacationDayDto dto, CancellationToken ct)
+    {
+        _ = await UserManager.FindByIdAsync(userId)
+            ?? throw new ResourceNotFoundException("Employee not found.");
+
+        if (await _service.ExistsForDateAndTypeAsync(userId, dto.Date, dto.VacationTypeId, ct))
+            return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
+
+        var created = await _service.CreateVacationDayAsync(userId, dto, ct);
+
+        var dateLabel = dto.Date.ToString("d MMM yyyy");
+        await _notificationService.NotifyUserAsync(
+            userId, $"An admin planned a vacation for you on {dateLabel}", NotificationType.Vacation, ct);
+
+        return CreatedAtAction(nameof(GetEmployeeVacationDays), new { userId }, created);
+    }
+
+    [HttpPut("employees/{userId}/{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<VacationDayDto>> UpdateEmployeeVacationDay(
+        string userId, int id, [FromBody] CreateVacationDayDto dto, CancellationToken ct)
+    {
+        var updated = await _service.UpdateVacationDayAsync(userId, id, dto, ct);
+
+        var dateLabel = dto.Date.ToString("d MMM yyyy");
+        await _notificationService.NotifyUserAsync(
+            userId, $"An admin updated your vacation on {dateLabel}", NotificationType.Vacation, ct);
+
+        return Ok(updated);
+    }
+
+    [HttpPost("employees/{userId}/range")]
+    [Authorize(Roles = "Admin")]
+    public async Task<ActionResult<VacationRangeResultDto>> CreateEmployeeVacationRange(
+        string userId, [FromBody] CreateVacationRangeDto dto, CancellationToken ct)
+    {
+        _ = await UserManager.FindByIdAsync(userId)
+            ?? throw new ResourceNotFoundException("Employee not found.");
+
+        var result = await _service.CreateVacationRangeAsync(userId, dto, ct);
+
+        if (result.Created.Any())
+        {
+            var startLabel = dto.StartDate.ToString("d MMM yyyy");
+            var endLabel = dto.EndDate.ToString("d MMM yyyy");
+            var message = dto.StartDate == dto.EndDate
+                ? $"An admin planned a vacation for you on {startLabel}"
+                : $"An admin planned a vacation for you from {startLabel} until {endLabel}";
+            await _notificationService.NotifyUserAsync(userId, message, NotificationType.Vacation, ct);
+        }
+
+        return Ok(result);
+    }
+
+    [HttpDelete("employees/{userId}/{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> DeleteEmployeeVacationDay(string userId, int id, CancellationToken ct)
+    {
+        var existing = (await _service.GetMyVacationDaysAsync(userId, ct))
+            .FirstOrDefault(d => d.Id == id);
+
+        await _service.DeleteVacationDayAsync(userId, id, ct);
+
+        if (existing != null)
+        {
+            var dateLabel = existing.Date.ToString("d MMM yyyy");
+            await _notificationService.NotifyUserAsync(
+                userId, $"An admin removed your vacation on {dateLabel}", NotificationType.Vacation, ct);
+        }
+
         return NoContent();
     }
 
