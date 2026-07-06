@@ -1,5 +1,17 @@
 # Changelog
 
+## [v0.6.1] - 2026-07-06
+
+### New Features
+
+- Admin-managed vacations — admins can plan, edit, or remove vacation days on behalf of an employee from an employee selector in the existing vacation planner, reusing the same balance checks and validation as self-service requests. The employee is notified whenever an admin changes their vacation on their behalf.
+
+### Bug Fixes
+
+- Admins were flagged by the "not logged today" widget on the admin dashboard, since the employee list didn't distinguish admin accounts from regular employees — the exclusion is now applied server-side via an optional role filter, next to the other places that already encode the "admins don't track time" rule.
+- Admins landing on the shared personal dashboard (via the 404 page's "Go home" link, a stale bookmark, or a typed URL) now get redirected to the admin dashboard instead of seeing an employee-facing nag.
+- Time adjustment approval links containing a `/` in their token broke approval for a large fraction of requests — the token is now generated as URL-safe base64 so it survives percent-encoding through ASP.NET Core's routing unchanged.
+
 ## [v0.6.0] - 2026-07-03
 
 ### New Features
