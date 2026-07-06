@@ -99,12 +99,12 @@ onMounted(async () => {
   try {
     const [logs, emps, vacations] = await Promise.all([
       adminService.getAllTimeLogs({ dateFrom: todayStr, dateTo: todayStr }),
-      adminService.getEmployees(),
+      // Admins don't track time, so they shouldn't count toward "logged" / "not logged" stats.
+      adminService.getEmployees("Employee"),
       adminService.getAllVacationDays(),
     ]);
     allLogs.value = logs;
-    // Admins don't track time, so they shouldn't count toward "logged" / "not logged" stats.
-    employees.value = emps.filter((e) => e.role === "Employee");
+    employees.value = emps;
     upcomingVacations.value = vacations;
   } catch {
     toast.error("Failed to load dashboard data");

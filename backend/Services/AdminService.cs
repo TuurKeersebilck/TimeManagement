@@ -99,14 +99,17 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .ToList();
     }
 
-    public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(CancellationToken ct = default)
+    public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(UserRole? role = null, CancellationToken ct = default)
     {
         var config = await _context.AppConfigurations.FirstOrDefaultAsync(ct);
 
         var (weekStart, weekEnd) = TimeCalculationHelper.GetCurrentWeekBounds();
 
-        var users = await _context.Users
-            .AsNoTracking()
+        var usersQuery = _context.Users.AsNoTracking().AsQueryable();
+        if (role.HasValue)
+            usersQuery = usersQuery.Where(u => u.Role == role.Value);
+
+        var users = await usersQuery
             .OrderBy(u => u.FullName)
             .ToListAsync(ct);
 
@@ -136,7 +139,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Id = u.Id,
                 FullName = u.FullName,
                 Email = u.Email ?? string.Empty,
-                Role = u.Role,
                 WeeklyHoursLogged = Math.Round(weeklyLogged, 2),
                 ResolvedWeeklyTarget = resolvedWeekly,
                 IsDisabled = u.IsDisabled,

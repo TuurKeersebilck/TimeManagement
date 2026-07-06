@@ -30,7 +30,6 @@ export interface Employee {
   id: string;
   fullName: string;
   email: string;
-  role: "Employee" | "Admin";
   weeklyHoursLogged: number;
   resolvedWeeklyTarget?: number | null;
   isDisabled: boolean;
@@ -97,8 +96,10 @@ export const adminService = {
     return response.data;
   },
 
-  async getEmployees(): Promise<Employee[]> {
-    const response = await apiClient.get<Employee[]>("/admin/employees");
+  async getEmployees(role?: "Employee" | "Admin"): Promise<Employee[]> {
+    const response = await apiClient.get<Employee[]>("/admin/employees", {
+      params: role ? { role } : undefined,
+    });
     return response.data;
   },
 

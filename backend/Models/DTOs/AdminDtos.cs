@@ -34,7 +34,6 @@ public class EmployeeDto
     public string Id { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public UserRole Role { get; set; }
     public decimal WeeklyHoursLogged { get; set; }
     public decimal? ResolvedWeeklyTarget { get; set; }
     public bool IsDisabled { get; set; }
