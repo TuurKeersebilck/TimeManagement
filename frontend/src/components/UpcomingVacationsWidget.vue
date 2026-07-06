@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from "vue";
 import { vacationService, type VacationDay, type TeamVacationDay } from "@/services/vacationService";
 import { holidayService, type PublicHoliday } from "@/services/holidayService";
+import { employeeColor } from "@/lib/employeeColors";
 import { useAuth } from "@/composables/useAuth";
 import { Button } from "@/components/ui/button";
 import {
@@ -264,7 +265,7 @@ const displayDate = (iso: string) =>
                     v-for="entry in teamVacationsByDate.get(cell.iso)?.slice(0, 2) ?? []"
                     :key="`t-${entry.id}`"
                     class="w-1.5 h-1.5 rounded-full ring-1 ring-black/10 opacity-50"
-                    :style="{ backgroundColor: entry.vacationTypeColor ?? '#94a3b8' }"
+                    :style="{ backgroundColor: employeeColor(entry.userId) }"
                   />
                   <div
                     v-if="holidaysByDate.has(cell.iso)"
@@ -309,9 +310,9 @@ const displayDate = (iso: string) =>
               >
                 <div
                   class="w-1.5 h-1.5 rounded-full shrink-0 opacity-60"
-                  :style="{ backgroundColor: entry.vacationTypeColor ?? '#94a3b8' }"
+                  :style="{ backgroundColor: employeeColor(entry.userId) }"
                 />
-                <span class="text-xs opacity-80">{{ entry.employeeName.split(" ")[0] }} · {{ entry.vacationTypeName }}<span v-if="entry.amount === 0.5" class="opacity-60"> ½</span></span>
+                <span class="text-xs opacity-80">{{ entry.employeeName.split(" ")[0] }}<template v-if="entry.vacationTypeName"> · {{ entry.vacationTypeName }}</template><span v-if="entry.amount === 0.5" class="opacity-60"> ½</span></span>
               </div>
             </TooltipContent>
           </Tooltip>

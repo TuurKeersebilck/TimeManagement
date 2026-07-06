@@ -30,11 +30,12 @@ export interface TeamVacationDay {
   id: number;
   userId: string;
   employeeName: string;
-  vacationTypeId: number;
-  vacationTypeName: string;
-  vacationTypeColor?: string;
   date: string;
   amount: number;
+  // Only populated for admins — the API strips these for regular employees
+  vacationTypeId?: number;
+  vacationTypeName?: string;
+  vacationTypeColor?: string;
   note?: string;
 }
 
@@ -98,7 +99,6 @@ export const vacationService = {
   },
 
   async getTeamVacationDays(params?: {
-    vacationTypeId?: number;
     year?: number;
     month?: number;
   }): Promise<TeamVacationDay[]> {

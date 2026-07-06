@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
-import { vacationService, type TeamVacationDay, type VacationType } from "@/services/vacationService";
+import { vacationService, type TeamVacationDay } from "@/services/vacationService";
 import { adminService, type Employee } from "@/services/adminService";
+import { employeeColor, employeeColorWash } from "@/lib/employeeColors";
 import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import {
@@ -19,29 +20,23 @@ const { isAdmin } = useAuth();
 
 const vacationDays = ref<TeamVacationDay[]>([]);
 const employees = ref<Employee[]>([]);
-const vacationTypes = ref<VacationType[]>([]);
 const loading = ref(false);
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
 
 const filterEmployee = ref<string>("all");
-const filterType = ref<string>("all");
 
 const filteredDays = computed(() => {
-  let days = vacationDays.value;
-  if (filterEmployee.value !== "all") days = days.filter((d) => d.userId === filterEmployee.value);
-  if (filterType.value !== "all")
-    days = days.filter((d) => d.vacationTypeId === parseInt(filterType.value));
-  return days;
+  if (filterEmployee.value === "all") return vacationDays.value;
+  return vacationDays.value.filter((d) => d.userId === filterEmployee.value);
 });
 
 const clearFilters = () => {
   filterEmployee.value = "all";
-  filterType.value = "all";
   selectedIso.value = null;
 };
 
-const hasFilters = computed(() => filterEmployee.value !== "all" || filterType.value !== "all");
+const hasFilters = computed(() => filterEmployee.value !== "all");
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -157,17 +152,15 @@ watch(currentMonth, fetchVacationDays);
 onMounted(async () => {
   loading.value = true;
   try {
-    const requests: [ReturnType<typeof vacationService.getTeamVacationDays>, Promise<VacationType[]>, Promise<Employee[]>] = [
+    const requests: [ReturnType<typeof vacationService.getTeamVacationDays>, Promise<Employee[]>] = [
       vacationService.getTeamVacationDays({
         year: currentMonth.value.getFullYear(),
         month: currentMonth.value.getMonth() + 1,
       }),
-      vacationService.getVacationTypes(),
       isAdmin.value ? adminService.getEmployees() : Promise.resolve([]),
     ];
-    const [days, types, emps] = await Promise.all(requests);
+    const [days, emps] = await Promise.all(requests);
     vacationDays.value = days;
-    vacationTypes.value = types;
     employees.value = emps;
   } catch {
     toast.error("Failed to load team vacation data");
@@ -193,18 +186,6 @@ const MAX_VISIBLE = 3;
           <SelectItem value="all">All employees</SelectItem>
           <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
             {{ emp.fullName }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-
-      <Select v-model="filterType">
-        <SelectTrigger class="w-44">
-          <SelectValue placeholder="All types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All types</SelectItem>
-          <SelectItem v-for="type in vacationTypes" :key="type.id" :value="String(type.id)">
-            {{ type.name }}
           </SelectItem>
         </SelectContent>
       </Select>
@@ -287,8 +268,8 @@ const MAX_VISIBLE = 3;
               v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
               :key="entry.id"
               :style="{
-                backgroundColor: (entry.vacationTypeColor ?? '#6366f1') + '28',
-                borderLeftColor: entry.vacationTypeColor ?? '#6366f1',
+                backgroundColor: employeeColorWash(entry.userId),
+                borderLeftColor: employeeColor(entry.userId),
               }"
               class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
             >
@@ -331,10 +312,10 @@ const MAX_VISIBLE = 3;
           >
             <div
               class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
-              :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+              :style="{ backgroundColor: employeeColor(entry.userId) }"
             />
             <span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">{{ entry.employeeName }}</span>
-            <span class="text-xs text-slate-500 dark:text-slate-400">{{ entry.vacationTypeName }}</span>
+            <span v-if="entry.vacationTypeName" class="text-xs text-slate-500 dark:text-slate-400">{{ entry.vacationTypeName }}</span>
             <span
               :class="[
                 'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
