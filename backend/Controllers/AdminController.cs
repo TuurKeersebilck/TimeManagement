@@ -30,9 +30,9 @@ public class AdminController(
     }
 
     [HttpGet("employees")]
-    public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployees(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployees([FromQuery] UserRole? role, CancellationToken ct)
     {
-        var employees = await _adminService.GetEmployeesAsync(ct);
+        var employees = await _adminService.GetEmployeesAsync(role, ct);
         return Ok(employees);
     }
 
