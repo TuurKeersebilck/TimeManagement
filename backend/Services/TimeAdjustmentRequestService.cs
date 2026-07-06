@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
@@ -37,7 +38,7 @@ public class TimeAdjustmentRequestService(
             throw new ValidationException(
                 "A pending adjustment request already exists for this date. Please wait for it to be reviewed.");
 
-        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        var rawToken = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
         var tokenHash = HashToken(rawToken);
         var snapshotJson = JsonSerializer.Serialize(dto.DesiredDaySnapshot,
             new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
@@ -59,7 +60,7 @@ public class TimeAdjustmentRequestService(
         await db.SaveChangesAsync(ct);
 
         var user = await userManager.FindByIdAsync(userId);
-        var approveLink = $"{approvalBaseUrl.TrimEnd('/')}/api/timeadjustmentrequests/approve/{Uri.EscapeDataString(rawToken)}";
+        var approveLink = $"{approvalBaseUrl.TrimEnd('/')}/api/timeadjustmentrequests/approve/{rawToken}";
         var summary = FormatSnapshotSummary(dto.DesiredDaySnapshot);
 
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
