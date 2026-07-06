@@ -157,7 +157,7 @@ public class SettlementService(
         if (blockers.Count > 0)
             throw new SettlementBlockedException(blockers);
 
-        var (paidOut, carried) = ValidateAllocation(settlement, dto);
+        var (paidOut, carried) = ValidateAllocation(dto);
 
         settlement.PaidOutHours = paidOut;
         settlement.CarriedForwardHours = carried;
@@ -205,38 +205,18 @@ public class SettlementService(
     }
 
     /// <summary>
-    /// Validates the confirm allocation against the frozen balance and returns (paidOut, carried),
-    /// both rounded to 2 decimals. Carried is signed: positive = overtime carry, negative = deficit carry.
+    /// Sanity-checks the confirm allocation and returns (paidOut, carried), both rounded to
+    /// 2 decimals. Carried is signed: positive adds to next month's flex balance, negative starts
+    /// it in deficit. The allocation is deliberately NOT forced to reconcile with the computed
+    /// balance — the admin has full control; the UI surfaces any mismatch as a hint.
     /// </summary>
-    private static (decimal PaidOut, decimal Carried) ValidateAllocation(
-        MonthlySettlement settlement, ConfirmSettlementDto dto)
+    private static (decimal PaidOut, decimal Carried) ValidateAllocation(ConfirmSettlementDto dto)
     {
         var paidOut = Math.Round(dto.PaidOutHours, 2);
         var carried = Math.Round(dto.CarryForwardHours, 2);
-        var net = Math.Round(settlement.NetBalanceHours, 2);
 
-        if (net > 0)
-        {
-            if (paidOut < 0 || carried < 0)
-                throw new ValidationException("Paid-out and carry-forward hours cannot be negative.");
-            if (paidOut + carried > net)
-                throw new ValidationException(
-                    $"Allocation ({paidOut + carried}h) exceeds the month's overtime ({net}h). " +
-                    "Paid-out plus carry-forward must not exceed the balance; any remainder is forfeited.");
-        }
-        else if (net < 0)
-        {
-            if (paidOut != 0)
-                throw new ValidationException("A deficit month cannot have paid-out hours.");
-            if (carried != 0 && carried != net)
-                throw new ValidationException(
-                    $"A deficit is either carried forward in full ({net}h) or forgiven (0h).");
-        }
-        else
-        {
-            if (paidOut != 0 || carried != 0)
-                throw new ValidationException("A zero-balance month has nothing to allocate.");
-        }
+        if (paidOut < 0)
+            throw new ValidationException("Paid-out hours cannot be negative.");
 
         return (paidOut, carried);
     }
@@ -247,24 +227,12 @@ public class SettlementService(
         var prefix = $"Your {settlement.Year}-{settlement.Month:00} time settlement has been confirmed: " +
                      $"{balanceSign}{settlement.NetBalanceHours}h — ";
 
-        if (settlement.NetBalanceHours > 0)
-        {
-            var parts = new List<string>();
-            if (paidOut > 0) parts.Add($"{paidOut}h paid out");
-            if (carried > 0) parts.Add($"{carried}h carried to next month's flex balance");
-            var forfeited = Math.Round(settlement.NetBalanceHours, 2) - paidOut - carried;
-            if (forfeited > 0) parts.Add($"{forfeited}h forfeited");
-            return prefix + (parts.Count > 0 ? string.Join(", ", parts) : "settled") + ".";
-        }
+        var parts = new List<string>();
+        if (paidOut > 0) parts.Add($"{paidOut}h paid out");
+        if (carried > 0) parts.Add($"{carried}h carried over to next month's flex balance");
+        if (carried < 0) parts.Add($"next month starts at {carried}h");
 
-        if (settlement.NetBalanceHours < 0)
-        {
-            return prefix + (carried != 0
-                ? $"the deficit is carried forward, next month starts at {carried}h"
-                : "the deficit has been forgiven") + ".";
-        }
-
-        return prefix + "balanced, nothing to settle.";
+        return prefix + (parts.Count > 0 ? string.Join(", ", parts) : "settled as unpaid") + ".";
     }
 
     private static MonthlySettlementDto MapToDto(MonthlySettlement s) => new()

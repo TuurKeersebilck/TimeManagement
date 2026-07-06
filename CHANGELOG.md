@@ -4,7 +4,7 @@
 
 ### New Features
 
-- Settlement allocation — confirming a monthly settlement now decides where the employee's balance goes, all in one dialog. Overtime months can be split between paying out (appears in the payroll CSV) and carrying over to next month's flex balance, with anything unallocated explicitly forfeited; deficit months are either carried forward in full or forgiven. Carried hours automatically create the flex balance adjustment for next month, so the separate manual adjustment step per employee is no longer part of the monthly routine.
+- Settlement allocation — confirming a monthly settlement now decides where the employee's balance goes, all in one dialog with three always-available fields: pay out (appears in the payroll CSV), carry over to next month's flex balance, and deduct from next month (start it in deficit). The admin stays in full control — the dialog compares the allocation against the computed balance and shows a hint when they differ (unallocated hours are forfeited or forgiven), but never blocks the decision. Carried or deducted hours automatically create the flex balance adjustment for next month, so the separate manual adjustment step per employee is no longer part of the monthly routine.
 - The settlement outcome (Paid / Unpaid) is now derived from the allocation instead of being picked by hand, and the payroll CSV splits the Overtime Paid column from a new Carried Forward column so carried hours are never counted as paid.
 - Flex balance adjustments created by a settlement are labeled on the employee detail page and protected from manual deletion; hand-made adjustments still work as before for off-cycle corrections.
 

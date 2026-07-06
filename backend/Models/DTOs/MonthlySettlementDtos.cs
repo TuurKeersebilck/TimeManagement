@@ -24,10 +24,10 @@ public class MonthlySettlementDto
 }
 
 /// <summary>
-/// Allocation of a month's frozen balance, decided at confirm time.
-/// Overtime month: PaidOutHours + CarryForwardHours ≤ overtime; the remainder is forfeited.
-/// Deficit month: PaidOutHours must be 0; CarryForwardHours is either the full negative balance
-/// (carry the deficit) or 0 (forgive it).
+/// Allocation of a month's balance, decided at confirm time. The admin has full control:
+/// PaidOutHours (≥ 0) goes to the payroll export; CarryForwardHours is signed — positive adds to
+/// next month's flex balance, negative starts it in deficit. Any mismatch with the computed
+/// balance is intentional (forfeited / forgiven / granted) and surfaced as a hint in the UI.
 /// </summary>
 public class ConfirmSettlementDto
 {

@@ -93,35 +93,34 @@ const selected = ref<MonthlySettlementDto | null>(null);
 const detailOvertime = ref<OvertimeResultDto | null>(null);
 const loadingDetail = ref(false);
 
-// Confirm form — allocation of the month's balance
+// Confirm form — allocation of the month's balance. The admin has full control:
+// all three fields are always available; any mismatch with the computed balance
+// is surfaced as a hint, never a blocker.
 const payOutInput = ref<string>("");
 const carryOverInput = ref<string>("");
-const deficitChoice = ref<"carry" | "forgive">("carry");
+const deductInput = ref<string>("");
 const confirmNotes = ref("");
 const confirming = ref(false);
 
-const payOutHours = computed(() => {
-  const v = parseFloat(payOutInput.value);
-  return Number.isFinite(v) ? v : 0;
-});
-const carryOverHours = computed(() => {
-  const v = parseFloat(carryOverInput.value);
-  return Number.isFinite(v) ? v : 0;
-});
-const allocatedHours = computed(() => payOutHours.value + carryOverHours.value);
-const forfeitedHours = computed(() =>
-  selected.value ? Math.max(0, selected.value.netBalanceHours - allocatedHours.value) : 0
+function parseHours(v: string): number {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+const payOutHours = computed(() => parseHours(payOutInput.value));
+const carryOverHours = computed(() => parseHours(carryOverInput.value));
+const deductHours = computed(() => parseHours(deductInput.value));
+// Signed carry sent to the backend: carry over adds, deduct subtracts
+const carrySigned = computed(() => carryOverHours.value - deductHours.value);
+// Difference between the computed balance and what the admin allocated
+const allocationDiff = computed(() =>
+  selected.value
+    ? selected.value.netBalanceHours - (payOutHours.value + carrySigned.value)
+    : 0
 );
-const allocationValid = computed(() => {
-  if (!selected.value) return false;
-  const net = selected.value.netBalanceHours;
-  if (net <= 0) return true; // deficit/zero months use the radio choice, always valid
-  return (
-    payOutHours.value >= 0 &&
-    carryOverHours.value >= 0 &&
-    allocatedHours.value <= net + 0.001
-  );
-});
+const allocationValid = computed(
+  () => payOutHours.value >= 0 && carryOverHours.value >= 0 && deductHours.value >= 0
+);
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
@@ -164,10 +163,11 @@ async function generateSettlements() {
 
 async function openDetail(s: MonthlySettlementDto) {
   selected.value = s;
-  // Default: pay out the full overtime, carry nothing; deficits default to carry forward
+  // Sensible defaults: overtime months prefill a full pay-out, deficit months a full deduction —
+  // both freely editable
   payOutInput.value = s.netBalanceHours > 0 ? String(s.netBalanceHours) : "";
   carryOverInput.value = "";
-  deficitChoice.value = "carry";
+  deductInput.value = s.netBalanceHours < 0 ? String(-s.netBalanceHours) : "";
   confirmNotes.value = s.notes ?? "";
   detailOpen.value = true;
   loadingDetail.value = true;
@@ -193,13 +193,11 @@ async function openDetail(s: MonthlySettlementDto) {
 
 async function confirmSettlement() {
   if (!selected.value || !allocationValid.value) return;
-  const net = selected.value.netBalanceHours;
   confirming.value = true;
   try {
     await settlementService.confirm(selected.value.id, {
-      paidOutHours: net > 0 ? payOutHours.value : 0,
-      carryForwardHours:
-        net > 0 ? carryOverHours.value : net < 0 && deficitChoice.value === "carry" ? net : 0,
+      paidOutHours: payOutHours.value,
+      carryForwardHours: carrySigned.value,
       notes: confirmNotes.value.trim() || undefined,
     });
     toast.success(`Settlement confirmed for ${selected.value.employeeName}`);
@@ -549,10 +547,10 @@ onMounted(load);
           <div v-else class="space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4">
             <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Confirm settlement</p>
 
-            <!-- Overtime month: split allocation -->
-            <div v-if="selected.netBalanceHours > 0" class="space-y-3">
+            <!-- Allocation: three fields, always available — admin has full control -->
+            <div class="space-y-3">
               <div class="flex items-center gap-1.5">
-                <Label>Allocate {{ fmtHPlain(selected.netBalanceHours) }} overtime</Label>
+                <Label>Allocate {{ fmtH(selected.netBalanceHours) }} balance</Label>
                 <TooltipProvider :delay-duration="100">
                   <Tooltip>
                     <TooltipTrigger as-child>
@@ -560,16 +558,17 @@ onMounted(load);
                     </TooltipTrigger>
                     <TooltipContent side="top" class="max-w-72 p-2.5 text-left">
                       <p class="text-xs">
-                        Decide where this month's overtime goes. <span class="font-semibold">Pay out</span>
-                        appears in the payroll CSV's Overtime Paid column.
-                        <span class="font-semibold">Carry over</span> is added to the employee's flex
-                        balance next month automatically. Anything left unallocated is forfeited (unpaid).
+                        <span class="font-semibold">Pay out</span> appears in the payroll CSV's
+                        Overtime Paid column. <span class="font-semibold">Carry over</span> is added
+                        to the employee's flex balance next month; <span class="font-semibold">Deduct</span>
+                        starts next month in deficit. Both are applied automatically as a flex
+                        adjustment. Anything unallocated is simply forfeited or forgiven.
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               </div>
-              <div class="grid grid-cols-2 gap-3">
+              <div class="grid grid-cols-3 gap-3">
                 <div class="space-y-1.5">
                   <Label class="text-xs text-slate-500">Pay out (h)</Label>
                   <Input
@@ -590,75 +589,39 @@ onMounted(load);
                     placeholder="e.g. 1.0"
                   />
                 </div>
+                <div class="space-y-1.5">
+                  <Label class="text-xs text-slate-500">Deduct from next month (h)</Label>
+                  <Input
+                    v-model="deductInput"
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    placeholder="e.g. 6.0"
+                  />
+                </div>
               </div>
               <p
-                class="text-xs font-mono"
-                :class="allocationValid ? 'text-slate-500 dark:text-slate-400' : 'text-rose-600 dark:text-rose-400 font-semibold'"
+                v-if="!allocationValid"
+                class="text-xs font-mono text-rose-600 dark:text-rose-400 font-semibold"
               >
-                <template v-if="allocationValid">
-                  Allocated {{ fmtHPlain(allocatedHours) }} / {{ fmtHPlain(selected.netBalanceHours) }}
-                  <template v-if="forfeitedHours > 0.001"> · {{ fmtHPlain(forfeitedHours) }} forfeited (unpaid)</template>
+                Hours cannot be negative — use the Deduct field to start next month in deficit.
+              </p>
+              <p
+                v-else-if="Math.abs(allocationDiff) > 0.001"
+                class="text-xs font-mono text-amber-600 dark:text-amber-400"
+              >
+                <template v-if="allocationDiff > 0">
+                  {{ fmtHPlain(allocationDiff) }} of the balance unallocated — it will be
+                  {{ selected.netBalanceHours >= 0 ? 'forfeited (unpaid)' : 'forgiven' }}.
                 </template>
                 <template v-else>
-                  Allocation exceeds the month's overtime of {{ fmtHPlain(selected.netBalanceHours) }}
+                  Allocating {{ fmtHPlain(-allocationDiff) }} more than the computed balance.
                 </template>
               </p>
+              <p v-else class="text-xs font-mono text-slate-500 dark:text-slate-400">
+                Allocation matches the computed balance.
+              </p>
             </div>
-
-            <!-- Deficit month: carry forward or forgive -->
-            <div v-else-if="selected.netBalanceHours < 0" class="space-y-3">
-              <div class="flex items-center gap-1.5">
-                <Label>Settle {{ fmtHPlain(selected.deficitHours) }} deficit</Label>
-                <TooltipProvider :delay-duration="100">
-                  <Tooltip>
-                    <TooltipTrigger as-child>
-                      <InfoIcon class="size-3.5 text-slate-400 dark:text-slate-500 cursor-pointer" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" class="max-w-72 p-2.5 text-left">
-                      <p class="text-xs">
-                        <span class="font-semibold">Carry forward</span> starts the employee's next
-                        month at {{ fmtH(selected.netBalanceHours) }} flex balance automatically.
-                        <span class="font-semibold">Forgive</span> wipes the deficit — next month
-                        starts clean.
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  class="rounded-lg border p-3 text-left transition-colors"
-                  :class="deficitChoice === 'carry'
-                    ? 'border-rose-400 dark:border-rose-600 bg-rose-50 dark:bg-rose-950/40'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'"
-                  @click="deficitChoice = 'carry'"
-                >
-                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Carry forward</p>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Next month starts at {{ fmtH(selected.netBalanceHours) }}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  class="rounded-lg border p-3 text-left transition-colors"
-                  :class="deficitChoice === 'forgive'
-                    ? 'border-emerald-400 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40'
-                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'"
-                  @click="deficitChoice = 'forgive'"
-                >
-                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Forgive</p>
-                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                    Deficit is wiped — next month starts clean
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            <!-- Balanced month -->
-            <p v-else class="text-sm text-slate-500 dark:text-slate-400">
-              Balanced month — nothing to allocate.
-            </p>
 
             <!-- Notes -->
             <div class="space-y-1.5">
