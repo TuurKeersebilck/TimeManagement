@@ -12,6 +12,8 @@ public class MonthlySettlementDto
     public decimal NetBalanceHours { get; set; }
     public decimal OvertimeHours { get; set; }
     public decimal DeficitHours { get; set; }
+    public decimal? PaidOutHours { get; set; }
+    public decimal? CarriedForwardHours { get; set; }
     public SettlementOutcome? Outcome { get; set; }
     public SettlementStatus Status { get; set; }
     public string? ReviewedByUserId { get; set; }
@@ -21,11 +23,16 @@ public class MonthlySettlementDto
     public DateTimeOffset GeneratedAt { get; set; }
 }
 
+/// <summary>
+/// Allocation of a month's frozen balance, decided at confirm time.
+/// Overtime month: PaidOutHours + CarryForwardHours ≤ overtime; the remainder is forfeited.
+/// Deficit month: PaidOutHours must be 0; CarryForwardHours is either the full negative balance
+/// (carry the deficit) or 0 (forgive it).
+/// </summary>
 public class ConfirmSettlementDto
 {
-    public SettlementOutcome Outcome { get; set; }
-    public decimal? OvertimeHoursOverride { get; set; }
-    public decimal? DeficitHoursOverride { get; set; }
+    public decimal PaidOutHours { get; set; }
+    public decimal CarryForwardHours { get; set; }
     public string? Notes { get; set; }
 }
 

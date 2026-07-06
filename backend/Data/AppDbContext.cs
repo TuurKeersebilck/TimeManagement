@@ -112,6 +112,12 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
                 .WithMany()
                 .HasForeignKey(e => e.CreatedByUserId)
                 .OnDelete(DeleteBehavior.SetNull);
+            // One carry-forward adjustment per settlement
+            entity.HasIndex(e => e.SourceSettlementId).IsUnique();
+            entity.HasOne(e => e.SourceSettlement)
+                .WithMany()
+                .HasForeignKey(e => e.SourceSettlementId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<TimeAdjustmentRequest>(entity =>

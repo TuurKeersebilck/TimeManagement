@@ -75,6 +75,8 @@ export interface TimeBankAdjustment {
   effectiveDate: string; // "YYYY-MM-DD"
   hours: number;
   reason: string;
+  /** Set when this adjustment was auto-created by confirming a monthly settlement. */
+  sourceSettlementId?: number | null;
   createdByUserId?: string | null;
   createdByName?: string | null;
   createdAt: string;
