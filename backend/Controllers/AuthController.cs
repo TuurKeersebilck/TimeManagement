@@ -71,7 +71,7 @@ public class AuthController(
 
             _logger.LogInformation("User {Username} logged in successfully", user.UserName);
 
-            var expiryMinutes = loginDto.RememberMe ? 60 * 24 * 30 : _jwtConfig.ExpiryInMinutes;
+            var expiryMinutes = loginDto.RememberMe ? 60 * 24 * 90 : _jwtConfig.ExpiryInMinutes;
             var token = _jwtService.GenerateToken(user, expiryMinutes);
             SetAuthCookie(token, expiryMinutes);
 
