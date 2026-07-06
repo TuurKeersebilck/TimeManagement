@@ -178,6 +178,11 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
 
+  if (to.name === "dashboard" && isAuthenticated && authService.getRoles().includes("Admin")) {
+    next("/admin/dashboard");
+    return;
+  }
+
   if (to.meta.requiresAdmin && !authService.getRoles().includes("Admin")) {
     next("/");
     return;

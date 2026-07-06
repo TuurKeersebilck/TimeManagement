@@ -99,7 +99,8 @@ onMounted(async () => {
   try {
     const [logs, emps, vacations] = await Promise.all([
       adminService.getAllTimeLogs({ dateFrom: todayStr, dateTo: todayStr }),
-      adminService.getEmployees(),
+      // Admins don't track time, so they shouldn't count toward "logged" / "not logged" stats.
+      adminService.getEmployees("Employee"),
       adminService.getAllVacationDays(),
     ]);
     allLogs.value = logs;
