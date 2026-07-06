@@ -107,6 +107,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         var users = await _context.Users
             .AsNoTracking()
+            .Where(u => u.Role == UserRole.Employee)
             .OrderBy(u => u.FullName)
             .ToListAsync(ct);
 
