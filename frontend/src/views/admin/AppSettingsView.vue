@@ -8,6 +8,7 @@ import {
 } from "@/services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { extractApiError } from "@/utils/apiError";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -149,8 +150,8 @@ const refresh = async () => {
   try {
     holidays.value = await holidayService.refreshHolidays(selectedYear.value);
     toast.success("Holidays refreshed from API");
-  } catch {
-    toast.error("Failed to refresh holidays");
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to refresh holidays"));
   } finally {
     refreshing.value = false;
   }

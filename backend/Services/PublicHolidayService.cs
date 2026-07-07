@@ -7,7 +7,7 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPublicHolidayService
+public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogger<PublicHolidayService> logger) : IPublicHolidayService
 {
     private const string NagerBaseUrl = "https://date.nager.at/api/v3";
 
@@ -95,10 +95,11 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
 
         await db.SaveChangesAsync(ct);
 
-        // Eagerly refresh holidays for current and next year
+        // Eagerly refresh holidays for current and next year — best-effort, a fetch
+        // failure here shouldn't block setting the country.
         var currentYear = DateTime.UtcNow.Year;
-        await FetchAndStoreAsync(normalized, currentYear, ct);
-        await FetchAndStoreAsync(normalized, currentYear + 1, ct);
+        await TryFetchAndStoreAsync(normalized, currentYear, ct);
+        await TryFetchAndStoreAsync(normalized, currentYear + 1, ct);
 
         return ToConfigDto(config);
     }
@@ -110,11 +111,12 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
         if (config?.CountryCode == null) return [];
 
-        // Auto-fetch if nothing stored yet for this year
+        // Auto-fetch if nothing stored yet for this year. Only non-custom rows count —
+        // an admin-added custom holiday alone shouldn't block the real auto-fetch forever.
         var exists = await db.PublicHolidays
-            .AnyAsync(h => h.CountryCode == config.CountryCode && h.Year == year, ct);
+            .AnyAsync(h => h.CountryCode == config.CountryCode && h.Year == year && !h.IsCustom, ct);
         if (!exists)
-            await FetchAndStoreAsync(config.CountryCode, year, ct);
+            await TryFetchAndStoreAsync(config.CountryCode, year, ct);
 
         return await db.PublicHolidays
             .Where(h => h.CountryCode == config.CountryCode && h.Year == year)
@@ -200,54 +202,78 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
 
     // ─── Internals ────────────────────────────────────────────────────────────
 
+    /// <summary>Best-effort wrapper for auto-fetch call sites — logs and swallows failures
+    /// instead of breaking the caller's request.</summary>
+    private async Task TryFetchAndStoreAsync(string countryCode, int year, CancellationToken ct, bool preserveOverrides = true)
+    {
+        try
+        {
+            await FetchAndStoreAsync(countryCode, year, ct, preserveOverrides);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Auto-fetch of public holidays failed for {CountryCode} {Year}.", countryCode, year);
+        }
+    }
+
     /// <param name="preserveOverrides">
     /// When true (auto-fetch), existing IsWorkingDay values are preserved so admin changes survive.
     /// When false (explicit refresh), always re-derive from the API Types field.
     /// </param>
+    /// <exception cref="ValidationException">The provider request failed, or returned no data —
+    /// callers that need failures surfaced (RefreshHolidaysAsync) let this propagate; auto-fetch
+    /// call sites go through TryFetchAndStoreAsync instead.</exception>
     private async Task FetchAndStoreAsync(string countryCode, int year, CancellationToken ct, bool preserveOverrides = true)
     {
+        List<NagerHolidayDto>? nagerHolidays;
         try
         {
-            var nagerHolidays = await httpClient.GetFromJsonAsync<List<NagerHolidayDto>>(
+            nagerHolidays = await httpClient.GetFromJsonAsync<List<NagerHolidayDto>>(
                 $"{NagerBaseUrl}/PublicHolidays/{year}/{countryCode}", ct);
-
-            if (nagerHolidays == null) return;
-
-            var existing = await db.PublicHolidays
-                .Where(h => h.CountryCode == countryCode && h.Year == year && !h.IsCustom)
-                .ToListAsync(ct);
-
-            // On explicit refresh, always use the API-derived defaults.
-            // On auto-fetch, preserve any admin overrides so they survive incidental re-fetches.
-            var overrides = preserveOverrides
-                ? existing.ToDictionary(h => h.Date, h => h.IsWorkingDay)
-                : [];
-
-            db.PublicHolidays.RemoveRange(existing);
-
-            var entities = nagerHolidays.Select(h =>
-            {
-                var date = DateOnly.Parse(h.Date);
-                // Non-public holidays (Optional, Bank, Observance, etc.) default to working days.
-                var apiDefault = !h.Types.Contains("Public", StringComparer.OrdinalIgnoreCase);
-                return new PublicHoliday
-                {
-                    Date = date,
-                    Name = h.LocalName,
-                    CountryCode = countryCode,
-                    Year = year,
-                    IsCustom = false,
-                    IsWorkingDay = overrides.TryGetValue(date, out var ov) ? ov : apiDefault,
-                };
-            });
-
-            db.PublicHolidays.AddRange(entities);
-            await db.SaveChangesAsync(ct);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Don't throw — holiday fetch failure shouldn't break the app
+            throw new ValidationException(
+                $"Couldn't reach the holiday provider for {countryCode} {year}: {ex.Message}");
         }
+
+        // A null or empty response is indistinguishable from "this country has no holidays this
+        // year", which never happens in practice — treat it as a failed fetch rather than wiping
+        // out whatever holidays are already stored with nothing to replace them.
+        if (nagerHolidays == null || nagerHolidays.Count == 0)
+            throw new ValidationException(
+                $"The holiday provider returned no holidays for {countryCode} {year}.");
+
+        var existing = await db.PublicHolidays
+            .Where(h => h.CountryCode == countryCode && h.Year == year && !h.IsCustom)
+            .ToListAsync(ct);
+
+        // On explicit refresh, always use the API-derived defaults.
+        // On auto-fetch, preserve any admin overrides so they survive incidental re-fetches.
+        var overrides = preserveOverrides
+            ? existing.ToDictionary(h => h.Date, h => h.IsWorkingDay)
+            : [];
+
+        db.PublicHolidays.RemoveRange(existing);
+
+        var entities = nagerHolidays.Select(h =>
+        {
+            var date = DateOnly.Parse(h.Date);
+            // Non-public holidays (Optional, Bank, Observance, etc.) default to working days.
+            var apiDefault = !h.Types.Contains("Public", StringComparer.OrdinalIgnoreCase);
+            return new PublicHoliday
+            {
+                Date = date,
+                Name = h.LocalName,
+                CountryCode = countryCode,
+                Year = year,
+                IsCustom = false,
+                IsWorkingDay = overrides.TryGetValue(date, out var ov) ? ov : apiDefault,
+            };
+        });
+
+        db.PublicHolidays.AddRange(entities);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<AppConfigurationDto> SetNotificationTogglesAsync(bool enableAdjustmentRequestEmails, bool enableMissedClockInEmails, CancellationToken ct = default)
