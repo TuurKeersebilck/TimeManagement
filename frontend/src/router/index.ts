@@ -56,14 +56,14 @@ const routes: Array<RouteRecordRaw> = [
     component: AuthenticatedLayout,
     meta: { requiresAuth: true },
     children: [
-      // Shared (employee + admin) — admins are redirected to /admin/dashboard below
+      // Time tracking — admins are redirected to /admin/dashboard instead, below
       {
         path: "",
         name: "time-tracking",
         component: () => import("../views/TimeTrackingView.vue"),
       },
 
-      // Employee routes
+      // Shared (employee + admin) routes
       {
         path: "vacations",
         name: "vacations",
