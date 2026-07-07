@@ -12,8 +12,6 @@ export interface PublicHoliday {
 export interface AppConfiguration {
   countryCode: string | null;
   countryName?: string | null;
-  defaultDailyHours?: number | null;
-  defaultWeeklyHours?: number | null;
   notificationEmail?: string | null;
   enableAdjustmentRequestEmails: boolean;
   enableMissedClockInEmails: boolean;
@@ -23,6 +21,21 @@ export interface AppConfiguration {
 export interface AvailableCountry {
   countryCode: string;
   name: string;
+}
+
+// Matches the .NET DayOfWeek enum, serialized as its name (JsonStringEnumConverter).
+export type DayOfWeek =
+  | "Sunday"
+  | "Monday"
+  | "Tuesday"
+  | "Wednesday"
+  | "Thursday"
+  | "Friday"
+  | "Saturday";
+
+export interface WorkdayTargetDto {
+  dayOfWeek: DayOfWeek;
+  hours: number;
 }
 
 export const holidayService = {
@@ -72,8 +85,13 @@ export const holidayService = {
     await apiClient.delete(`/admin/settings/holidays/${id}`);
   },
 
-  async setDefaultTargets(defaultDailyHours: number | null, defaultWeeklyHours: number | null): Promise<AppConfiguration> {
-    const res = await apiClient.put<AppConfiguration>("/admin/settings/targets", { defaultDailyHours, defaultWeeklyHours });
+  async getGlobalWorkdayTargets(): Promise<WorkdayTargetDto[]> {
+    const res = await apiClient.get<WorkdayTargetDto[]>("/admin/settings/targets");
+    return res.data;
+  },
+
+  async setGlobalWorkdayTargets(targets: WorkdayTargetDto[]): Promise<WorkdayTargetDto[]> {
+    const res = await apiClient.put<WorkdayTargetDto[]>("/admin/settings/targets", { targets });
     return res.data;
   },
 

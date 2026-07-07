@@ -33,11 +33,18 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
     public async Task<IEnumerable<WorkdayTargetDto>> SetGlobalWorkdayTargetsAsync(
         IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
     {
+        var targetList = targets.ToList();
+        var submittedDays = targetList.Select(t => t.DayOfWeek).ToHashSet();
+
         var existing = await db.WorkdayTargets
             .Where(t => t.UserId == null)
             .ToListAsync(ct);
 
-        foreach (var dto in targets)
+        // Submitted set is authoritative, same as the per-employee variant — keeps
+        // this idempotent/self-healing even though the frontend always sends all 7.
+        db.WorkdayTargets.RemoveRange(existing.Where(t => !submittedDays.Contains(t.DayOfWeek)));
+
+        foreach (var dto in targetList)
         {
             var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
             if (row == null)
@@ -285,8 +292,6 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient) : IPub
     private static AppConfigurationDto ToConfigDto(AppConfiguration c) => new()
     {
         CountryCode = c.CountryCode,
-        DefaultDailyHours = c.DefaultDailyHours,
-        DefaultWeeklyHours = c.DefaultWeeklyHours,
         NotificationEmail = c.NotificationEmail,
         EnableAdjustmentRequestEmails = c.EnableAdjustmentRequestEmails,
         EnableMissedClockInEmails = c.EnableMissedClockInEmails,

@@ -4,6 +4,7 @@ import {
   holidayService,
   type PublicHoliday,
   type AvailableCountry,
+  type DayOfWeek,
 } from "@/services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
@@ -48,8 +49,24 @@ const countryCode = ref<string>("");
 const countries = ref<AvailableCountry[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
 
-const defaultDailyHours = ref<string>("");
-const defaultWeeklyHours = ref<string>("");
+const DAYS_MON_SUN: DayOfWeek[] = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+const globalTargets = ref<Record<DayOfWeek, string>>({
+  Monday: "",
+  Tuesday: "",
+  Wednesday: "",
+  Thursday: "",
+  Friday: "",
+  Saturday: "",
+  Sunday: "",
+});
 const minimumBreakMinutes = ref<string>("");
 const savingTargets = ref(false);
 const savingMinBreak = ref(false);
@@ -81,18 +98,18 @@ const selectedCountryName = computed(
 onMounted(async () => {
   loadingCountries.value = true;
   try {
-    const [config, available] = await Promise.all([
+    const [config, available, workdayTargets] = await Promise.all([
       holidayService.getConfiguration(),
       holidayService.getAvailableCountries(),
+      holidayService.getGlobalWorkdayTargets(),
     ]);
     countries.value = available;
     if (config.countryCode) countryCode.value = config.countryCode;
-    if (config.defaultDailyHours != null) defaultDailyHours.value = String(config.defaultDailyHours);
-    if (config.defaultWeeklyHours != null) defaultWeeklyHours.value = String(config.defaultWeeklyHours);
     if (config.minimumBreakMinutes != null) minimumBreakMinutes.value = String(config.minimumBreakMinutes);
     if (config.notificationEmail) notificationEmail.value = config.notificationEmail;
     enableAdjustmentRequestEmails.value = config.enableAdjustmentRequestEmails;
     enableMissedClockInEmails.value = config.enableMissedClockInEmails;
+    for (const t of workdayTargets) globalTargets.value[t.dayOfWeek] = String(t.hours);
   } catch {
     toast.error("Failed to load settings");
   } finally {
@@ -195,10 +212,12 @@ const deleteHoliday = (holiday: PublicHoliday) => {
 const saveTargets = async () => {
   savingTargets.value = true;
   try {
-    const daily = defaultDailyHours.value ? parseFloat(defaultDailyHours.value) : null;
-    const weekly = defaultWeeklyHours.value ? parseFloat(defaultWeeklyHours.value) : null;
-    await holidayService.setDefaultTargets(daily, weekly);
-    toast.success("Default targets saved");
+    const targets = DAYS_MON_SUN.map((day) => ({
+      dayOfWeek: day,
+      hours: globalTargets.value[day] ? parseFloat(globalTargets.value[day]) : 0,
+    }));
+    await holidayService.setGlobalWorkdayTargets(targets);
+    toast.success("Working hours targets saved");
   } catch {
     toast.error("Failed to save targets");
   } finally {
@@ -458,50 +477,43 @@ const formatDate = (iso: string) =>
         </h2>
 
         <div class="card p-5">
-          <div class="flex items-start gap-3 mb-5">
+          <div class="flex items-start gap-3 mb-4">
             <ClockIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
             <div>
               <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 Default targets
               </p>
               <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                These apply to all employees unless overridden individually in their profile.
+                Target hours per weekday. These apply to all employees unless overridden individually in their profile. 0 = non-working day.
               </p>
             </div>
           </div>
 
-          <div class="flex items-end gap-3">
-            <div class="space-y-1.5">
-              <Label>Daily target (hours)</Label>
+          <div class="rounded-lg border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800 mb-4">
+            <div
+              v-for="day in DAYS_MON_SUN"
+              :key="day"
+              class="flex items-center justify-between gap-3 px-4 py-2.5"
+            >
+              <span class="text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
               <Input
-                v-model="defaultDailyHours"
+                v-model="globalTargets[day]"
                 type="number"
                 min="0"
                 max="24"
                 step="0.5"
-                placeholder="e.g. 8"
-                class="w-32"
+                placeholder="0"
+                class="w-24 h-8 text-sm"
               />
             </div>
-            <div class="space-y-1.5">
-              <Label>Weekly target (hours)</Label>
-              <Input
-                v-model="defaultWeeklyHours"
-                type="number"
-                min="0"
-                max="168"
-                step="0.5"
-                placeholder="e.g. 40"
-                class="w-32"
-              />
-            </div>
-            <Button :disabled="savingTargets" @click="saveTargets">
-              <Loader2Icon v-if="savingTargets" class="size-4 animate-spin" />
-              Save
-            </Button>
           </div>
 
-          <div class="border-t border-slate-100 dark:border-slate-800 pt-5">
+          <Button :disabled="savingTargets" @click="saveTargets">
+            <Loader2Icon v-if="savingTargets" class="size-4 animate-spin" />
+            Save
+          </Button>
+
+          <div class="border-t border-slate-100 dark:border-slate-800 pt-5 mt-5">
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">Minimum break duration</p>
             <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">
               Employees must wait this many minutes before they can end their break. Leave blank to disable. Does not apply on half-day vacation days. Can be overridden per employee.
