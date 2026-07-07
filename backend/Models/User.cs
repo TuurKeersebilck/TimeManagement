@@ -9,6 +9,7 @@ public class User : IdentityUser
     public bool IsDisabled { get; set; } = false;
     public string? CalendarTokenHash { get; set; }
     public DateTimeOffset? CalendarTokenExpiresAt { get; set; }
+    public DateTimeOffset? CalendarTokenExpiryNotifiedAt { get; set; }
     public ICollection<TimeAdjustmentRequest> AdjustmentRequests { get; set; } = new List<TimeAdjustmentRequest>();
     public ICollection<WorkSession> WorkSessions { get; set; } = new List<WorkSession>();
     public ICollection<WorkDay> WorkDays { get; set; } = new List<WorkDay>();
