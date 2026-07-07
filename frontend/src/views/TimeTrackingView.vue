@@ -10,7 +10,10 @@ import {
   type WorkSessionDto,
   type BreakRecordDto,
 } from "@/services/workSessionService";
-import { adjustmentRequestService } from "@/services/adjustmentRequestService";
+import {
+  adjustmentRequestService,
+  type AdjustmentRequest,
+} from "@/services/adjustmentRequestService";
 import { vacationService, type VacationDay } from "@/services/vacationService";
 import { holidayService, type PublicHoliday } from "@/services/holidayService";
 import { useClockEventsStore } from "@/composables/useClockEventsStore";
@@ -83,6 +86,7 @@ const holidays = ref<PublicHoliday[]>([]);
 const showAdjustDialog = ref(false);
 const adjForm = ref(emptyAdjForm());
 const adjSubmitting = ref(false);
+const pendingRequests = ref<AdjustmentRequest[]>([]);
 
 // Inline edit state for history tab
 const editingDate = ref<string | null>(null);
@@ -399,7 +403,28 @@ async function prefillSessions(date: string) {
 async function openAdjustDialog() {
   adjForm.value = emptyAdjForm();
   showAdjustDialog.value = true;
-  await prefillSessions(adjForm.value.date);
+  await Promise.all([prefillSessions(adjForm.value.date), loadPendingRequests()]);
+}
+
+const pendingRequestsByDate = computed(() => {
+  const map = new Map<string, AdjustmentRequest>();
+  for (const r of pendingRequests.value) map.set(r.date, r);
+  return map;
+});
+
+function pendingRequestForDate(date: string): AdjustmentRequest | undefined {
+  return pendingRequestsByDate.value.get(date);
+}
+
+const pendingForSelectedDate = computed(() => pendingRequestForDate(adjForm.value.date));
+
+async function loadPendingRequests() {
+  try {
+    const all = await adjustmentRequestService.getMine();
+    pendingRequests.value = all.filter((r) => r.status === "Pending");
+  } catch {
+    // Non-critical
+  }
 }
 
 watch(
@@ -624,6 +649,11 @@ async function submitAdjustmentRequest() {
     return;
   }
 
+  if (pendingForSelectedDate.value) {
+    toast.error("You already have a pending adjustment request for this date");
+    return;
+  }
+
   for (const s of adjForm.value.sessions) {
     if (!s.clockIn || !s.clockOut) {
       toast.error("All sessions must have clock-in and clock-out times");
@@ -684,6 +714,7 @@ async function submitAdjustmentRequest() {
     showAdjustDialog.value = false;
     adjForm.value = emptyAdjForm();
     toast.success("Adjustment request sent to admin for approval");
+    await loadPendingRequests();
   } catch (err) {
     toast.error(extractApiError(err, "Failed to submit adjustment request"));
   } finally {
@@ -697,6 +728,7 @@ function handleVisibilityChange() {
   if (!document.hidden) {
     now.value = new Date();
     refreshToday();
+    loadPendingRequests();
   }
 }
 
@@ -724,6 +756,7 @@ onMounted(async () => {
     })(),
     loadTodayVacation(),
     loadHolidays(),
+    loadPendingRequests(),
   ]);
 });
 
@@ -1080,7 +1113,22 @@ onUnmounted(() => {
           </TabsContent>
 
           <!-- ── History tab ─────────────────────────────────────────────── -->
-          <TabsContent value="history">
+          <TabsContent value="history" class="space-y-4">
+            <div v-if="pendingRequests.length > 0" class="card p-4 space-y-2">
+              <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <SendIcon class="size-3.5 text-amber-500" />
+                Pending adjustment requests
+              </h2>
+              <div
+                v-for="req in pendingRequests"
+                :key="req.id"
+                class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30"
+              >
+                <span class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">{{ formatDate(req.date) }}</span>
+                <span class="text-slate-500 dark:text-slate-400 truncate">{{ req.reason }}</span>
+              </div>
+            </div>
+
             <div class="card overflow-hidden">
               <div v-if="loadingSummaries" class="divide-y divide-slate-100 dark:divide-slate-800">
                 <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
@@ -1136,6 +1184,11 @@ onUnmounted(() => {
                           v-if="row.data.date === localDateString(new Date())"
                           class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
                         >Today</span>
+                        <span
+                          v-if="pendingRequestForDate(row.data.date)"
+                          class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
+                          :title="`Pending adjustment request: ${pendingRequestForDate(row.data.date)!.reason}`"
+                        >Pending</span>
                       </TableCell>
 
                       <!-- Hours -->
@@ -1281,6 +1334,14 @@ onUnmounted(() => {
             <Input v-model="adjForm.date" type="date" class="cursor-pointer" />
           </div>
 
+          <div
+            v-if="pendingForSelectedDate"
+            class="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+          >
+            <ClockIcon class="size-3.5 shrink-0" />
+            You already have a pending adjustment request for this date.
+          </div>
+
           <!-- Sessions -->
           <div class="space-y-2">
             <div v-if="adjPrefilling" class="flex items-center gap-2 text-xs text-slate-400 py-1">
@@ -1380,7 +1441,10 @@ onUnmounted(() => {
 
         <DialogFooter>
           <Button variant="outline" @click="showAdjustDialog = false">Cancel</Button>
-          <Button :disabled="adjSubmitting || adjPrefilling" @click="submitAdjustmentRequest">
+          <Button
+            :disabled="adjSubmitting || adjPrefilling || !!pendingForSelectedDate"
+            @click="submitAdjustmentRequest"
+          >
             <Loader2Icon v-if="adjSubmitting" class="size-4 animate-spin" />
             Send request
           </Button>
