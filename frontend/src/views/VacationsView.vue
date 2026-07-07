@@ -7,7 +7,6 @@ import {
   type VacationBalance,
   type VacationDay,
   type CreateVacationDayDto,
-  type TeamVacationDay,
 } from "../services/vacationService";
 import { holidayService, type PublicHoliday } from "../services/holidayService";
 import { adminService, type Employee } from "../services/adminService";
@@ -42,7 +41,7 @@ import {
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
-const { currentUser, isAdmin } = useAuth();
+const { isAdmin } = useAuth();
 const route = useRoute();
 const router = useRouter();
 
@@ -51,7 +50,6 @@ const router = useRouter();
 const balances = ref<VacationBalance[]>([]);
 const vacationDays = ref<VacationDay[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
-const teamVacationDays = ref<TeamVacationDay[]>([]);
 const loading = ref(false);
 
 // ─── Admin: manage on behalf of an employee ──────────────────────────────────
@@ -181,29 +179,9 @@ const vacationsByDate = computed(() => {
   return map;
 });
 
-const teamVacationsByDate = computed(() => {
-  const ownerId = actingEmployeeId.value ?? currentUser.value?.id;
-  const map = new Map<string, TeamVacationDay[]>();
-  for (const d of teamVacationDays.value) {
-    if (d.userId === ownerId) continue;
-    if (!map.has(d.date)) map.set(d.date, []);
-    map.get(d.date)!.push(d);
-  }
-  return map;
-});
-
-const fetchTeamVacationDays = async () => {
-  try {
-    teamVacationDays.value = await vacationService.getTeamVacationDays({
-      year: currentMonth.value.getFullYear(),
-      month: currentMonth.value.getMonth() + 1,
-    });
-  } catch {
-    // non-critical, fail silently
-  }
-};
-
-watch(currentMonth, fetchTeamVacationDays);
+const upcomingVacationDays = computed(() =>
+  vacationDays.value.filter((d) => d.date >= todayIso).sort((a, b) => a.date.localeCompare(b.date))
+);
 
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MAX_VISIBLE = 2;
@@ -445,18 +423,15 @@ onMounted(async () => {
   loading.value = true;
   try {
     const year = new Date().getFullYear();
-    const month = new Date().getMonth() + 1;
-    const [b, d, h, t, emps] = await Promise.all([
+    const [b, d, h, emps] = await Promise.all([
       vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value),
       vacationService.getVacationDays(actingEmployeeId.value),
       holidayService.getHolidays(year).catch(() => [] as PublicHoliday[]),
-      vacationService.getTeamVacationDays({ year, month }).catch(() => [] as TeamVacationDay[]),
       isAdmin.value ? adminService.getEmployees() : Promise.resolve([] as Employee[]),
     ]);
     balances.value = b;
     vacationDays.value = d;
     holidays.value = h;
-    teamVacationDays.value = t;
     employees.value = emps;
   } catch {
     toast.error("Failed to load vacation data");
@@ -480,7 +455,7 @@ onMounted(async () => {
               {{
                 actingEmployeeName
                   ? `Manage vacation on behalf of ${actingEmployeeName}`
-                  : "Plan your vacation and see when your team is off"
+                  : "Plan your vacation days"
               }}
             </p>
           </div>
@@ -612,18 +587,6 @@ onMounted(async () => {
                           class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
                         >
                           +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
-                        </div>
-                      </template>
-
-                      <!-- Teammates' chips -->
-                      <template v-if="teamVacationsByDate.has(cell.iso)">
-                        <div
-                          v-for="entry in teamVacationsByDate.get(cell.iso)!.slice(0, 2)"
-                          :key="`team-${entry.id}`"
-                          :style="{ borderLeftColor: entry.vacationTypeColor ?? '#6366f1' }"
-                          class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/50"
-                        >
-                          {{ entry.employeeName.split(" ")[0] }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
                         </div>
                       </template>
                     </div>
@@ -805,9 +768,9 @@ onMounted(async () => {
             </div>
           </section>
 
-          <!-- Planned days list -->
+          <!-- Upcoming -->
           <VacationDaysList
-            :vacation-days="vacationDays"
+            :vacation-days="upcomingVacationDays"
             :loading="loading"
             @delete="deleteDay"
           />
@@ -819,7 +782,6 @@ onMounted(async () => {
     <YearCalendarOverlay
       v-model:open="yearOverlayOpen"
       :vacations-by-date="vacationsByDate"
-      :team-vacations-by-date="teamVacationsByDate"
     />
 
   </AuthenticatedLayout>

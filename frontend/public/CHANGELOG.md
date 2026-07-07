@@ -1,5 +1,35 @@
 # Changelog
 
+## [v0.6.3] - 2026-07-07
+
+### New Features
+
+- Employee dashboard removed — after login, employees land directly on the Clock In/Out screen instead of a separate dashboard page. Two stat cards with no prior equivalent there (This week, This month) were added to the time-tracking view; the existing live counter and monthly balance banner already covered the other two dashboard cards. Old dashboard links and bookmarks still work.
+- My Vacations now shows only your own vacation days — teammates' entries moved exclusively to the Team Calendar. The list below the calendar is renamed "Upcoming" and filtered to today-and-future days, matching the dashboard widget.
+- Team calendar shows public holidays — a holiday marker appears on calendar cells and in the day-detail panel, matching the styling already used in My Vacations.
+- Team calendar year view — a new 12-month grid colored by employee, plus holidays, opened via a "Year view" button next to "Today". The remaining employee filter dropdown was removed now that per-employee coloring and the day-detail panel already answer "who's off" without it.
+- Auto-deduct a default break when none was logged — if a day's sessions have zero recorded break minutes, the resolved minimum break (employee override, else the global default) is now deducted from that day's worked time in the flex balance and settlement calculations, so an unrecorded break no longer inflates hours. A coffee icon with a tooltip on the time-tracking history table shows when this happened.
+
+### Improvements
+
+- Team calendar entries are now colored per employee — a stable, colorblind-safe palette — instead of by vacation type, since the type filter was removed for privacy. Every chip still carries the employee's name so identity never rides on color alone.
+- Admin nav section renamed from "Manage" to "Admin" and now defaults to open, instead of only expanding once you're already on an admin route.
+
+### Bug Fixes
+
+- Team calendar exposed vacation type and notes to non-admin employees over the network — the API now strips those fields for non-admin callers; admins keep full detail.
+- The "Start Break" live counter began several seconds ahead because the break start time was truncated to the minute; it now records the real start instant. Break end still clamps to no earlier than start, avoiding a negative duration for breaks ended within the same minute.
+- Remember-me sessions expired after 30 days, forcing frequent re-logins — extended to 90 days.
+- Adjustment request emails showed clock-in/out and break times in raw UTC while every other view converts to local time — emails now render times in Europe/Brussels (CET/CEST).
+
+## [v0.6.2] - 2026-07-06
+
+### New Features
+
+- Settlement allocation — confirming a monthly settlement now decides where the employee's balance goes, all in one dialog with three always-available fields: pay out (appears in the payroll CSV), carry over to next month's flex balance, and deduct from next month (start it in deficit). The admin stays in full control — the dialog compares the allocation against the computed balance and shows a hint when they differ (unallocated hours are forfeited or forgiven), but never blocks the decision. Carried or deducted hours automatically create the flex balance adjustment for next month, so the separate manual adjustment step per employee is no longer part of the monthly routine.
+- The settlement outcome (Paid / Unpaid) is now derived from the allocation instead of being picked by hand, and the payroll CSV splits the Overtime Paid column from a new Carried Forward column so carried hours are never counted as paid.
+- Flex balance adjustments created by a settlement are labeled on the employee detail page and protected from manual deletion; hand-made adjustments still work as before for off-cycle corrections.
+
 ## [v0.6.1] - 2026-07-06
 
 ### New Features

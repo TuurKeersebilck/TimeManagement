@@ -12,6 +12,8 @@ public class MonthlySettlementDto
     public decimal NetBalanceHours { get; set; }
     public decimal OvertimeHours { get; set; }
     public decimal DeficitHours { get; set; }
+    public decimal? PaidOutHours { get; set; }
+    public decimal? CarriedForwardHours { get; set; }
     public SettlementOutcome? Outcome { get; set; }
     public SettlementStatus Status { get; set; }
     public string? ReviewedByUserId { get; set; }
@@ -21,11 +23,16 @@ public class MonthlySettlementDto
     public DateTimeOffset GeneratedAt { get; set; }
 }
 
+/// <summary>
+/// Allocation of a month's balance, decided at confirm time. The admin has full control:
+/// PaidOutHours (≥ 0) goes to the payroll export; CarryForwardHours is signed — positive adds to
+/// next month's flex balance, negative starts it in deficit. Any mismatch with the computed
+/// balance is intentional (forfeited / forgiven / granted) and surfaced as a hint in the UI.
+/// </summary>
 public class ConfirmSettlementDto
 {
-    public SettlementOutcome Outcome { get; set; }
-    public decimal? OvertimeHoursOverride { get; set; }
-    public decimal? DeficitHoursOverride { get; set; }
+    public decimal PaidOutHours { get; set; }
+    public decimal CarryForwardHours { get; set; }
     public string? Notes { get; set; }
 }
 

@@ -1,5 +1,6 @@
 import api from "./api";
 
+// "LeaveDeducted" is legacy — kept for historical rows only; the confirm flow derives Paid/Unpaid
 export type SettlementOutcome = "Paid" | "LeaveDeducted" | "Unpaid";
 export type SettlementStatus = "PendingReview" | "Settled";
 
@@ -12,6 +13,8 @@ export interface MonthlySettlementDto {
   netBalanceHours: number;
   overtimeHours: number;
   deficitHours: number;
+  paidOutHours: number | null;
+  carriedForwardHours: number | null;
   outcome: SettlementOutcome | null;
   status: SettlementStatus;
   reviewedByUserId: string | null;
@@ -27,9 +30,13 @@ export interface BlockerDto {
 }
 
 export interface ConfirmSettlementPayload {
-  outcome: SettlementOutcome;
-  overtimeHoursOverride?: number;
-  deficitHoursOverride?: number;
+  /** Overtime hours paid out via payroll. Must be 0 for a deficit month. */
+  paidOutHours: number;
+  /**
+   * Hours carried to next month's flex balance. Positive for an overtime carry;
+   * for a deficit month either the full negative balance (carry) or 0 (forgive).
+   */
+  carryForwardHours: number;
   notes?: string;
 }
 

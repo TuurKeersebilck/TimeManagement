@@ -527,7 +527,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         // ── Section 1: Summary ──────────────────────────────────────────────
         sb.AppendLine("SUMMARY");
-        sb.AppendLine("Name,Email,Days Worked,Regular Hours,Overtime Hours,Total Hours,Vacation Days,Outcome,Notes");
+        sb.AppendLine("Name,Email,Days Worked,Regular Hours,Overtime Paid,Carried Forward,Total Hours,Vacation Days,Outcome,Notes");
 
         var vacsByEmployee = vacations.GroupBy(v => v.UserId).ToDictionary(g => g.Key, g => g.ToList());
 
@@ -557,8 +557,12 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 : 0.0;
 
             settlementByUser.TryGetValue(emp.UserId, out var settlement);
-            var overtimeHours = (double)(settlement?.OvertimeHours ?? 0m);
-            var regularHours = Math.Max(0, totalHours - overtimeHours);
+            // Regular hours exclude the full computed overtime so carried-forward hours are never paid as regular
+            var computedOvertime = (double)(settlement?.OvertimeHours ?? 0m);
+            var regularHours = Math.Max(0, totalHours - computedOvertime);
+            // Until confirmed, show the computed overtime; after confirming, only the paid-out portion
+            var overtimePaid = (double)(settlement?.PaidOutHours ?? settlement?.OvertimeHours ?? 0m);
+            var carriedForward = settlement?.CarriedForwardHours;
             var outcome = settlement?.Outcome.HasValue == true ? settlement.Outcome!.Value.ToString() : "";
             var notes = settlement?.Notes ?? "";
 
@@ -567,7 +571,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 CsvEscape(emp.Email),
                 daysWorked,
                 regularHours.ToString("F2", CultureInfo.InvariantCulture),
-                overtimeHours.ToString("F2", CultureInfo.InvariantCulture),
+                overtimePaid.ToString("F2", CultureInfo.InvariantCulture),
+                carriedForward?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
                 totalHours.ToString("F2", CultureInfo.InvariantCulture),
                 vacDays.ToString("F1", CultureInfo.InvariantCulture),
                 CsvEscape(outcome),
@@ -776,6 +781,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 EffectiveDate = a.EffectiveDate,
                 Hours = a.Hours,
                 Reason = a.Reason,
+                SourceSettlementId = a.SourceSettlementId,
                 CreatedByUserId = a.CreatedByUserId,
                 CreatedByName = a.CreatedByUser != null ? a.CreatedByUser.FullName : null,
                 CreatedAt = a.CreatedAt,
@@ -819,6 +825,10 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     {
         var adjustment = await _context.TimeBankAdjustments.FindAsync([id], ct)
             ?? throw new ResourceNotFoundException("Time bank adjustment not found.");
+
+        if (adjustment.SourceSettlementId.HasValue)
+            throw new ValidationException(
+                "This adjustment was created automatically by a monthly settlement and cannot be deleted manually.");
 
         var hasSettledMonth = await _context.MonthlySettlements.AnyAsync(
             s => s.UserId == adjustment.UserId

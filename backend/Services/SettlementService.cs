@@ -157,26 +157,35 @@ public class SettlementService(
         if (blockers.Count > 0)
             throw new SettlementBlockedException(blockers);
 
-        settlement.Outcome = dto.Outcome;
-        settlement.OvertimeHours = dto.OvertimeHoursOverride ?? settlement.OvertimeHours;
-        settlement.DeficitHours = dto.DeficitHoursOverride ?? settlement.DeficitHours;
+        var (paidOut, carried) = ValidateAllocation(dto);
+
+        settlement.PaidOutHours = paidOut;
+        settlement.CarriedForwardHours = carried;
+        settlement.Outcome = paidOut > 0 ? SettlementOutcome.Paid : SettlementOutcome.Unpaid;
         settlement.Notes = dto.Notes;
         settlement.Status = SettlementStatus.Settled;
         settlement.ReviewedByUserId = adminUserId;
         settlement.ReviewedAt = DateTimeOffset.UtcNow;
 
+        // Materialize the carry-forward as a linked adjustment on next month's flex balance
+        if (carried != 0)
+        {
+            var nextMonth = new DateOnly(settlement.Year, settlement.Month, 1).AddMonths(1);
+            db.TimeBankAdjustments.Add(new TimeBankAdjustment
+            {
+                UserId = settlement.UserId,
+                EffectiveDate = nextMonth,
+                Hours = carried,
+                Reason = $"Carry-over from {settlement.Year}-{settlement.Month:00} settlement",
+                SourceSettlementId = settlement.Id,
+                CreatedByUserId = adminUserId,
+                CreatedAt = DateTimeOffset.UtcNow,
+            });
+        }
+
         await db.SaveChangesAsync(ct);
 
-        var outcomeLabel = dto.Outcome switch
-        {
-            SettlementOutcome.Paid => "marked as paid",
-            SettlementOutcome.LeaveDeducted => "settled via leave deduction",
-            SettlementOutcome.Unpaid => "settled as unpaid",
-            _ => "settled",
-        };
-        var balanceSign = settlement.NetBalanceHours >= 0 ? "+" : "";
-        var msg = $"Your {settlement.Year}-{settlement.Month:00} time settlement has been confirmed: " +
-                  $"{balanceSign}{settlement.NetBalanceHours}h {outcomeLabel}.";
+        var msg = BuildEmployeeMessage(settlement, paidOut, carried);
 
         try { await notificationService.NotifyUserAsync(settlement.UserId, msg, NotificationType.MonthlySettlement, ct); }
         catch (Exception ex) { logger.LogError(ex, "Failed to send MonthlySettlement notification for settlement {Id}.", id); }
@@ -195,6 +204,37 @@ public class SettlementService(
             .ToListAsync(ct);
     }
 
+    /// <summary>
+    /// Sanity-checks the confirm allocation and returns (paidOut, carried), both rounded to
+    /// 2 decimals. Carried is signed: positive adds to next month's flex balance, negative starts
+    /// it in deficit. The allocation is deliberately NOT forced to reconcile with the computed
+    /// balance — the admin has full control; the UI surfaces any mismatch as a hint.
+    /// </summary>
+    private static (decimal PaidOut, decimal Carried) ValidateAllocation(ConfirmSettlementDto dto)
+    {
+        var paidOut = Math.Round(dto.PaidOutHours, 2);
+        var carried = Math.Round(dto.CarryForwardHours, 2);
+
+        if (paidOut < 0)
+            throw new ValidationException("Paid-out hours cannot be negative.");
+
+        return (paidOut, carried);
+    }
+
+    private static string BuildEmployeeMessage(MonthlySettlement settlement, decimal paidOut, decimal carried)
+    {
+        var balanceSign = settlement.NetBalanceHours >= 0 ? "+" : "";
+        var prefix = $"Your {settlement.Year}-{settlement.Month:00} time settlement has been confirmed: " +
+                     $"{balanceSign}{settlement.NetBalanceHours}h — ";
+
+        var parts = new List<string>();
+        if (paidOut > 0) parts.Add($"{paidOut}h paid out");
+        if (carried > 0) parts.Add($"{carried}h carried over to next month's flex balance");
+        if (carried < 0) parts.Add($"next month starts at {carried}h");
+
+        return prefix + (parts.Count > 0 ? string.Join(", ", parts) : "settled as unpaid") + ".";
+    }
+
     private static MonthlySettlementDto MapToDto(MonthlySettlement s) => new()
     {
         Id = s.Id,
@@ -205,6 +245,8 @@ public class SettlementService(
         NetBalanceHours = s.NetBalanceHours,
         OvertimeHours = s.OvertimeHours,
         DeficitHours = s.DeficitHours,
+        PaidOutHours = s.PaidOutHours,
+        CarriedForwardHours = s.CarriedForwardHours,
         Outcome = s.Outcome,
         Status = s.Status,
         ReviewedByUserId = s.ReviewedByUserId,

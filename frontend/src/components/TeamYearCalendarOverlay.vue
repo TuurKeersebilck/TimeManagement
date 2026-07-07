@@ -3,14 +3,12 @@ import { ref, computed, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-vue-next";
-import type { VacationDay, TeamVacationDay } from "@/services/vacationService";
+import { vacationService, type TeamVacationDay } from "@/services/vacationService";
 import { holidayService, type PublicHoliday } from "@/services/holidayService";
-import { employeeColor } from "@/lib/employeeColors";
+import { employeeColor, employeeColorWash } from "@/lib/employeeColors";
 
 const props = defineProps<{
   open: boolean;
-  vacationsByDate: Map<string, VacationDay[]>;
-  teamVacationsByDate?: Map<string, TeamVacationDay[]>;
 }>();
 
 const emit = defineEmits<{
@@ -19,14 +17,21 @@ const emit = defineEmits<{
 
 const overlayYear = ref(new Date().getFullYear());
 
-// ─── Holidays ─────────────────────────────────────────────────────────────────
+// ─── Data ──────────────────────────────────────────────────────────────────────
 
+const vacationDays = ref<TeamVacationDay[]>([]);
 const holidayList = ref<PublicHoliday[]>([]);
 
-async function fetchHolidays(year: number) {
+async function fetchYear(year: number) {
   try {
-    holidayList.value = await holidayService.getHolidays(year);
+    const [days, holidays] = await Promise.all([
+      vacationService.getTeamVacationDays({ year }),
+      holidayService.getHolidays(year),
+    ]);
+    vacationDays.value = days;
+    holidayList.value = holidays;
   } catch {
+    vacationDays.value = [];
     holidayList.value = [];
   }
 }
@@ -34,10 +39,19 @@ async function fetchHolidays(year: number) {
 watch(
   [() => props.open, overlayYear],
   ([isOpen]) => {
-    if (isOpen) fetchHolidays(overlayYear.value);
+    if (isOpen) fetchYear(overlayYear.value);
   },
   { immediate: true },
 );
+
+const vacationsByDate = computed(() => {
+  const map = new Map<string, TeamVacationDay[]>();
+  for (const d of vacationDays.value) {
+    if (!map.has(d.date)) map.set(d.date, []);
+    map.get(d.date)!.push(d);
+  }
+  return map;
+});
 
 const holidaysByDate = computed(() => {
   const map = new Map<string, PublicHoliday>();
@@ -61,7 +75,6 @@ interface CalDay {
   day: number;
   isCurrentMonth: boolean;
   isToday: boolean;
-  isWeekend: boolean;
 }
 
 interface MiniCalMonth {
@@ -79,20 +92,17 @@ function buildCalendarDays(year: number, month: number): CalDay[] {
 
   for (let i = startDow - 1; i >= 0; i--) {
     const d = new Date(year, month, -i);
-    const dow = d.getDay();
-    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false, isWeekend: dow === 0 || dow === 6 });
+    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false });
   }
   for (let n = 1; n <= lastDay.getDate(); n++) {
     const d = new Date(year, month, n);
     const iso = toIso(d);
-    const dow = d.getDay();
-    days.push({ iso, day: n, isCurrentMonth: true, isToday: iso === todayIso, isWeekend: dow === 0 || dow === 6 });
+    days.push({ iso, day: n, isCurrentMonth: true, isToday: iso === todayIso });
   }
   const remaining = 42 - days.length;
   for (let n = 1; n <= remaining; n++) {
     const d = new Date(year, month + 1, n);
-    const dow = d.getDay();
-    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false, isWeekend: dow === 0 || dow === 6 });
+    days.push({ iso: toIso(d), day: d.getDate(), isCurrentMonth: false, isToday: false });
   }
   return days;
 }
@@ -109,32 +119,11 @@ const overlayMonths = computed<MiniCalMonth[]>(() => {
 // ─── Vacation cell helpers ─────────────────────────────────────────────────────
 
 function vacationCellStyle(iso: string): Record<string, string> {
-  const entries = props.vacationsByDate.get(iso);
+  const entries = vacationsByDate.value.get(iso);
   if (!entries?.length) return {};
-  const color = entries[0].vacationTypeColor ?? "#6366f1";
-  const isHalf = entries[0].amount < 1;
-  return isHalf
-    ? { background: `linear-gradient(135deg, transparent 50%, ${color}20 50%)`, borderLeft: `2px solid ${color}` }
-    : { backgroundColor: color + "28", borderLeft: `2px solid ${color}` };
+  const userId = entries[0].userId;
+  return { backgroundColor: employeeColorWash(userId), borderLeft: `2px solid ${employeeColor(userId)}` };
 }
-
-function vacationCellTitle(iso: string): string | undefined {
-  const entries = props.vacationsByDate.get(iso);
-  if (!entries?.length) return undefined;
-  return entries.map((e) => `${e.vacationTypeName}${e.amount < 1 ? " (½)" : ""}`).join(", ");
-}
-
-const vacationTypes = computed(() => {
-  const seen = new Map<string, string>();
-  for (const entries of props.vacationsByDate.values()) {
-    for (const e of entries) {
-      if (!seen.has(e.vacationTypeName)) {
-        seen.set(e.vacationTypeName, e.vacationTypeColor ?? "#6366f1");
-      }
-    }
-  }
-  return [...seen.entries()].map(([name, color]) => ({ name, color }));
-});
 </script>
 
 <template>
@@ -163,23 +152,7 @@ const vacationTypes = computed(() => {
               </Button>
             </div>
             <div class="flex items-center gap-4">
-              <!-- Legend -->
               <div class="hidden sm:flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-                <span v-for="type in vacationTypes" :key="type.name" class="flex items-center gap-2">
-                  <span class="flex items-center gap-1">
-                    <span
-                      class="w-3 h-3 rounded-sm inline-block"
-                      :style="{ backgroundColor: type.color + '28', borderLeft: `2px solid ${type.color}` }"
-                      title="Full day"
-                    />
-                    <span
-                      class="w-3 h-3 rounded-sm inline-block"
-                      :style="{ background: `linear-gradient(135deg, transparent 50%, ${type.color}20 50%)`, borderLeft: `2px solid ${type.color}` }"
-                      title="Half day"
-                    />
-                  </span>
-                  {{ type.name }}
-                </span>
                 <span v-if="holidaysByDate.size > 0" class="flex items-center gap-1.5">
                   <span class="w-3 h-3 rounded-sm bg-amber-100 dark:bg-amber-950/40 border-l-2 border-amber-400 inline-block" />
                   Holiday
@@ -225,43 +198,33 @@ const vacationTypes = computed(() => {
                             !cell.isCurrentMonth && 'opacity-20',
                             cell.isToday && 'bg-primary text-primary-foreground font-bold',
                             !cell.isToday && holidaysByDate.has(cell.iso) && !vacationsByDate.has(cell.iso) && 'bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300',
-                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && cell.isWeekend && 'text-muted-foreground',
-                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && !cell.isWeekend && cell.isCurrentMonth && 'text-card-foreground',
-                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && props.teamVacationsByDate?.has(cell.iso) && 'bg-muted',
+                            !cell.isToday && !vacationsByDate.has(cell.iso) && !holidaysByDate.has(cell.iso) && 'text-card-foreground',
                           ]"
                           :style="!cell.isToday && vacationsByDate.has(cell.iso) ? vacationCellStyle(cell.iso) : undefined"
                         >
                           {{ cell.day }}
-                          <!-- Team-vacation dot when others are off but I'm not -->
-                          <span
-                            v-if="!cell.isToday && !vacationsByDate.has(cell.iso) && props.teamVacationsByDate?.has(cell.iso)"
-                            class="absolute bottom-0.5 right-0.5 w-1 h-1 rounded-full bg-muted-foreground"
-                          />
                         </div>
                       </TooltipTrigger>
                       <TooltipContent
-                        v-if="vacationsByDate.has(cell.iso) || holidaysByDate.has(cell.iso) || props.teamVacationsByDate?.has(cell.iso)"
+                        v-if="vacationsByDate.has(cell.iso) || holidaysByDate.has(cell.iso)"
                         side="top"
-                        class="text-xs max-w-44 space-y-1"
+                        class="text-xs max-w-48 space-y-1"
                       >
                         <p v-if="holidaysByDate.has(cell.iso)" class="flex items-center gap-1">
                           <span class="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 inline-block" />
                           {{ holidaysByDate.get(cell.iso)!.name }}
                         </p>
-                        <p v-if="vacationsByDate.has(cell.iso)">{{ vacationCellTitle(cell.iso) }}</p>
-                        <template v-if="props.teamVacationsByDate?.has(cell.iso)">
-                          <p
-                            v-for="entry in props.teamVacationsByDate!.get(cell.iso)"
-                            :key="entry.id"
-                            class="flex items-center gap-1 opacity-80"
-                          >
-                            <span
-                              class="w-1.5 h-1.5 rounded-full shrink-0 inline-block opacity-60"
-                              :style="{ backgroundColor: employeeColor(entry.userId) }"
-                            />
-                            {{ entry.employeeName.split(" ")[0] }}<template v-if="entry.vacationTypeName"> · {{ entry.vacationTypeName }}</template><span v-if="entry.amount === 0.5"> ½</span>
-                          </p>
-                        </template>
+                        <p
+                          v-for="entry in vacationsByDate.get(cell.iso) ?? []"
+                          :key="entry.id"
+                          class="flex items-center gap-1"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 rounded-full shrink-0 inline-block"
+                            :style="{ backgroundColor: employeeColor(entry.userId) }"
+                          />
+                          {{ entry.employeeName.split(" ")[0] }}<template v-if="entry.vacationTypeName"> · {{ entry.vacationTypeName }}</template><span v-if="entry.amount === 0.5"> ½</span>
+                        </p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

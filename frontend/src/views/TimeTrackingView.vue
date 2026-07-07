@@ -53,6 +53,7 @@ import {
   SunIcon,
   TimerIcon,
   StarIcon,
+  CalendarDaysIcon,
   TrendingUpIcon,
   TrendingDownIcon,
   ScaleIcon,
@@ -155,6 +156,51 @@ const todayFlexSeconds = computed(() => todayWorkedSeconds.value - todayTargetHo
 
 const monthlyFlexHours = computed(() => overtime.value?.runningBalanceHours ?? null);
 
+// ─── Week / month summary (from DashboardView) ────────────────────────────────
+
+const isWeekend = computed(() => {
+  const day = new Date().getDay();
+  return day === 0 || day === 6;
+});
+
+const todayHoliday = computed(() => {
+  const todayStr = localDateString(new Date());
+  return holidays.value.find((h) => h.date === todayStr && !h.isWorkingDay) ?? null;
+});
+
+const totalHoursThisWeek = computed(() => {
+  const now = new Date();
+  const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - daysFromMonday);
+  const weekStartStr = localDateString(weekStart);
+
+  return summaries.value
+    .filter((s) => s.date >= weekStartStr)
+    .reduce((sum, s) => sum + s.totalWorkedHours, 0);
+});
+
+const totalHoursThisMonth = computed(() => {
+  const now = new Date();
+  const monthStartStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+
+  return summaries.value
+    .filter((s) => s.date >= monthStartStr)
+    .reduce((sum, s) => sum + s.totalWorkedHours, 0);
+});
+
+const weeklyTarget = computed<number | null>(() => {
+  if (!schedule.value) return null;
+  const weekdayHours = schedule.value.workdayTargets
+    .filter((t) => t.dayOfWeek >= 1 && t.dayOfWeek <= 5)
+    .reduce((sum, t) => sum + t.hours, 0);
+  return weekdayHours > 0 ? weekdayHours : null;
+});
+
+const weeklyProgress = computed(() =>
+  weeklyTarget.value ? Math.min((totalHoursThisWeek.value / weeklyTarget.value) * 100, 100) : null
+);
+
 // Minimum break enforcement
 const breakElapsedSeconds = computed<number>(() => {
   if (!isOnBreak.value || !openBreak.value) return 0;
@@ -224,6 +270,12 @@ function flexDeltaForDay(s: WorkDaySummaryDto): number | null {
   if (!overtime.value) return null;
   const dayEntry = overtime.value.perDay.find((p) => p.date === s.date);
   return dayEntry ? dayEntry.flexDelta : null;
+}
+
+function breakAutoDeductedMinutesForDay(s: WorkDaySummaryDto): number | null {
+  if (!overtime.value) return null;
+  const dayEntry = overtime.value.perDay.find((p) => p.date === s.date);
+  return dayEntry?.breakAutoDeductedMinutes ?? null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -709,6 +761,40 @@ onUnmounted(() => {
           <!-- ── Today tab ───────────────────────────────────────────────── -->
           <TabsContent value="today" class="space-y-6">
 
+            <!-- Week / month summary -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div class="stat-card">
+                <div class="flex items-center gap-2 mb-1">
+                  <ClockIcon class="size-3.5 text-slate-400" />
+                  <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This week</p>
+                </div>
+                <p class="text-3xl font-bold font-mono text-foreground">
+                  <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
+                  <span v-else>{{ totalHoursThisWeek.toFixed(2) }}h</span>
+                </p>
+                <template v-if="!loadingSummaries && weeklyTarget != null">
+                  <div class="mt-2 w-full bg-muted rounded-full h-1.5">
+                    <div
+                      :class="['h-1.5 rounded-full transition-all', weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
+                      :style="{ width: `${weeklyProgress}%` }"
+                    />
+                  </div>
+                  <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ weeklyTarget }}h target</p>
+                </template>
+              </div>
+
+              <div class="stat-card">
+                <div class="flex items-center gap-2 mb-1">
+                  <ClockIcon class="size-3.5 text-slate-400" />
+                  <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This month</p>
+                </div>
+                <p class="text-3xl font-bold font-mono text-foreground">
+                  <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
+                  <span v-else>{{ totalHoursThisMonth.toFixed(2) }}h</span>
+                </p>
+              </div>
+            </div>
+
             <!-- Full vacation -->
             <div
               v-if="isFullDayVacation"
@@ -726,6 +812,26 @@ onUnmounted(() => {
             </div>
 
             <template v-else>
+              <!-- Public holiday note -->
+              <div
+                v-if="todayHoliday"
+                class="flex items-center gap-3 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 px-4 py-3"
+              >
+                <StarIcon class="size-4 text-sky-500 shrink-0" />
+                <p class="text-sm text-sky-800 dark:text-sky-200">
+                  Public holiday — {{ todayHoliday.name }}
+                </p>
+              </div>
+
+              <!-- Weekend note -->
+              <div
+                v-else-if="isWeekend"
+                class="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-3"
+              >
+                <CalendarDaysIcon class="size-4 text-slate-400 shrink-0" />
+                <p class="text-sm text-slate-600 dark:text-slate-400">Enjoy your weekend!</p>
+              </div>
+
               <!-- Half-day banner -->
               <div
                 v-if="isHalfDayVacation"
@@ -1058,6 +1164,11 @@ onUnmounted(() => {
                             />
                             {{ formatHours(flexDeltaForDay(row.data)!) }}
                           </span>
+                          <CoffeeIcon
+                            v-if="breakAutoDeductedMinutesForDay(row.data)"
+                            class="size-3.5 text-amber-500 shrink-0"
+                            :title="`No break logged — ${breakAutoDeductedMinutesForDay(row.data)} min minimum break auto-deducted`"
+                          />
                         </template>
                         <span v-else class="text-slate-400 text-xs">—</span>
                       </TableCell>

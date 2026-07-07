@@ -19,7 +19,7 @@ const displayDate = (iso: string) =>
 <template>
   <section>
     <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">
-      All planned days
+      Upcoming
     </h2>
 
     <div v-if="loading" class="card divide-y divide-slate-100 dark:divide-slate-800">
@@ -32,7 +32,7 @@ const displayDate = (iso: string) =>
 
     <div v-else-if="vacationDays.length === 0" class="card text-center py-10">
       <CalendarIcon class="size-6 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-      <p class="text-sm text-slate-500 dark:text-slate-400">No vacation days planned yet.</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400">Nothing upcoming.</p>
     </div>
 
     <div v-else class="card divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">

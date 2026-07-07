@@ -34,8 +34,7 @@ interface NavItem {
 }
 
 const employeeNav: NavItem[] = [
-  { name: "Dashboard", to: "/" },
-  { name: "Clock In/Out", to: "/time-tracking" },
+  { name: "Clock In/Out", to: "/" },
   { name: "My Vacations", to: "/vacations" },
   { name: "Team Calendar", to: "/team-calendar" },
   { name: "Account", to: "/account" },
@@ -62,7 +61,7 @@ const adminSectionNav: NavItem[] = [
 
 const navigationItems = computed(() => (isAdmin.value ? adminPersonalNav : employeeNav));
 
-const adminSectionOpen = ref(route.path.startsWith("/admin/") && route.path !== "/admin/dashboard");
+const adminSectionOpen = ref(true);
 
 const handleNavClick = () => {
   if (window.innerWidth < 1024) emit("toggle");
@@ -173,7 +172,7 @@ onMounted(async () => {
             class="w-full flex items-center justify-between text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             @click="adminSectionOpen = !adminSectionOpen"
           >
-            <span>Manage</span>
+            <span>Admin</span>
             <ChevronDownIcon
               :class="[
                 'size-3 transition-transform duration-200',

@@ -1,47 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
-import { vacationService, type TeamVacationDay, type VacationType } from "@/services/vacationService";
-import { adminService, type Employee } from "@/services/adminService";
-import { useAuth } from "@/composables/useAuth";
+import { vacationService, type TeamVacationDay } from "@/services/vacationService";
+import { holidayService, type PublicHoliday } from "@/services/holidayService";
+import { employeeColor, employeeColorWash } from "@/lib/employeeColors";
 import { useAppToast } from "@/composables/useAppToast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-vue-next";
+import TeamYearCalendarOverlay from "@/components/TeamYearCalendarOverlay.vue";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon, Maximize2Icon } from "lucide-vue-next";
 
 const toast = useAppToast();
-const { isAdmin } = useAuth();
 
 const vacationDays = ref<TeamVacationDay[]>([]);
-const employees = ref<Employee[]>([]);
-const vacationTypes = ref<VacationType[]>([]);
+const holidays = ref<PublicHoliday[]>([]);
 const loading = ref(false);
-
-// ─── Filters ──────────────────────────────────────────────────────────────────
-
-const filterEmployee = ref<string>("all");
-const filterType = ref<string>("all");
-
-const filteredDays = computed(() => {
-  let days = vacationDays.value;
-  if (filterEmployee.value !== "all") days = days.filter((d) => d.userId === filterEmployee.value);
-  if (filterType.value !== "all")
-    days = days.filter((d) => d.vacationTypeId === parseInt(filterType.value));
-  return days;
-});
-
-const clearFilters = () => {
-  filterEmployee.value = "all";
-  filterType.value = "all";
-  selectedIso.value = null;
-};
-
-const hasFilters = computed(() => filterEmployee.value !== "all" || filterType.value !== "all");
+const yearOverlayOpen = ref(false);
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -109,10 +81,16 @@ const calendarDays = computed<CalDay[]>(() => {
 
 const vacationsByDate = computed(() => {
   const map = new Map<string, TeamVacationDay[]>();
-  for (const d of filteredDays.value) {
+  for (const d of vacationDays.value) {
     if (!map.has(d.date)) map.set(d.date, []);
     map.get(d.date)!.push(d);
   }
+  return map;
+});
+
+const holidaysByDate = computed(() => {
+  const map = new Map<string, PublicHoliday>();
+  for (const h of holidays.value) map.set(h.date, h);
   return map;
 });
 
@@ -138,6 +116,19 @@ const selectedLabel = computed(() => {
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
+const fetchedHolidayYears = new Set<number>();
+
+const fetchHolidaysForYear = async (year: number) => {
+  if (fetchedHolidayYears.has(year)) return;
+  fetchedHolidayYears.add(year);
+  try {
+    const result = await holidayService.getHolidays(year);
+    holidays.value = [...holidays.value.filter((h) => !h.date.startsWith(`${year}-`)), ...result];
+  } catch {
+    // holidays are non-critical, fail silently
+  }
+};
+
 const fetchVacationDays = async () => {
   loading.value = true;
   try {
@@ -152,28 +143,14 @@ const fetchVacationDays = async () => {
   }
 };
 
-watch(currentMonth, fetchVacationDays);
+watch(currentMonth, (d) => {
+  fetchVacationDays();
+  fetchHolidaysForYear(d.getFullYear());
+});
 
-onMounted(async () => {
-  loading.value = true;
-  try {
-    const requests: [ReturnType<typeof vacationService.getTeamVacationDays>, Promise<VacationType[]>, Promise<Employee[]>] = [
-      vacationService.getTeamVacationDays({
-        year: currentMonth.value.getFullYear(),
-        month: currentMonth.value.getMonth() + 1,
-      }),
-      vacationService.getVacationTypes(),
-      isAdmin.value ? adminService.getEmployees() : Promise.resolve([]),
-    ];
-    const [days, types, emps] = await Promise.all(requests);
-    vacationDays.value = days;
-    vacationTypes.value = types;
-    employees.value = emps;
-  } catch {
-    toast.error("Failed to load team vacation data");
-  } finally {
-    loading.value = false;
-  }
+onMounted(() => {
+  fetchVacationDays();
+  fetchHolidaysForYear(currentMonth.value.getFullYear());
 });
 
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -182,39 +159,6 @@ const MAX_VISIBLE = 3;
 
 <template>
   <div>
-    <!-- Filters -->
-    <div class="flex flex-wrap items-center gap-3 mb-6">
-      <!-- Employee filter: admin only -->
-      <Select v-if="isAdmin" v-model="filterEmployee">
-        <SelectTrigger class="w-48">
-          <SelectValue placeholder="All employees" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All employees</SelectItem>
-          <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
-            {{ emp.fullName }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-
-      <Select v-model="filterType">
-        <SelectTrigger class="w-44">
-          <SelectValue placeholder="All types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All types</SelectItem>
-          <SelectItem v-for="type in vacationTypes" :key="type.id" :value="String(type.id)">
-            {{ type.name }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-
-      <Button v-if="hasFilters" variant="ghost" size="sm" @click="clearFilters">
-        <XIcon class="size-3.5" />
-        Clear
-      </Button>
-    </div>
-
     <!-- Month navigation -->
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-1">
@@ -228,7 +172,13 @@ const MAX_VISIBLE = 3;
           {{ monthLabel }}
         </span>
       </div>
-      <Button variant="outline" size="sm" @click="goToday">Today</Button>
+      <div class="flex items-center gap-2">
+        <Button variant="outline" size="sm" @click="goToday">Today</Button>
+        <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
+          <Maximize2Icon class="size-3.5" />
+          Year view
+        </Button>
+      </div>
     </div>
 
     <!-- Calendar -->
@@ -282,13 +232,22 @@ const MAX_VISIBLE = 3;
             {{ cell.day }}
           </div>
 
+          <!-- Holiday marker -->
+          <div
+            v-if="holidaysByDate.has(cell.iso)"
+            class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-l-2 border-amber-400"
+            :title="holidaysByDate.get(cell.iso)!.name"
+          >
+            {{ holidaysByDate.get(cell.iso)!.name }}
+          </div>
+
           <template v-if="vacationsByDate.has(cell.iso)">
             <div
               v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
               :key="entry.id"
               :style="{
-                backgroundColor: (entry.vacationTypeColor ?? '#6366f1') + '28',
-                borderLeftColor: entry.vacationTypeColor ?? '#6366f1',
+                backgroundColor: employeeColorWash(entry.userId),
+                borderLeftColor: employeeColor(entry.userId),
               }"
               class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
             >
@@ -323,6 +282,14 @@ const MAX_VISIBLE = 3;
             <XIcon class="size-3.5" />
           </Button>
         </div>
+        <div
+          v-if="selectedIso && holidaysByDate.has(selectedIso)"
+          class="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30"
+        >
+          <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
+            🎉 {{ holidaysByDate.get(selectedIso)!.name }}
+          </span>
+        </div>
         <div class="divide-y divide-slate-100 dark:divide-slate-800">
           <div
             v-for="entry in selectedEntries"
@@ -331,10 +298,10 @@ const MAX_VISIBLE = 3;
           >
             <div
               class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
-              :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+              :style="{ backgroundColor: employeeColor(entry.userId) }"
             />
             <span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">{{ entry.employeeName }}</span>
-            <span class="text-xs text-slate-500 dark:text-slate-400">{{ entry.vacationTypeName }}</span>
+            <span v-if="entry.vacationTypeName" class="text-xs text-slate-500 dark:text-slate-400">{{ entry.vacationTypeName }}</span>
             <span
               :class="[
                 'text-xs font-medium px-1.5 py-0.5 rounded shrink-0',
@@ -351,5 +318,7 @@ const MAX_VISIBLE = 3;
         </div>
       </div>
     </Transition>
+
+    <TeamYearCalendarOverlay v-model:open="yearOverlayOpen" />
   </div>
 </template>
