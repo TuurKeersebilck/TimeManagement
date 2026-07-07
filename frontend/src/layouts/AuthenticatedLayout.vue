@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useRouter } from "vue-router";
+import { ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Sidebar from "@/components/Sidebar.vue";
 import AppLogo from "@/components/AppLogo.vue";
 import NotificationBell from "@/components/NotificationBell.vue";
@@ -9,10 +10,20 @@ import { useSidebar } from "../composables/useSidebar";
 import { useNotifications } from "../composables/useNotifications";
 import { MenuIcon } from "lucide-vue-next";
 
+const route = useRoute();
 const router = useRouter();
 const { sidebarOpen, toggle: toggleSidebar } = useSidebar();
 const { clearUser } = useAuth();
 const { reset: resetNotifications } = useNotifications();
+
+// <main> now persists across navigation instead of remounting fresh on every
+// route change, so its scroll position no longer resets on its own — reset
+// it manually to match the previous (incidental) behavior.
+const mainEl = ref<HTMLElement | null>(null);
+watch(
+  () => route.path,
+  () => mainEl.value?.scrollTo({ top: 0 })
+);
 
 const handleLogout = async (): Promise<void> => {
   resetNotifications();
@@ -34,9 +45,7 @@ const handleLogout = async (): Promise<void> => {
       ]"
     >
       <!-- Mobile top bar -->
-      <header
-        class="lg:hidden flex items-center h-14 px-4 bg-card border-b border-border shrink-0"
-      >
+      <header class="lg:hidden flex items-center h-14 px-4 bg-card border-b border-border shrink-0">
         <button @click="toggleSidebar" class="btn-ghost !px-2 !py-2" aria-label="Open menu">
           <MenuIcon class="size-5" />
         </button>
@@ -45,10 +54,9 @@ const handleLogout = async (): Promise<void> => {
       </header>
 
       <!-- Page content -->
-      <main class="flex-1 overflow-y-auto">
-        <slot />
+      <main ref="mainEl" class="flex-1 overflow-y-auto">
+        <router-view />
       </main>
-
     </div>
   </div>
 </template>

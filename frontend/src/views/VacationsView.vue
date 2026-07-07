@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   vacationService,
   type VacationBalance,
@@ -442,347 +441,345 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AuthenticatedLayout>
-    <div class="p-6 lg:p-8">
-      <div class="max-w-5xl mx-auto">
-        <!-- Header -->
-        <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-              {{ actingEmployeeName ? `${actingEmployeeName}'s vacation` : "Vacations" }}
-            </h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {{
-                actingEmployeeName
-                  ? `Manage vacation on behalf of ${actingEmployeeName}`
-                  : "Plan your vacation days"
-              }}
-            </p>
+  <div class="p-6 lg:p-8">
+    <div class="max-w-5xl mx-auto">
+      <!-- Header -->
+      <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            {{ actingEmployeeName ? `${actingEmployeeName}'s vacation` : "Vacations" }}
+          </h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            {{
+              actingEmployeeName
+                ? `Manage vacation on behalf of ${actingEmployeeName}`
+                : "Plan your vacation days"
+            }}
+          </p>
+        </div>
+
+        <!-- Admin: act on behalf of an employee -->
+        <Select v-if="isAdmin" v-model="selectedEmployeeId">
+          <SelectTrigger class="w-56">
+            <SelectValue placeholder="Manage my own vacation" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="own">Manage my own vacation</SelectItem>
+            <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
+              {{ emp.fullName }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div class="max-w-4xl">
+        <!-- Balance cards -->
+        <VacationBalanceCards :balances="balances" :loading="loading" />
+
+        <!-- Calendar -->
+        <section class="mb-8">
+          <!-- Month navigation -->
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-1">
+              <Button variant="ghost" size="icon" class="size-8" @click="prevMonth">
+                <ChevronLeftIcon class="size-4" />
+              </Button>
+              <Button variant="ghost" size="icon" class="size-8" @click="nextMonth">
+                <ChevronRightIcon class="size-4" />
+              </Button>
+              <span class="text-base font-semibold text-slate-900 dark:text-slate-100 ml-2 capitalize">
+                {{ monthLabel }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
+              <Button variant="outline" size="sm" @click="goToday">Today</Button>
+              <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
+                <Maximize2Icon class="size-3.5" />
+                Year view
+              </Button>
+            </div>
           </div>
 
-          <!-- Admin: act on behalf of an employee -->
-          <Select v-if="isAdmin" v-model="selectedEmployeeId">
-            <SelectTrigger class="w-56">
-              <SelectValue placeholder="Manage my own vacation" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="own">Manage my own vacation</SelectItem>
-              <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
-                {{ emp.fullName }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+          <div v-if="loading" class="card h-64 animate-pulse bg-slate-100 dark:bg-slate-800" />
 
-        <div class="max-w-4xl">
-          <!-- Balance cards -->
-          <VacationBalanceCards :balances="balances" :loading="loading" />
-
-          <!-- Calendar -->
-          <section class="mb-8">
-            <!-- Month navigation -->
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-1">
-                <Button variant="ghost" size="icon" class="size-8" @click="prevMonth">
-                  <ChevronLeftIcon class="size-4" />
-                </Button>
-                <Button variant="ghost" size="icon" class="size-8" @click="nextMonth">
-                  <ChevronRightIcon class="size-4" />
-                </Button>
-                <span class="text-base font-semibold text-slate-900 dark:text-slate-100 ml-2 capitalize">
-                  {{ monthLabel }}
-                </span>
-              </div>
-              <div class="flex items-center gap-2">
-                <Button variant="outline" size="sm" @click="goToday">Today</Button>
-                <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
-                  <Maximize2Icon class="size-3.5" />
-                  Year view
-                </Button>
+          <div v-else class="card overflow-hidden">
+            <!-- Weekday headers -->
+            <div class="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800">
+              <div
+                v-for="wd in WEEK_DAYS"
+                :key="wd"
+                class="text-center text-xs font-semibold text-slate-400 dark:text-slate-500 py-2"
+              >
+                {{ wd }}
               </div>
             </div>
 
-            <div v-if="loading" class="card h-64 animate-pulse bg-slate-100 dark:bg-slate-800" />
-
-            <div v-else class="card overflow-hidden">
-              <!-- Weekday headers -->
-              <div class="grid grid-cols-7 border-b border-slate-200 dark:border-slate-800">
-                <div
-                  v-for="wd in WEEK_DAYS"
-                  :key="wd"
-                  class="text-center text-xs font-semibold text-slate-400 dark:text-slate-500 py-2"
-                >
-                  {{ wd }}
-                </div>
-              </div>
-
-              <!-- Day cells -->
-              <div class="grid grid-cols-7">
-                <Popover
-                  v-for="cell in calendarDays"
-                  :key="cell.iso"
-                  :open="openPopoverIso === cell.iso"
-                  @update:open="
-                    (v) => {
-                      if (v && cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay))))
-                        openPopover(cell.iso);
-                      else if (!v) closePopover();
-                    }
-                  "
-                >
-                  <PopoverTrigger as-child>
+            <!-- Day cells -->
+            <div class="grid grid-cols-7">
+              <Popover
+                v-for="cell in calendarDays"
+                :key="cell.iso"
+                :open="openPopoverIso === cell.iso"
+                @update:open="
+                  (v) => {
+                    if (v && cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay))))
+                      openPopover(cell.iso);
+                    else if (!v) closePopover();
+                  }
+                "
+              >
+                <PopoverTrigger as-child>
+                  <div
+                    :class="[
+                      'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors select-none',
+                      !cell.isCurrentMonth && 'opacity-40',
+                      cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
+                      cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
+                      openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500' : '',
+                      highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-indigo-50 dark:bg-indigo-950/30' : '',
+                      cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
+                        ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                        : 'cursor-default pointer-events-none',
+                    ]"
+                  >
+                    <!-- Day number -->
                     <div
                       :class="[
-                        'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors select-none',
-                        !cell.isCurrentMonth && 'opacity-40',
-                        cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
-                        cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
-                        openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500' : '',
-                        highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-indigo-50 dark:bg-indigo-950/30' : '',
-                        cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
-                          ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                          : 'cursor-default pointer-events-none',
+                        'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
+                        cell.isToday
+                          ? 'bg-indigo-600 text-white'
+                          : cell.isWeekend
+                            ? 'text-slate-400 dark:text-slate-600'
+                            : cell.isCurrentMonth
+                              ? 'text-slate-700 dark:text-slate-200'
+                              : 'text-slate-300 dark:text-slate-600',
                       ]"
                     >
-                      <!-- Day number -->
-                      <div
-                        :class="[
-                          'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
-                          cell.isToday
-                            ? 'bg-indigo-600 text-white'
-                            : cell.isWeekend
-                              ? 'text-slate-400 dark:text-slate-600'
-                              : cell.isCurrentMonth
-                                ? 'text-slate-700 dark:text-slate-200'
-                                : 'text-slate-300 dark:text-slate-600',
-                        ]"
-                      >
-                        {{ cell.day }}
-                      </div>
-
-                      <!-- Holiday marker -->
-                      <div
-                        v-if="holidaysByDate.has(cell.iso)"
-                        class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-l-2 border-amber-400"
-                        :title="holidaysByDate.get(cell.iso)!.name"
-                      >
-                        {{ holidaysByDate.get(cell.iso)!.name }}
-                      </div>
-
-                      <!-- Own vacation chips -->
-                      <template v-if="vacationsByDate.has(cell.iso)">
-                        <div
-                          v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
-                          :key="entry.id"
-                          :style="{
-                            backgroundColor: (entry.vacationTypeColor ?? '#6366f1') + '28',
-                            borderLeftColor: entry.vacationTypeColor ?? '#6366f1',
-                          }"
-                          class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
-                        >
-                          {{ entry.vacationTypeName }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
-                        </div>
-                        <div
-                          v-if="vacationsByDate.get(cell.iso)!.length > MAX_VISIBLE"
-                          class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
-                        >
-                          +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
-                        </div>
-                      </template>
-                    </div>
-                  </PopoverTrigger>
-
-                  <PopoverContent class="w-72 p-0 shadow-lg flex flex-col max-h-[min(520px,70svh)]" :collision-padding="12">
-                    <!-- Popover header — pinned, never scrolls away -->
-                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
-                      <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
-                        {{ popoverDateLabel }}
-                      </span>
-                      <button
-                        class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        @click="closePopover"
-                      >
-                        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M18 6 6 18M6 6l12 12" />
-                        </svg>
-                      </button>
+                      {{ cell.day }}
                     </div>
 
-                    <!-- Scrollable body (min-h-0 lets flex child shrink below content size) -->
-                    <div class="overflow-y-auto min-h-0">
-
-                    <!-- Holiday notice -->
+                    <!-- Holiday marker -->
                     <div
                       v-if="holidaysByDate.has(cell.iso)"
-                      class="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900"
+                      class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-l-2 border-amber-400"
+                      :title="holidaysByDate.get(cell.iso)!.name"
                     >
-                      <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
-                        🎉 {{ holidaysByDate.get(cell.iso)!.name }}
-                      </span>
+                      {{ holidaysByDate.get(cell.iso)!.name }}
                     </div>
 
-                    <!-- Entry switcher (multiple entries on same day) -->
-                    <div
-                      v-if="popoverDayEntries.length > 0"
-                      class="flex flex-wrap gap-1.5 px-4 pt-3 pb-1"
-                    >
-                      <button
-                        v-for="entry in popoverDayEntries"
+                    <!-- Own vacation chips -->
+                    <template v-if="vacationsByDate.has(cell.iso)">
+                      <div
+                        v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
                         :key="entry.id"
-                        type="button"
-                        :class="[
-                          'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
-                          popoverEditingId === entry.id
-                            ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
-                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
-                        ]"
-                        @click="fillFormForEntry(entry)"
+                        :style="{
+                          backgroundColor: (entry.vacationTypeColor ?? '#6366f1') + '28',
+                          borderLeftColor: entry.vacationTypeColor ?? '#6366f1',
+                        }"
+                        class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border-l-2 text-slate-700 dark:text-slate-200"
                       >
-                        <span
-                          class="w-1.5 h-1.5 rounded-full shrink-0"
-                          :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
-                        />
-                        {{ entry.vacationTypeName }}
-                        <span class="opacity-60">{{ entry.amount === 1 ? "Full" : "½" }}</span>
-                      </button>
-                      <button
-                        v-if="popoverDayTotal < 1"
-                        type="button"
-                        :class="[
-                          'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
-                          !isPopoverEditMode
-                            ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
-                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
-                        ]"
-                        @click="switchToNewMode"
+                        {{ entry.vacationTypeName }}<span v-if="entry.amount === 0.5" class="opacity-50"> ½</span>
+                      </div>
+                      <div
+                        v-if="vacationsByDate.get(cell.iso)!.length > MAX_VISIBLE"
+                        class="text-[10px] text-slate-400 dark:text-slate-500 pl-1"
                       >
-                        <PlusIcon class="size-3" />
-                        Add
-                      </button>
+                        +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
+                      </div>
+                    </template>
+                  </div>
+                </PopoverTrigger>
+
+                <PopoverContent class="w-72 p-0 shadow-lg flex flex-col max-h-[min(520px,70svh)]" :collision-padding="12">
+                  <!-- Popover header — pinned, never scrolls away -->
+                  <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+                    <span class="text-sm font-semibold text-slate-900 dark:text-slate-100 capitalize">
+                      {{ popoverDateLabel }}
+                    </span>
+                    <button
+                      class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                      @click="closePopover"
+                    >
+                      <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <!-- Scrollable body (min-h-0 lets flex child shrink below content size) -->
+                  <div class="overflow-y-auto min-h-0">
+
+                  <!-- Holiday notice -->
+                  <div
+                    v-if="holidaysByDate.has(cell.iso)"
+                    class="flex items-center gap-2 px-4 py-2 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-100 dark:border-amber-900"
+                  >
+                    <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                      🎉 {{ holidaysByDate.get(cell.iso)!.name }}
+                    </span>
+                  </div>
+
+                  <!-- Entry switcher (multiple entries on same day) -->
+                  <div
+                    v-if="popoverDayEntries.length > 0"
+                    class="flex flex-wrap gap-1.5 px-4 pt-3 pb-1"
+                  >
+                    <button
+                      v-for="entry in popoverDayEntries"
+                      :key="entry.id"
+                      type="button"
+                      :class="[
+                        'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                        popoverEditingId === entry.id
+                          ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+                      ]"
+                      @click="fillFormForEntry(entry)"
+                    >
+                      <span
+                        class="w-1.5 h-1.5 rounded-full shrink-0"
+                        :style="{ backgroundColor: entry.vacationTypeColor ?? '#6366f1' }"
+                      />
+                      {{ entry.vacationTypeName }}
+                      <span class="opacity-60">{{ entry.amount === 1 ? "Full" : "½" }}</span>
+                    </button>
+                    <button
+                      v-if="popoverDayTotal < 1"
+                      type="button"
+                      :class="[
+                        'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
+                        !isPopoverEditMode
+                          ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
+                      ]"
+                      @click="switchToNewMode"
+                    >
+                      <PlusIcon class="size-3" />
+                      Add
+                    </button>
+                  </div>
+
+                  <!-- Create / Edit form -->
+                  <div class="p-4 space-y-3">
+                    <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      {{ isPopoverEditMode ? "Edit vacation" : "Plan vacation" }}
+                    </p>
+
+                    <div class="space-y-1">
+                      <Label class="text-xs">Type</Label>
+                      <Select v-model="popoverForm.vacationTypeId">
+                        <SelectTrigger class="h-8 text-sm">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="balance in balances"
+                            :key="balance.vacationTypeId"
+                            :value="String(balance.vacationTypeId)"
+                          >
+                            {{ balance.vacationTypeName }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    <!-- Create / Edit form -->
-                    <div class="p-4 space-y-3">
-                      <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                        {{ isPopoverEditMode ? "Edit vacation" : "Plan vacation" }}
-                      </p>
-
+                    <div :class="isPopoverEditMode || popoverDayEntries.length > 0 ? '' : 'grid grid-cols-2 gap-2'">
                       <div class="space-y-1">
-                        <Label class="text-xs">Type</Label>
-                        <Select v-model="popoverForm.vacationTypeId">
-                          <SelectTrigger class="h-8 text-sm">
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="balance in balances"
-                              :key="balance.vacationTypeId"
-                              :value="String(balance.vacationTypeId)"
-                            >
-                              {{ balance.vacationTypeName }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <Label class="text-xs">{{ isPopoverEditMode || popoverDayEntries.length > 0 ? "Date" : "From" }}</Label>
+                        <Input v-model="popoverForm.startDate" type="date" class="h-8 cursor-pointer text-sm" />
                       </div>
-
-                      <div :class="isPopoverEditMode || popoverDayEntries.length > 0 ? '' : 'grid grid-cols-2 gap-2'">
-                        <div class="space-y-1">
-                          <Label class="text-xs">{{ isPopoverEditMode || popoverDayEntries.length > 0 ? "Date" : "From" }}</Label>
-                          <Input v-model="popoverForm.startDate" type="date" class="h-8 cursor-pointer text-sm" />
-                        </div>
-                        <div v-if="!isPopoverEditMode && popoverDayEntries.length === 0" class="space-y-1">
-                          <Label class="text-xs">To</Label>
-                          <Input v-model="popoverForm.endDate" type="date" class="h-8 cursor-pointer text-sm" />
-                        </div>
+                      <div v-if="!isPopoverEditMode && popoverDayEntries.length === 0" class="space-y-1">
+                        <Label class="text-xs">To</Label>
+                        <Input v-model="popoverForm.endDate" type="date" class="h-8 cursor-pointer text-sm" />
                       </div>
-
-                      <div class="space-y-1">
-                        <Label class="text-xs">Duration</Label>
-                        <Select v-model="popoverForm.amount">
-                          <SelectTrigger class="h-8 text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="1">Full day</SelectItem>
-                            <SelectItem value="0.5">Half day</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div class="space-y-1">
-                        <Label class="text-xs">Note</Label>
-                        <Input v-model="popoverForm.note" type="text" placeholder="Optional" class="h-8 text-sm" maxlength="500" />
-                      </div>
-
-                      <div
-                        v-if="isRangeMode"
-                        class="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2"
-                      >
-                        {{ workingDaysInRange }} working day{{ workingDaysInRange !== 1 ? "s" : "" }} selected
-                        <span class="text-slate-400 dark:text-slate-500">(weekends &amp; holidays skipped)</span>
-                      </div>
-
-                      <div
-                        v-if="popoverForm.vacationTypeId && popoverLiveRemaining !== null"
-                        :class="[
-                          'rounded-lg px-3 py-2 text-xs flex items-center gap-1.5',
-                          popoverLiveRemaining < 0
-                            ? 'bg-destructive/10 text-destructive'
-                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
-                        ]"
-                      >
-                        <XCircleIcon v-if="popoverLiveRemaining < 0" class="size-3.5 shrink-0" />
-                        <CheckCircleIcon v-else class="size-3.5 shrink-0" />
-                        <span v-if="popoverLiveRemaining < 0">
-                          Exceeds balance by {{ Math.abs(popoverLiveRemaining) }} day(s)
-                        </span>
-                        <span v-else>{{ popoverLiveRemaining }} day(s) remaining after this</span>
-                      </div>
-
-                      <Button
-                        class="w-full"
-                        size="sm"
-                        :disabled="popoverSaving || !canPopoverSubmit"
-                        @click="savePopover"
-                      >
-                        <Loader2Icon v-if="popoverSaving" class="size-3.5 animate-spin" />
-                        <PlusIcon v-else-if="!isPopoverEditMode" class="size-3.5" />
-                        {{ isPopoverEditMode ? "Save changes" : isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
-                      </Button>
-                      <Button
-                        v-if="isPopoverEditMode"
-                        class="w-full"
-                        size="sm"
-                        variant="ghost"
-                        :disabled="popoverSaving"
-                        @click="deletePopoverEntry"
-                      >
-                        <Trash2Icon class="size-3.5" />
-                        Delete
-                      </Button>
                     </div>
-                    </div><!-- end scrollable body -->
-                  </PopoverContent>
-                </Popover>
-              </div>
+
+                    <div class="space-y-1">
+                      <Label class="text-xs">Duration</Label>
+                      <Select v-model="popoverForm.amount">
+                        <SelectTrigger class="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">Full day</SelectItem>
+                          <SelectItem value="0.5">Half day</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div class="space-y-1">
+                      <Label class="text-xs">Note</Label>
+                      <Input v-model="popoverForm.note" type="text" placeholder="Optional" class="h-8 text-sm" maxlength="500" />
+                    </div>
+
+                    <div
+                      v-if="isRangeMode"
+                      class="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2"
+                    >
+                      {{ workingDaysInRange }} working day{{ workingDaysInRange !== 1 ? "s" : "" }} selected
+                      <span class="text-slate-400 dark:text-slate-500">(weekends &amp; holidays skipped)</span>
+                    </div>
+
+                    <div
+                      v-if="popoverForm.vacationTypeId && popoverLiveRemaining !== null"
+                      :class="[
+                        'rounded-lg px-3 py-2 text-xs flex items-center gap-1.5',
+                        popoverLiveRemaining < 0
+                          ? 'bg-destructive/10 text-destructive'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300',
+                      ]"
+                    >
+                      <XCircleIcon v-if="popoverLiveRemaining < 0" class="size-3.5 shrink-0" />
+                      <CheckCircleIcon v-else class="size-3.5 shrink-0" />
+                      <span v-if="popoverLiveRemaining < 0">
+                        Exceeds balance by {{ Math.abs(popoverLiveRemaining) }} day(s)
+                      </span>
+                      <span v-else>{{ popoverLiveRemaining }} day(s) remaining after this</span>
+                    </div>
+
+                    <Button
+                      class="w-full"
+                      size="sm"
+                      :disabled="popoverSaving || !canPopoverSubmit"
+                      @click="savePopover"
+                    >
+                      <Loader2Icon v-if="popoverSaving" class="size-3.5 animate-spin" />
+                      <PlusIcon v-else-if="!isPopoverEditMode" class="size-3.5" />
+                      {{ isPopoverEditMode ? "Save changes" : isRangeMode ? `Plan ${workingDaysInRange} day(s)` : "Plan day" }}
+                    </Button>
+                    <Button
+                      v-if="isPopoverEditMode"
+                      class="w-full"
+                      size="sm"
+                      variant="ghost"
+                      :disabled="popoverSaving"
+                      @click="deletePopoverEntry"
+                    >
+                      <Trash2Icon class="size-3.5" />
+                      Delete
+                    </Button>
+                  </div>
+                  </div><!-- end scrollable body -->
+                </PopoverContent>
+              </Popover>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <!-- Upcoming -->
-          <VacationDaysList
-            :vacation-days="upcomingVacationDays"
-            :loading="loading"
-            @delete="deleteDay"
-          />
-        </div>
+        <!-- Upcoming -->
+        <VacationDaysList
+          :vacation-days="upcomingVacationDays"
+          :loading="loading"
+          @delete="deleteDay"
+        />
       </div>
     </div>
+  </div>
 
-    <!-- Year overview overlay -->
-    <YearCalendarOverlay
-      v-model:open="yearOverlayOpen"
-      :vacations-by-date="vacationsByDate"
-    />
+  <!-- Year overview overlay -->
+  <YearCalendarOverlay
+    v-model:open="yearOverlayOpen"
+    :vacations-by-date="vacationsByDate"
+  />
 
-  </AuthenticatedLayout>
 </template>
