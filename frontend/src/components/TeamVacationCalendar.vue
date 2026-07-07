@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from "vue";
 import { vacationService, type TeamVacationDay } from "@/services/vacationService";
 import { adminService, type Employee } from "@/services/adminService";
+import { holidayService, type PublicHoliday } from "@/services/holidayService";
 import { employeeColor, employeeColorWash } from "@/lib/employeeColors";
 import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
@@ -20,6 +21,7 @@ const { isAdmin } = useAuth();
 
 const vacationDays = ref<TeamVacationDay[]>([]);
 const employees = ref<Employee[]>([]);
+const holidays = ref<PublicHoliday[]>([]);
 const loading = ref(false);
 
 // ─── Filters ──────────────────────────────────────────────────────────────────
@@ -111,6 +113,12 @@ const vacationsByDate = computed(() => {
   return map;
 });
 
+const holidaysByDate = computed(() => {
+  const map = new Map<string, PublicHoliday>();
+  for (const h of holidays.value) map.set(h.date, h);
+  return map;
+});
+
 // ─── Selected day panel ───────────────────────────────────────────────────────
 
 const selectedIso = ref<string | null>(null);
@@ -133,6 +141,19 @@ const selectedLabel = computed(() => {
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
+const fetchedHolidayYears = new Set<number>();
+
+const fetchHolidaysForYear = async (year: number) => {
+  if (fetchedHolidayYears.has(year)) return;
+  fetchedHolidayYears.add(year);
+  try {
+    const result = await holidayService.getHolidays(year);
+    holidays.value = [...holidays.value.filter((h) => !h.date.startsWith(`${year}-`)), ...result];
+  } catch {
+    // holidays are non-critical, fail silently
+  }
+};
+
 const fetchVacationDays = async () => {
   loading.value = true;
   try {
@@ -147,7 +168,10 @@ const fetchVacationDays = async () => {
   }
 };
 
-watch(currentMonth, fetchVacationDays);
+watch(currentMonth, (d) => {
+  fetchVacationDays();
+  fetchHolidaysForYear(d.getFullYear());
+});
 
 onMounted(async () => {
   loading.value = true;
@@ -167,6 +191,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  fetchHolidaysForYear(currentMonth.value.getFullYear());
 });
 
 const WEEK_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -263,6 +288,15 @@ const MAX_VISIBLE = 3;
             {{ cell.day }}
           </div>
 
+          <!-- Holiday marker -->
+          <div
+            v-if="holidaysByDate.has(cell.iso)"
+            class="text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-l-2 border-amber-400"
+            :title="holidaysByDate.get(cell.iso)!.name"
+          >
+            {{ holidaysByDate.get(cell.iso)!.name }}
+          </div>
+
           <template v-if="vacationsByDate.has(cell.iso)">
             <div
               v-for="entry in vacationsByDate.get(cell.iso)!.slice(0, MAX_VISIBLE)"
@@ -303,6 +337,14 @@ const MAX_VISIBLE = 3;
           <Button variant="ghost" size="icon" class="size-7" @click="selectedIso = null">
             <XIcon class="size-3.5" />
           </Button>
+        </div>
+        <div
+          v-if="selectedIso && holidaysByDate.has(selectedIso)"
+          class="flex items-center gap-2 mb-3 px-2.5 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/30"
+        >
+          <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
+            🎉 {{ holidaysByDate.get(selectedIso)!.name }}
+          </span>
         </div>
         <div class="divide-y divide-slate-100 dark:divide-slate-800">
           <div
