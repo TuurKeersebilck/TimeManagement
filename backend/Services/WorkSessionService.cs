@@ -329,6 +329,8 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
         var employeeTarget = await db.EmployeeTargets
             .FirstOrDefaultAsync(t => t.UserId == userId, ct);
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new ResourceNotFoundException("User not found.");
 
         var allTargets = await db.WorkdayTargets
             .Where(t => t.UserId == userId || t.UserId == null)
@@ -354,7 +356,19 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
                 ?? config?.DefaultDailyOvertimeAllowanceHours,
             WeeklyOvertimeAllowanceHours = employeeTarget?.WeeklyOvertimeAllowanceHours
                 ?? config?.DefaultWeeklyOvertimeAllowanceHours,
+            DefaultWfhWeekdays = Enum.GetValues<DayOfWeek>()
+                .Where(d => (user.DefaultWfhWeekdaysMask & (1 << (int)d)) != 0)
+                .ToList(),
         };
+    }
+
+    public async Task SetDefaultWfhWeekdaysAsync(string userId, List<DayOfWeek> weekdays, CancellationToken ct = default)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
+            ?? throw new ResourceNotFoundException("User not found.");
+
+        user.DefaultWfhWeekdaysMask = weekdays.Distinct().Aggregate(0, (mask, d) => mask | (1 << (int)d));
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<WorkDayDto> UpdateDayAsync(
