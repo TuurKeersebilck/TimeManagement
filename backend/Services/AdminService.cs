@@ -344,11 +344,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         return new EmployeeTargetDto
         {
-            DailyHours = target?.DailyHours,
-            WeeklyHours = target?.WeeklyHours,
-            ResolvedDailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
-            ResolvedWeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
-            HasOverride = target != null && (target.DailyHours.HasValue || target.WeeklyHours.HasValue || target.MinimumBreakMinutes.HasValue),
+            HasOverride = target?.MinimumBreakMinutes.HasValue ?? false,
             MinimumBreakMinutes = target?.MinimumBreakMinutes,
             ResolvedMinimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
         };
@@ -363,8 +359,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             _context.EmployeeTargets.Add(target);
         }
 
-        target.DailyHours = dto.DailyHours;
-        target.WeeklyHours = dto.WeeklyHours;
         target.MinimumBreakMinutes = dto.MinimumBreakMinutes;
         await _context.SaveChangesAsync(ct);
 
@@ -687,11 +681,18 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<IEnumerable<WorkdayTargetDto>> SetEmployeeWorkdayTargetsAsync(
         string userId, IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
     {
+        var targetList = targets.ToList();
+        var submittedDays = targetList.Select(t => t.DayOfWeek).ToHashSet();
+
         var existing = await _context.WorkdayTargets
             .Where(t => t.UserId == userId)
             .ToListAsync(ct);
 
-        foreach (var dto in targets)
+        // The submitted set is authoritative — a day missing from it means "inherit
+        // the global default again", so any existing override for that day is cleared.
+        _context.WorkdayTargets.RemoveRange(existing.Where(t => !submittedDays.Contains(t.DayOfWeek)));
+
+        foreach (var dto in targetList)
         {
             var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
             if (row == null)

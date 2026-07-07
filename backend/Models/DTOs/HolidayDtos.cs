@@ -25,8 +25,6 @@ public class AppConfigurationDto
 {
     public string? CountryCode { get; set; }
     public string? CountryName { get; set; }
-    public decimal? DefaultDailyHours { get; set; }
-    public decimal? DefaultWeeklyHours { get; set; }
     public string? NotificationEmail { get; set; }
     public bool EnableAdjustmentRequestEmails { get; set; }
     public bool EnableMissedClockInEmails { get; set; }

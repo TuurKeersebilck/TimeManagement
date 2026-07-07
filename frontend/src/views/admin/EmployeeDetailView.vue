@@ -9,6 +9,7 @@ import {
   type WeekSummary,
   type TimeBankAdjustment,
 } from "../../services/adminService";
+import { holidayService, type DayOfWeek } from "../../services/holidayService";
 import { extractApiError } from "@/utils/apiError";
 import {
   vacationTypeService,
@@ -77,23 +78,78 @@ const loading = ref(false);
 
 // ─── Working hours target ─────────────────────────────────────────────────────
 
+const DAYS_MON_SUN: DayOfWeek[] = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
 const target = ref<EmployeeTarget | null>(null);
 const weeklySummary = ref<WeekSummary[]>([]);
-const targetForm = ref({ dailyHours: "", weeklyHours: "", minimumBreakMinutes: "" });
-const savingTarget = ref(false);
+const globalWorkdayTargets = ref<Record<DayOfWeek, number>>({
+  Monday: 0,
+  Tuesday: 0,
+  Wednesday: 0,
+  Thursday: 0,
+  Friday: 0,
+  Saturday: 0,
+  Sunday: 0,
+});
+// Blank = inherit the global default for that day.
+const employeeWorkdayTargets = ref<Record<DayOfWeek, string>>({
+  Monday: "",
+  Tuesday: "",
+  Wednesday: "",
+  Thursday: "",
+  Friday: "",
+  Saturday: "",
+  Sunday: "",
+});
+const savingWorkdayTargets = ref(false);
+const minBreakForm = ref("");
+const savingMinBreak = ref(false);
 
-const saveTarget = async () => {
-  savingTarget.value = true;
+const hasWorkdayOverride = computed(() =>
+  DAYS_MON_SUN.some((day) => employeeWorkdayTargets.value[day] !== "")
+);
+
+const weeklyResolvedHours = computed(() =>
+  DAYS_MON_SUN.reduce((sum, day) => {
+    const override = employeeWorkdayTargets.value[day];
+    const hours = override !== "" ? parseFloat(override) : globalWorkdayTargets.value[day];
+    return sum + (Number.isFinite(hours) ? hours : 0);
+  }, 0)
+);
+
+const saveWorkdayTargets = async () => {
+  savingWorkdayTargets.value = true;
   try {
-    const daily = targetForm.value.dailyHours ? parseFloat(targetForm.value.dailyHours) : null;
-    const weekly = targetForm.value.weeklyHours ? parseFloat(targetForm.value.weeklyHours) : null;
-    const minBreak = targetForm.value.minimumBreakMinutes ? parseInt(targetForm.value.minimumBreakMinutes) : null;
-    target.value = await adminService.setEmployeeTarget(userId, { dailyHours: daily, weeklyHours: weekly, minimumBreakMinutes: minBreak });
-    toast.success("Target saved");
+    const targets = DAYS_MON_SUN.filter((day) => employeeWorkdayTargets.value[day] !== "").map(
+      (day) => ({ dayOfWeek: day, hours: parseFloat(employeeWorkdayTargets.value[day]) })
+    );
+    await adminService.setEmployeeWorkdayTargets(userId, targets);
+    toast.success("Working hours target saved");
   } catch {
-    toast.error("Failed to save target");
+    toast.error("Failed to save working hours target");
   } finally {
-    savingTarget.value = false;
+    savingWorkdayTargets.value = false;
+  }
+};
+
+const saveMinBreak = async () => {
+  savingMinBreak.value = true;
+  try {
+    const minBreak = minBreakForm.value ? parseInt(minBreakForm.value) : null;
+    target.value = await adminService.setEmployeeTarget(userId, { minimumBreakMinutes: minBreak });
+    toast.success("Minimum break saved");
+  } catch {
+    toast.error("Failed to save minimum break");
+  } finally {
+    savingMinBreak.value = false;
   }
 };
 
@@ -231,13 +287,24 @@ function fmtH(h: number): string {
 onMounted(async () => {
   loading.value = true;
   try {
-    const [employees, fetchedBalances, fetchedTypes, fetchedDays, fetchedTarget, fetchedSummary] = await Promise.all([
+    const [
+      employees,
+      fetchedBalances,
+      fetchedTypes,
+      fetchedDays,
+      fetchedTarget,
+      fetchedSummary,
+      fetchedGlobalTargets,
+      fetchedEmployeeTargets,
+    ] = await Promise.all([
       adminService.getEmployees(),
       vacationTypeService.getEmployeeBalances(userId),
       vacationTypeService.getAll(),
       adminService.getAllVacationDays({ userId }),
       adminService.getEmployeeTarget(userId),
       adminService.getWeeklySummary(userId, 8),
+      holidayService.getGlobalWorkdayTargets(),
+      adminService.getEmployeeWorkdayTargets(userId),
     ]);
     employee.value = employees.find((e) => e.id === userId) ?? null;
     if (!employee.value) {
@@ -249,11 +316,9 @@ onMounted(async () => {
     vacationDays.value = fetchedDays;
     target.value = fetchedTarget;
     weeklySummary.value = fetchedSummary;
-    targetForm.value = {
-      dailyHours: fetchedTarget.dailyHours != null ? String(fetchedTarget.dailyHours) : "",
-      weeklyHours: fetchedTarget.weeklyHours != null ? String(fetchedTarget.weeklyHours) : "",
-      minimumBreakMinutes: fetchedTarget.minimumBreakMinutes != null ? String(fetchedTarget.minimumBreakMinutes) : "",
-    };
+    minBreakForm.value = fetchedTarget.minimumBreakMinutes != null ? String(fetchedTarget.minimumBreakMinutes) : "";
+    for (const t of fetchedGlobalTargets) globalWorkdayTargets.value[t.dayOfWeek] = t.hours;
+    for (const t of fetchedEmployeeTargets) employeeWorkdayTargets.value[t.dayOfWeek] = String(t.hours);
   } catch {
     toast.error("Failed to load employee");
   } finally {
@@ -512,61 +577,52 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
           <div class="flex items-center gap-3">
             <ClockIcon class="size-4 text-indigo-500 shrink-0" />
             <div class="text-sm text-slate-600 dark:text-slate-400">
-              <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours || target?.resolvedMinimumBreakMinutes">
-                <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours">
-                  <span class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ target?.resolvedDailyHours ?? "—" }}h/day
-                  </span>
-                  ·
-                  <span class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ target?.resolvedWeeklyHours ?? "—" }}h/week
-                  </span>
-                </span>
-                <span v-if="target?.resolvedMinimumBreakMinutes">
-                  <span v-if="target?.resolvedDailyHours || target?.resolvedWeeklyHours"> · </span>
-                  <span class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ target.resolvedMinimumBreakMinutes }}min break
-                  </span>
-                </span>
-                <span v-if="target?.hasOverride" class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
-                  Override
-                </span>
-                <span v-else class="ml-1.5 text-xs text-slate-400 dark:text-slate-500">(global default)</span>
+              <span class="font-medium text-slate-900 dark:text-slate-100">
+                {{ weeklyResolvedHours }}h/week
               </span>
-              <span v-else class="text-slate-400 dark:text-slate-500">No target configured</span>
+              <span v-if="target?.resolvedMinimumBreakMinutes">
+                ·
+                <span class="font-medium text-slate-900 dark:text-slate-100">
+                  {{ target.resolvedMinimumBreakMinutes }}min break
+                </span>
+              </span>
+              <span v-if="hasWorkdayOverride || target?.hasOverride" class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                Override
+              </span>
+              <span v-else class="ml-1.5 text-xs text-slate-400 dark:text-slate-500">(global default)</span>
             </div>
           </div>
 
-          <!-- Override form -->
-          <div class="flex items-end gap-3 pt-1 flex-wrap">
-            <div class="space-y-1.5">
-              <Label class="text-xs">Daily (h) — leave blank to use default</Label>
+          <!-- Per-weekday override — blank = inherit the global default for that day -->
+          <div class="rounded-lg border border-slate-100 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+            <div
+              v-for="day in DAYS_MON_SUN"
+              :key="day"
+              class="flex items-center justify-between gap-3 px-4 py-2"
+            >
+              <span class="text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
               <Input
-                v-model="targetForm.dailyHours"
+                v-model="employeeWorkdayTargets[day]"
                 type="number"
                 min="0"
                 max="24"
                 step="0.5"
-                placeholder="default"
-                class="w-28 h-8 text-sm"
+                :placeholder="String(globalWorkdayTargets[day])"
+                class="w-24 h-8 text-sm"
               />
             </div>
-            <div class="space-y-1.5">
-              <Label class="text-xs">Weekly (h) — leave blank to use default</Label>
-              <Input
-                v-model="targetForm.weeklyHours"
-                type="number"
-                min="0"
-                max="168"
-                step="0.5"
-                placeholder="default"
-                class="w-28 h-8 text-sm"
-              />
-            </div>
-            <div class="space-y-1.5">
+          </div>
+          <Button size="sm" :disabled="savingWorkdayTargets" @click="saveWorkdayTargets">
+            <Loader2Icon v-if="savingWorkdayTargets" class="size-3.5 animate-spin" />
+            Save hours
+          </Button>
+
+          <!-- Minimum break override -->
+          <div class="flex items-end gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div class="space-y-1.5 pt-4">
               <Label class="text-xs">Min. break (min) — leave blank to use default</Label>
               <Input
-                v-model="targetForm.minimumBreakMinutes"
+                v-model="minBreakForm"
                 type="number"
                 min="1"
                 max="120"
@@ -575,8 +631,8 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
                 class="w-28 h-8 text-sm"
               />
             </div>
-            <Button size="sm" :disabled="savingTarget" @click="saveTarget">
-              <Loader2Icon v-if="savingTarget" class="size-3.5 animate-spin" />
+            <Button size="sm" :disabled="savingMinBreak" @click="saveMinBreak">
+              <Loader2Icon v-if="savingMinBreak" class="size-3.5 animate-spin" />
               Save
             </Button>
           </div>

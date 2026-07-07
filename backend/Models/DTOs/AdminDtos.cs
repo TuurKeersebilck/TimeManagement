@@ -41,10 +41,6 @@ public class EmployeeDto
 
 public class EmployeeTargetDto
 {
-    public decimal? DailyHours { get; set; }       // null = using global default
-    public decimal? WeeklyHours { get; set; }      // null = using global default
-    public decimal? ResolvedDailyHours { get; set; }
-    public decimal? ResolvedWeeklyHours { get; set; }
     public bool HasOverride { get; set; }
     public int? MinimumBreakMinutes { get; set; }          // null = using global default
     public int? ResolvedMinimumBreakMinutes { get; set; }
@@ -52,8 +48,6 @@ public class EmployeeTargetDto
 
 public class SetEmployeeTargetDto
 {
-    public decimal? DailyHours { get; set; }
-    public decimal? WeeklyHours { get; set; }
     public int? MinimumBreakMinutes { get; set; }
 }
 
