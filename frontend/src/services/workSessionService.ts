@@ -73,7 +73,7 @@ export interface OvertimeResultDto {
   runningBalanceHours: number;
   complianceFlags: Array<{
     date: string;
-    type: number;
+    type: "DailyOvertime" | "WeeklyOvertime";
     hoursWorked: number;
     threshold: number;
   }>;

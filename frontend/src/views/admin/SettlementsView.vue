@@ -476,7 +476,7 @@ onMounted(load);
             >
               <AlertTriangleIcon class="size-3.5 text-amber-500 shrink-0 mt-px" />
               <span class="text-amber-800 dark:text-amber-200">
-                {{ flag.date }} — {{ flag.type === 0 ? 'Daily overtime' : 'Weekly overtime' }}:
+                {{ flag.date }} — {{ flag.type === 'DailyOvertime' ? 'Daily overtime' : 'Weekly overtime' }}:
                 {{ flag.hoursWorked.toFixed(2) }}h worked vs {{ flag.threshold.toFixed(2) }}h threshold
               </span>
             </div>
