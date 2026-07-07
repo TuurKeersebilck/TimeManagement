@@ -27,7 +27,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
         var adjustmentHours = await db.TimeBankAdjustments
             .Where(a => a.UserId == userId
                      && a.EffectiveDate >= monthStart
-                     && a.EffectiveDate <= monthEnd)
+                     && a.EffectiveDate <= endDate)
             .SumAsync(a => (decimal?)a.Hours, ct) ?? 0m;
 
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
