@@ -272,6 +272,12 @@ function flexDeltaForDay(s: WorkDaySummaryDto): number | null {
   return dayEntry ? dayEntry.flexDelta : null;
 }
 
+function breakAutoDeductedMinutesForDay(s: WorkDaySummaryDto): number | null {
+  if (!overtime.value) return null;
+  const dayEntry = overtime.value.perDay.find((p) => p.date === s.date);
+  return dayEntry?.breakAutoDeductedMinutes ?? null;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function localDateString(d: Date): string {
@@ -1158,6 +1164,11 @@ onUnmounted(() => {
                             />
                             {{ formatHours(flexDeltaForDay(row.data)!) }}
                           </span>
+                          <CoffeeIcon
+                            v-if="breakAutoDeductedMinutesForDay(row.data)"
+                            class="size-3.5 text-amber-500 shrink-0"
+                            :title="`No break logged — ${breakAutoDeductedMinutesForDay(row.data)} min minimum break auto-deducted`"
+                          />
                         </template>
                         <span v-else class="text-slate-400 text-xs">—</span>
                       </TableCell>

@@ -12,6 +12,9 @@ public class PerDayOvertimeDto
 
     /// <summary>WorkedHours − TargetHours. Positive = surplus, negative = deficit.</summary>
     public decimal FlexDelta { get; set; }
+
+    /// <summary>Minutes auto-deducted from WorkedHours because no break was logged this day. Null = no deduction applied.</summary>
+    public int? BreakAutoDeductedMinutes { get; set; }
 }
 
 public enum ComplianceFlagType
