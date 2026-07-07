@@ -433,17 +433,26 @@ public class TimeAdjustmentRequestService(
         return Convert.ToHexString(hash).ToLower();
     }
 
+    // Emails render times in the app's local business timezone (CET/CEST) for readability;
+    // all storage and calculations elsewhere stay UTC.
+    private static readonly TimeZoneInfo s_emailDisplayTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+
     private static string FormatSnapshotSummary(DesiredDaySnapshotDto snapshot)
     {
-        static string Fmt(DateTimeOffset t) => t.ToUniversalTime().ToString("HH:mm");
+        string Fmt(DateTimeOffset t)
+        {
+            var local = TimeZoneInfo.ConvertTime(t, s_emailDisplayTimeZone);
+            var abbreviation = s_emailDisplayTimeZone.IsDaylightSavingTime(local) ? "CEST" : "CET";
+            return $"{local:HH:mm} {abbreviation}";
+        }
 
         var lines = new List<string>();
         for (var i = 0; i < snapshot.Sessions.Count; i++)
         {
             var s = snapshot.Sessions[i];
-            lines.Add($"Session {i + 1}: {Fmt(s.ClockIn)} – {Fmt(s.ClockOut)} UTC");
+            lines.Add($"Session {i + 1}: {Fmt(s.ClockIn)} – {Fmt(s.ClockOut)}");
             foreach (var b in s.Breaks)
-                lines.Add($"  Break: {Fmt(b.BreakStart)} – {Fmt(b.BreakEnd)} UTC");
+                lines.Add($"  Break: {Fmt(b.BreakStart)} – {Fmt(b.BreakEnd)}");
         }
         return string.Join("\n", lines);
     }
