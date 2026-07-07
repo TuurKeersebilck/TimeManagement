@@ -59,6 +59,14 @@ const holidaysByDate = computed(() => {
   return map;
 });
 
+const legendEmployees = computed(() => {
+  const byUser = new Map<string, string>();
+  for (const d of vacationDays.value) byUser.set(d.userId, d.employeeName);
+  return [...byUser.entries()]
+    .map(([userId, name]) => ({ userId, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
+
 // ─── Calendar grid ─────────────────────────────────────────────────────────────
 
 const toIso = (d: Date) => {
@@ -151,6 +159,25 @@ function vacationCellStyle(iso: string): Record<string, string> {
                 <ChevronRightIcon class="size-4" />
               </Button>
             </div>
+
+            <!-- Employee legend -->
+            <div
+              v-if="legendEmployees.length"
+              class="hidden md:flex items-center gap-x-3 gap-y-1.5 flex-wrap text-xs text-muted-foreground"
+            >
+              <span
+                v-for="employee in legendEmployees"
+                :key="employee.userId"
+                class="flex items-center gap-1.5"
+              >
+                <span
+                  class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+                  :style="{ backgroundColor: employeeColor(employee.userId) }"
+                />
+                {{ employee.name }}
+              </span>
+            </div>
+
             <div class="flex items-center gap-4">
               <div class="hidden sm:flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                 <span v-if="holidaysByDate.size > 0" class="flex items-center gap-1.5">
