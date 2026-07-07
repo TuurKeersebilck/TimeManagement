@@ -76,6 +76,8 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
 
         // ── Per-day calculation ───────────────────────────────────────────────────
 
+        var minimumBreakMinutes = employeeTarget?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes;
+
         var perDay = new List<PerDayOvertimeDto>();
         long totalBalanceMinutes = 0;
 
@@ -85,6 +87,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             var targetMinutes = (long)Math.Round(targetHours * 60);
 
             var dayWorkedMinutes = 0L;
+            int? breakAutoDeductedMinutes = null;
             if (sessionsByDate.TryGetValue(date, out var daySessions))
             {
                 // Day still in progress — exclude from balance to avoid a false deficit.
@@ -100,13 +103,24 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
                     continue;
                 }
 
-                foreach (var s in daySessions.Where(s => s.Status == WorkSessionStatus.Closed))
+                var closedSessions = daySessions.Where(s => s.Status == WorkSessionStatus.Closed).ToList();
+                var dayBreakMinutes = 0L;
+                foreach (var s in closedSessions)
                 {
                     var breakMinutes = s.Breaks
                         .Where(b => b.BreakEnd != null)
                         .Sum(b => (long)(b.BreakEnd!.Value - b.BreakStart).TotalMinutes);
+                    dayBreakMinutes += breakMinutes;
                     var sessionMinutes = (long)(s.ClockOut!.Value - s.ClockIn).TotalMinutes - breakMinutes;
                     dayWorkedMinutes += Math.Max(0, sessionMinutes);
+                }
+
+                // No break was logged anywhere in the day's closed sessions — deduct the
+                // resolved minimum break so unrecorded breaks don't inflate the flex balance.
+                if (closedSessions.Count > 0 && dayBreakMinutes == 0 && minimumBreakMinutes is > 0)
+                {
+                    breakAutoDeductedMinutes = minimumBreakMinutes.Value;
+                    dayWorkedMinutes = Math.Max(0, dayWorkedMinutes - minimumBreakMinutes.Value);
                 }
             }
 
@@ -119,6 +133,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
                 WorkedHours = Math.Round(dayWorkedMinutes / 60m, 2),
                 TargetHours = targetHours,
                 FlexDelta = Math.Round(flexDeltaMinutes / 60m, 2),
+                BreakAutoDeductedMinutes = breakAutoDeductedMinutes,
             });
         }
 

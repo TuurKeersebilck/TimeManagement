@@ -67,6 +67,7 @@ export interface PerDayOvertimeDto {
   workedHours: number;
   targetHours: number;
   flexDelta: number;
+  breakAutoDeductedMinutes: number | null;
 }
 
 export interface OvertimeResultDto {
