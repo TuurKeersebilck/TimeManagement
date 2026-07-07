@@ -6,13 +6,6 @@ export interface LoginCredentials {
   rememberMe: boolean;
 }
 
-export interface RegisterCredentials {
-  fullName: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
-
 export interface UpdateProfilePayload {
   fullName: string;
   email: string;
@@ -42,11 +35,6 @@ export interface User {
 export const authService = {
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>("/auth/login", credentials);
-    return response.data;
-  },
-
-  async register(credentials: RegisterCredentials): Promise<AuthResponse> {
-    const response = await apiClient.post<AuthResponse>("/auth/register", credentials);
     return response.data;
   },
 

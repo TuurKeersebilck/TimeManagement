@@ -40,7 +40,7 @@ import {
 
 const toast = useAppToast();
 const { confirm } = useConfirmDialog();
-const { isAdmin } = useAuth();
+const { isAdmin, currentUser } = useAuth();
 const route = useRoute();
 const router = useRouter();
 
@@ -65,6 +65,11 @@ const actingEmployeeId = computed(() =>
 
 const actingEmployeeName = computed(
   () => employees.value.find((e) => e.id === selectedEmployeeId.value)?.fullName
+);
+
+// "Manage my own vacation" already covers the logged-in admin — don't list them again.
+const otherEmployees = computed(() =>
+  employees.value.filter((e) => e.id !== currentUser.value?.id)
 );
 
 watch(selectedEmployeeId, (id) => {
@@ -465,7 +470,7 @@ onMounted(async () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="own">Manage my own vacation</SelectItem>
-            <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
+            <SelectItem v-for="emp in otherEmployees" :key="emp.id" :value="emp.id">
               {{ emp.fullName }}
             </SelectItem>
           </SelectContent>

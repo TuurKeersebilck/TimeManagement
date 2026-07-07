@@ -265,18 +265,6 @@ public class TimeAdjustmentRequestService(
         }
     }
 
-    public async Task AdminDirectEditAsync(
-        string userId, DateOnly date, DesiredDaySnapshotDto snapshot, string adminUserId, CancellationToken ct = default)
-    {
-        ValidateSnapshot(snapshot);
-        await ReconcileWorkSessionsAsync(userId, date, snapshot, ct);
-        await db.SaveChangesAsync(ct);
-
-        var msg = $"An admin has adjusted your time log for {date:d MMM yyyy}.";
-        try { await notificationService.NotifyUserAsync(userId, msg, NotificationType.AdminHoursAdjusted, ct); }
-        catch (Exception ex) { logger.LogError(ex, "Failed to send AdminHoursAdjusted notification to {UserId}", userId); }
-    }
-
     // ── Core reconcile (replaces UpsertClockEventAsync) ───────────────────────
 
     private async Task ReconcileWorkSessionsAsync(
