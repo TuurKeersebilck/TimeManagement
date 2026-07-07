@@ -97,11 +97,3 @@ public class TimeBankAdjustmentDto
     public string? CreatedByName { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
-
-// ── Admin direct edit ──────────────────────────────────────────────────────────
-
-public class AdminDirectEditDto
-{
-    [Required]
-    public DesiredDaySnapshotDto Snapshot { get; set; } = null!;
-}
