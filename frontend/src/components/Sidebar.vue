@@ -34,8 +34,7 @@ interface NavItem {
 }
 
 const employeeNav: NavItem[] = [
-  { name: "Dashboard", to: "/" },
-  { name: "Clock In/Out", to: "/time-tracking" },
+  { name: "Clock In/Out", to: "/" },
   { name: "My Vacations", to: "/vacations" },
   { name: "Team Calendar", to: "/team-calendar" },
   { name: "Account", to: "/account" },

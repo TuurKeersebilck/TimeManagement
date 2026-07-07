@@ -39,21 +39,19 @@ const routes: Array<RouteRecordRaw> = [
     meta: { guest: true },
   },
 
-  // Shared (employee + admin)
+  // Shared (employee + admin) — admins are redirected to /admin/dashboard below
   {
     path: "/",
-    name: "dashboard",
-    component: () => import("../views/DashboardView.vue"),
-    meta: { requiresAuth: true },
-  },
-
-  // Employee routes
-  {
-    path: "/time-tracking",
     name: "time-tracking",
     component: () => import("../views/TimeTrackingView.vue"),
     meta: { requiresAuth: true },
   },
+  {
+    path: "/time-tracking",
+    redirect: "/",
+  },
+
+  // Employee routes
   {
     path: "/vacations",
     name: "vacations",
@@ -178,7 +176,7 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
 
-  if (to.name === "dashboard" && isAuthenticated && authService.getRoles().includes("Admin")) {
+  if (to.name === "time-tracking" && isAuthenticated && authService.getRoles().includes("Admin")) {
     next("/admin/dashboard");
     return;
   }
