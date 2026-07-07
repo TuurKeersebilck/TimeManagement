@@ -44,19 +44,29 @@ public class MissedClockInReminderService(
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
             var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
-            var maxHours = config?.MaxSessionHours ?? 10m;
+            var maxHours = config?.MaxSessionHours ?? 13m;
             var cutoff = DateTimeOffset.UtcNow.AddHours(-(double)maxHours);
 
             var expiredSessions = await db.WorkSessions
+                .Include(s => s.Breaks)
                 .Where(s => s.Status == WorkSessionStatus.Open && s.ClockIn < cutoff)
                 .ToListAsync(ct);
 
             if (expiredSessions.Count == 0)
                 return;
 
+            var invalidatedAt = DateTimeOffset.UtcNow;
+
             foreach (var session in expiredSessions)
             {
                 session.Status = WorkSessionStatus.Invalidated;
+
+                var openBreak = session.Breaks.FirstOrDefault(b => b.BreakEnd == null);
+                if (openBreak != null)
+                {
+                    openBreak.BreakEnd = invalidatedAt;
+                    openBreak.BreakEndServerStamp = invalidatedAt;
+                }
 
                 var msg = $"Your session from {session.ClockIn.ToUniversalTime():HH:mm UTC} on " +
                           $"{session.Date:d MMM yyyy} was auto-closed after {maxHours}h. " +
