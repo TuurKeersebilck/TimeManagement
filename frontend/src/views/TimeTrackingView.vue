@@ -14,7 +14,7 @@ import {
   type AdjustmentRequest,
 } from "@/services/adjustmentRequestService";
 import { vacationService, type VacationDay } from "@/services/vacationService";
-import { holidayService, type PublicHoliday } from "@/services/holidayService";
+import { holidayService, type PublicHoliday, type DayOfWeek } from "@/services/holidayService";
 import { useClockEventsStore } from "@/composables/useClockEventsStore";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
@@ -149,10 +149,12 @@ const todayWorkedSeconds = computed(() => {
   return total;
 });
 
+// Derived from the overtime endpoint's per-day resolved target (EffectiveTargetService
+// on the backend) rather than the raw schedule, so weekend/holiday/leave-fraction
+// adjustments match what the real flex-balance calculation uses.
 const todayTargetHours = computed<number>(() => {
-  if (!schedule.value) return 0;
-  const dow = new Date().getDay(); // 0=Sun 6=Sat
-  return schedule.value.workdayTargets.find((t) => t.dayOfWeek === dow)?.hours ?? 0;
+  const todayStr = localDateString(new Date());
+  return overtime.value?.perDay.find((p) => p.date === todayStr)?.targetHours ?? 0;
 });
 
 const todayFlexSeconds = computed(() => todayWorkedSeconds.value - todayTargetHours.value * 3600);
@@ -192,10 +194,12 @@ const totalHoursThisMonth = computed(() => {
     .reduce((sum, s) => sum + s.totalWorkedHours, 0);
 });
 
+const WEEKDAY_NAMES: DayOfWeek[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
 const weeklyTarget = computed<number | null>(() => {
   if (!schedule.value) return null;
   const weekdayHours = schedule.value.workdayTargets
-    .filter((t) => t.dayOfWeek >= 1 && t.dayOfWeek <= 5)
+    .filter((t) => WEEKDAY_NAMES.includes(t.dayOfWeek))
     .reduce((sum, t) => sum + t.hours, 0);
   return weekdayHours > 0 ? weekdayHours : null;
 });

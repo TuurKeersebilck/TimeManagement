@@ -1,4 +1,5 @@
 import api from "./api";
+import type { WorkdayTargetDto } from "./holidayService";
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
@@ -48,13 +49,8 @@ export interface WorkDaySummaryDto {
   vacationTypeName: string | null;
 }
 
-export interface WorkdayTargetEntry {
-  dayOfWeek: number; // 0=Sun…6=Sat
-  hours: number;
-}
-
 export interface WorkScheduleDto {
-  workdayTargets: WorkdayTargetEntry[];
+  workdayTargets: WorkdayTargetDto[];
   minimumBreakMinutes: number | null;
   dailyOvertimeAllowanceHours: number | null;
   weeklyOvertimeAllowanceHours: number | null;
