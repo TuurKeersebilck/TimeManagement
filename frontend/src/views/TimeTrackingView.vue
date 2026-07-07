@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   workSessionService,
   type TodayStatusDto,
@@ -767,689 +766,687 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <AuthenticatedLayout>
-    <div class="p-6 lg:p-8">
-      <div class="max-w-4xl mx-auto">
+  <div class="p-6 lg:p-8">
+    <div class="max-w-4xl mx-auto">
 
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Time Tracking</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              {{ new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) }}
-            </p>
-          </div>
-          <Button variant="outline" size="sm" @click="openAdjustDialog">
-            <SendIcon class="size-3.5" />
-            Request adjustment
-          </Button>
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Time Tracking</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            {{ new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) }}
+          </p>
         </div>
+        <Button variant="outline" size="sm" @click="openAdjustDialog">
+          <SendIcon class="size-3.5" />
+          Request adjustment
+        </Button>
+      </div>
 
-        <Tabs default-value="today">
-          <TabsList class="w-full mb-6">
-            <TabsTrigger value="today" class="flex-1">Today</TabsTrigger>
-            <TabsTrigger value="history" class="flex-1">History</TabsTrigger>
-          </TabsList>
+      <Tabs default-value="today">
+        <TabsList class="w-full mb-6">
+          <TabsTrigger value="today" class="flex-1">Today</TabsTrigger>
+          <TabsTrigger value="history" class="flex-1">History</TabsTrigger>
+        </TabsList>
 
-          <!-- ── Today tab ───────────────────────────────────────────────── -->
-          <TabsContent value="today" class="space-y-6">
+        <!-- ── Today tab ───────────────────────────────────────────────── -->
+        <TabsContent value="today" class="space-y-6">
 
-            <!-- Week / month summary -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div class="stat-card">
-                <div class="flex items-center gap-2 mb-1">
-                  <ClockIcon class="size-3.5 text-slate-400" />
-                  <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This week</p>
+          <!-- Week / month summary -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="stat-card">
+              <div class="flex items-center gap-2 mb-1">
+                <ClockIcon class="size-3.5 text-slate-400" />
+                <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This week</p>
+              </div>
+              <p class="text-3xl font-bold font-mono text-foreground">
+                <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
+                <span v-else>{{ totalHoursThisWeek.toFixed(2) }}h</span>
+              </p>
+              <template v-if="!loadingSummaries && weeklyTarget != null">
+                <div class="mt-2 w-full bg-muted rounded-full h-1.5">
+                  <div
+                    :class="['h-1.5 rounded-full transition-all', weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
+                    :style="{ width: `${weeklyProgress}%` }"
+                  />
                 </div>
-                <p class="text-3xl font-bold font-mono text-foreground">
-                  <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
-                  <span v-else>{{ totalHoursThisWeek.toFixed(2) }}h</span>
-                </p>
-                <template v-if="!loadingSummaries && weeklyTarget != null">
-                  <div class="mt-2 w-full bg-muted rounded-full h-1.5">
-                    <div
-                      :class="['h-1.5 rounded-full transition-all', weeklyProgress === 100 ? 'bg-emerald-500' : 'bg-primary']"
-                      :style="{ width: `${weeklyProgress}%` }"
-                    />
-                  </div>
-                  <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ weeklyTarget }}h target</p>
+                <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ weeklyTarget }}h target</p>
+              </template>
+            </div>
+
+            <div class="stat-card">
+              <div class="flex items-center gap-2 mb-1">
+                <ClockIcon class="size-3.5 text-slate-400" />
+                <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This month</p>
+              </div>
+              <p class="text-3xl font-bold font-mono text-foreground">
+                <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
+                <span v-else>{{ totalHoursThisMonth.toFixed(2) }}h</span>
+              </p>
+            </div>
+          </div>
+
+          <!-- Full vacation -->
+          <div
+            v-if="isFullDayVacation"
+            class="card flex flex-col items-center gap-3 py-8 text-center"
+          >
+            <div class="size-10 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center">
+              <PlaneIcon class="size-5 text-violet-500" />
+            </div>
+            <div>
+              <p class="font-medium text-slate-900 dark:text-slate-100">Full vacation day</p>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                {{ todayVacation?.vacationTypeName }} vacation today — enjoy!
+              </p>
+            </div>
+          </div>
+
+          <template v-else>
+            <!-- Public holiday note -->
+            <div
+              v-if="todayHoliday"
+              class="flex items-center gap-3 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 px-4 py-3"
+            >
+              <StarIcon class="size-4 text-sky-500 shrink-0" />
+              <p class="text-sm text-sky-800 dark:text-sky-200">
+                Public holiday — {{ todayHoliday.name }}
+              </p>
+            </div>
+
+            <!-- Weekend note -->
+            <div
+              v-else-if="isWeekend"
+              class="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-3"
+            >
+              <CalendarDaysIcon class="size-4 text-slate-400 shrink-0" />
+              <p class="text-sm text-slate-600 dark:text-slate-400">Enjoy your weekend!</p>
+            </div>
+
+            <!-- Half-day banner -->
+            <div
+              v-if="isHalfDayVacation"
+              class="flex items-center gap-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-3"
+            >
+              <SunIcon class="size-4 text-violet-500 shrink-0" />
+              <p class="text-sm text-violet-800 dark:text-violet-200">
+                Half-day {{ todayVacation?.vacationTypeName }} vacation — clock in/out only, no break.
+              </p>
+            </div>
+
+            <!-- Clock action card -->
+            <div class="card p-6 space-y-5">
+              <!-- Live elapsed -->
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Today
+                  </p>
+                  <p class="text-4xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
+                    {{ (() => {
+                      const s = Math.floor(todayWorkedSeconds);
+                      const h = Math.floor(s / 3600);
+                      const m = Math.floor((s % 3600) / 60);
+                      const sec = s % 60;
+                      return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+                    })() }}
+                  </p>
+                </div>
+                <!-- Daily flex -->
+                <div class="text-right">
+                  <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Today's Δ
+                  </p>
+                  <p
+                    class="text-xl font-mono font-semibold tabular-nums"
+                    :class="todayFlexSeconds >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                  >
+                    {{ formatSeconds(Math.floor(todayFlexSeconds)) }}
+                  </p>
+                  <p class="text-xs text-slate-400 mt-0.5">vs {{ todayTargetHours }}h target</p>
+                </div>
+              </div>
+
+              <!-- Monthly flex balance -->
+              <div
+                v-if="monthlyFlexHours !== null"
+                class="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm"
+                :class="monthlyFlexHours >= 0
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40'
+                  : 'bg-rose-50 dark:bg-rose-950/40'"
+              >
+                <component
+                  :is="monthlyFlexHours >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                  class="size-4 shrink-0"
+                  :class="monthlyFlexHours >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+                />
+                <span class="text-slate-600 dark:text-slate-400">Monthly balance:</span>
+                <span
+                  class="font-semibold font-mono"
+                  :class="monthlyFlexHours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                >
+                  {{ formatHours(monthlyFlexHours) }}
+                </span>
+                <span v-if="monthlyFlexHours < 0" class="text-slate-500 text-xs ml-1">below target</span>
+              </div>
+
+              <!-- On-break status / countdown -->
+              <div
+                v-if="isOnBreak"
+                class="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm"
+                :class="breakMinimumReached
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40'
+                  : 'bg-amber-50 dark:bg-amber-950/40'"
+              >
+                <CoffeeIcon
+                  class="size-4 shrink-0"
+                  :class="breakMinimumReached ? 'text-emerald-500' : 'text-amber-500'"
+                />
+                <template v-if="!breakMinimumReached && breakRemainingSeconds !== null">
+                  <span class="text-slate-600 dark:text-slate-400">End Break available in</span>
+                  <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">
+                    {{ formatMmSs(breakRemainingSeconds) }}
+                  </span>
+                </template>
+                <template v-else>
+                  <span class="text-slate-600 dark:text-slate-400">On break —</span>
+                  <span class="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+                    {{ formatElapsedBreak(breakElapsedSeconds) }}
+                  </span>
                 </template>
               </div>
 
-              <div class="stat-card">
-                <div class="flex items-center gap-2 mb-1">
-                  <ClockIcon class="size-3.5 text-slate-400" />
-                  <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This month</p>
-                </div>
-                <p class="text-3xl font-bold font-mono text-foreground">
-                  <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
-                  <span v-else>{{ totalHoursThisMonth.toFixed(2) }}h</span>
-                </p>
-              </div>
-            </div>
-
-            <!-- Full vacation -->
-            <div
-              v-if="isFullDayVacation"
-              class="card flex flex-col items-center gap-3 py-8 text-center"
-            >
-              <div class="size-10 rounded-full bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center">
-                <PlaneIcon class="size-5 text-violet-500" />
-              </div>
-              <div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">Full vacation day</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                  {{ todayVacation?.vacationTypeName }} vacation today — enjoy!
-                </p>
-              </div>
-            </div>
-
-            <template v-else>
-              <!-- Public holiday note -->
+              <!-- Time offset adjuster (only when an action is available) -->
               <div
-                v-if="todayHoliday"
-                class="flex items-center gap-3 rounded-lg border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/30 px-4 py-3"
+                v-if="canClockIn || canClockOut || canEndBreak"
+                class="flex items-center justify-center gap-4"
               >
-                <StarIcon class="size-4 text-sky-500 shrink-0" />
-                <p class="text-sm text-sky-800 dark:text-sky-200">
-                  Public holiday — {{ todayHoliday.name }}
-                </p>
+                <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
+                  <MinusIcon class="size-4" />
+                </Button>
+                <div class="text-center w-28">
+                  <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
+                    {{ selectedTime }}
+                  </p>
+                  <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ offsetLabel }}</p>
+                </div>
+                <Button variant="outline" size="icon" :disabled="minuteOffset >= 5" @click="adjustMinutes(1)">
+                  <PlusIcon class="size-4" />
+                </Button>
               </div>
 
-              <!-- Weekend note -->
-              <div
-                v-else-if="isWeekend"
-                class="flex items-center gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-3"
-              >
-                <CalendarDaysIcon class="size-4 text-slate-400 shrink-0" />
-                <p class="text-sm text-slate-600 dark:text-slate-400">Enjoy your weekend!</p>
+              <!-- WFH toggle (only when clock-in is available) -->
+              <div v-if="canClockIn" class="flex items-center gap-3">
+                <Switch v-model="wfh" />
+                <Label>Working from home today</Label>
               </div>
 
-              <!-- Half-day banner -->
-              <div
-                v-if="isHalfDayVacation"
-                class="flex items-center gap-3 rounded-lg border border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-950/30 px-4 py-3"
-              >
-                <SunIcon class="size-4 text-violet-500 shrink-0" />
-                <p class="text-sm text-violet-800 dark:text-violet-200">
-                  Half-day {{ todayVacation?.vacationTypeName }} vacation — clock in/out only, no break.
-                </p>
+              <!-- Description (only when clocked in and break not active) -->
+              <div v-if="canClockOut" class="space-y-1.5">
+                <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
+                <textarea
+                  v-model="description"
+                  rows="3"
+                  class="input-field resize-none"
+                  placeholder="What did you work on today?"
+                />
               </div>
 
-              <!-- Clock action card -->
-              <div class="card p-6 space-y-5">
-                <!-- Live elapsed -->
-                <div class="flex items-center justify-between">
-                  <div>
-                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      Today
-                    </p>
-                    <p class="text-4xl font-mono font-bold text-slate-900 dark:text-slate-100 tabular-nums">
-                      {{ (() => {
-                        const s = Math.floor(todayWorkedSeconds);
-                        const h = Math.floor(s / 3600);
-                        const m = Math.floor((s % 3600) / 60);
-                        const sec = s % 60;
-                        return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-                      })() }}
-                    </p>
-                  </div>
-                  <!-- Daily flex -->
-                  <div class="text-right">
-                    <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                      Today's Δ
-                    </p>
-                    <p
-                      class="text-xl font-mono font-semibold tabular-nums"
-                      :class="todayFlexSeconds >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
-                    >
-                      {{ formatSeconds(Math.floor(todayFlexSeconds)) }}
-                    </p>
-                    <p class="text-xs text-slate-400 mt-0.5">vs {{ todayTargetHours }}h target</p>
-                  </div>
-                </div>
-
-                <!-- Monthly flex balance -->
-                <div
-                  v-if="monthlyFlexHours !== null"
-                  class="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm"
-                  :class="monthlyFlexHours >= 0
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40'
-                    : 'bg-rose-50 dark:bg-rose-950/40'"
+              <!-- Action buttons -->
+              <div class="grid gap-2" :class="isClockedIn ? 'grid-cols-2' : 'grid-cols-1'">
+                <Button
+                  v-if="canClockIn"
+                  class="w-full"
+                  size="lg"
+                  :disabled="acting != null"
+                  @click="handleClockIn"
                 >
-                  <component
-                    :is="monthlyFlexHours >= 0 ? TrendingUpIcon : TrendingDownIcon"
-                    class="size-4 shrink-0"
-                    :class="monthlyFlexHours >= 0 ? 'text-emerald-500' : 'text-rose-500'"
-                  />
-                  <span class="text-slate-600 dark:text-slate-400">Monthly balance:</span>
-                  <span
-                    class="font-semibold font-mono"
-                    :class="monthlyFlexHours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
-                  >
-                    {{ formatHours(monthlyFlexHours) }}
-                  </span>
-                  <span v-if="monthlyFlexHours < 0" class="text-slate-500 text-xs ml-1">below target</span>
-                </div>
+                  <Loader2Icon v-if="acting === 'clockIn'" class="size-4 animate-spin" />
+                  <ClockIcon v-else class="size-4" />
+                  Clock In
+                </Button>
 
-                <!-- On-break status / countdown -->
-                <div
-                  v-if="isOnBreak"
-                  class="flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm"
-                  :class="breakMinimumReached
-                    ? 'bg-emerald-50 dark:bg-emerald-950/40'
-                    : 'bg-amber-50 dark:bg-amber-950/40'"
-                >
-                  <CoffeeIcon
-                    class="size-4 shrink-0"
-                    :class="breakMinimumReached ? 'text-emerald-500' : 'text-amber-500'"
-                  />
-                  <template v-if="!breakMinimumReached && breakRemainingSeconds !== null">
-                    <span class="text-slate-600 dark:text-slate-400">End Break available in</span>
-                    <span class="font-semibold font-mono text-amber-600 dark:text-amber-400">
-                      {{ formatMmSs(breakRemainingSeconds) }}
-                    </span>
-                  </template>
-                  <template v-else>
-                    <span class="text-slate-600 dark:text-slate-400">On break —</span>
-                    <span class="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
-                      {{ formatElapsedBreak(breakElapsedSeconds) }}
-                    </span>
-                  </template>
-                </div>
-
-                <!-- Time offset adjuster (only when an action is available) -->
-                <div
-                  v-if="canClockIn || canClockOut || canEndBreak"
-                  class="flex items-center justify-center gap-4"
-                >
-                  <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
-                    <MinusIcon class="size-4" />
-                  </Button>
-                  <div class="text-center w-28">
-                    <p class="text-3xl font-mono font-bold text-slate-900 dark:text-slate-100">
-                      {{ selectedTime }}
-                    </p>
-                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ offsetLabel }}</p>
-                  </div>
-                  <Button variant="outline" size="icon" :disabled="minuteOffset >= 5" @click="adjustMinutes(1)">
-                    <PlusIcon class="size-4" />
-                  </Button>
-                </div>
-
-                <!-- WFH toggle (only when clock-in is available) -->
-                <div v-if="canClockIn" class="flex items-center gap-3">
-                  <Switch v-model="wfh" />
-                  <Label>Working from home today</Label>
-                </div>
-
-                <!-- Description (only when clocked in and break not active) -->
-                <div v-if="canClockOut" class="space-y-1.5">
-                  <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
-                  <textarea
-                    v-model="description"
-                    rows="3"
-                    class="input-field resize-none"
-                    placeholder="What did you work on today?"
-                  />
-                </div>
-
-                <!-- Action buttons -->
-                <div class="grid gap-2" :class="isClockedIn ? 'grid-cols-2' : 'grid-cols-1'">
+                <template v-if="isClockedIn">
                   <Button
-                    v-if="canClockIn"
-                    class="w-full"
+                    v-if="isOnBreak"
+                    class="col-span-2 w-full"
                     size="lg"
-                    :disabled="acting != null"
-                    @click="handleClockIn"
+                    variant="secondary"
+                    :disabled="acting != null || !breakMinimumReached"
+                    @click="handleEndBreak"
                   >
-                    <Loader2Icon v-if="acting === 'clockIn'" class="size-4 animate-spin" />
-                    <ClockIcon v-else class="size-4" />
-                    Clock In
+                    <Loader2Icon v-if="acting === 'endBreak'" class="size-4 animate-spin" />
+                    <CoffeeIcon v-else class="size-4" />
+                    End Break
                   </Button>
 
-                  <template v-if="isClockedIn">
+                  <template v-else>
                     <Button
-                      v-if="isOnBreak"
-                      class="col-span-2 w-full"
-                      size="lg"
                       variant="secondary"
-                      :disabled="acting != null || !breakMinimumReached"
-                      @click="handleEndBreak"
+                      size="lg"
+                      :disabled="acting != null || !canStartBreak"
+                      @click="handleStartBreak"
                     >
-                      <Loader2Icon v-if="acting === 'endBreak'" class="size-4 animate-spin" />
+                      <Loader2Icon v-if="acting === 'startBreak'" class="size-4 animate-spin" />
                       <CoffeeIcon v-else class="size-4" />
-                      End Break
+                      Start Break
                     </Button>
 
-                    <template v-else>
-                      <Button
-                        variant="secondary"
-                        size="lg"
-                        :disabled="acting != null || !canStartBreak"
-                        @click="handleStartBreak"
-                      >
-                        <Loader2Icon v-if="acting === 'startBreak'" class="size-4 animate-spin" />
-                        <CoffeeIcon v-else class="size-4" />
-                        Start Break
-                      </Button>
-
-                      <Button
-                        size="lg"
-                        :disabled="acting != null || !canClockOut"
-                        @click="handleClockOut"
-                      >
-                        <Loader2Icon v-if="acting === 'clockOut'" class="size-4 animate-spin" />
-                        <CheckIcon v-else class="size-4" />
-                        Clock Out
-                      </Button>
-                    </template>
+                    <Button
+                      size="lg"
+                      :disabled="acting != null || !canClockOut"
+                      @click="handleClockOut"
+                    >
+                      <Loader2Icon v-if="acting === 'clockOut'" class="size-4 animate-spin" />
+                      <CheckIcon v-else class="size-4" />
+                      Clock Out
+                    </Button>
                   </template>
-                </div>
-              </div>
-
-              <!-- Today's sessions -->
-              <div class="card overflow-hidden">
-                <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
-                  <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's sessions</h2>
-                </div>
-
-                <div v-if="loadingToday" class="divide-y divide-slate-100 dark:divide-slate-800">
-                  <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
-                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse" />
-                    <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse ml-auto" />
-                  </div>
-                </div>
-
-                <div v-else>
-                  <div
-                    v-if="!today || (today.closedSessions.length === 0 && !today.openSession)"
-                    class="flex flex-col items-center gap-2 py-8 text-center"
-                  >
-                    <ClockIcon class="size-8 text-slate-300 dark:text-slate-600" />
-                    <p class="text-sm text-slate-500 dark:text-slate-400">
-                      No sessions yet. Use the button above to clock in.
-                    </p>
-                  </div>
-
-                  <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-                    <!-- Open session -->
-                    <div
-                      v-if="today?.openSession"
-                      class="flex items-center gap-3 px-4 py-3"
-                    >
-                      <span class="inline-flex size-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span class="text-sm font-mono text-slate-700 dark:text-slate-300 flex-1">
-                        {{ sessionTimeline(today.openSession) }}
-                      </span>
-                      <span
-                        class="text-xs px-2 py-0.5 rounded-full font-medium"
-                        :class="isOnBreak
-                          ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
-                          : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'"
-                      >
-                        {{ isOnBreak ? 'On break' : 'Active' }}
-                      </span>
-                    </div>
-
-                    <!-- Closed sessions -->
-                    <div
-                      v-for="session in today?.closedSessions"
-                      :key="session.id"
-                      class="flex items-center gap-3 px-4 py-3"
-                    >
-                      <span class="inline-flex size-2 rounded-full bg-slate-300 dark:bg-slate-600" />
-                      <span class="text-sm font-mono text-slate-700 dark:text-slate-300 flex-1">
-                        {{ sessionTimeline(session) }}
-                      </span>
-                      <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
-                        Closed
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </template>
-          </TabsContent>
-
-          <!-- ── History tab ─────────────────────────────────────────────── -->
-          <TabsContent value="history" class="space-y-4">
-            <div v-if="pendingRequests.length > 0" class="card p-4 space-y-2">
-              <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <SendIcon class="size-3.5 text-amber-500" />
-                Pending adjustment requests
-              </h2>
-              <div
-                v-for="req in pendingRequests"
-                :key="req.id"
-                class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30"
-              >
-                <span class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">{{ formatDate(req.date) }}</span>
-                <span class="text-slate-500 dark:text-slate-400 truncate">{{ req.reason }}</span>
+                </template>
               </div>
             </div>
 
+            <!-- Today's sessions -->
             <div class="card overflow-hidden">
-              <div v-if="loadingSummaries" class="divide-y divide-slate-100 dark:divide-slate-800">
-                <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
-                  <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+              <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">Today's sessions</h2>
+              </div>
+
+              <div v-if="loadingToday" class="divide-y divide-slate-100 dark:divide-slate-800">
+                <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3">
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse" />
+                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse ml-auto" />
                 </div>
               </div>
 
-              <Table v-else>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Hours</TableHead>
-                    <TableHead>Δ</TableHead>
-                    <TableHead>Sessions</TableHead>
-                    <TableHead class="text-center">WFH</TableHead>
-                    <TableHead class="text-center">Vacation</TableHead>
-                    <TableHead>Description</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableEmpty v-if="mergedHistory.length === 0" :colspan="7">
-                    <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                    <p class="text-slate-500 dark:text-slate-400">No clocked days yet.</p>
-                  </TableEmpty>
-
-                  <template v-else v-for="row in mergedHistory" :key="row.data.date + '-' + row.kind">
-                    <!-- Holiday row -->
-                    <TableRow
-                      v-if="row.kind === 'holiday'"
-                      class="bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50/70 dark:hover:bg-sky-950/30"
-                    >
-                      <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        {{ formatDate(row.data.date) }}
-                      </TableCell>
-                      <TableCell :colspan="6">
-                        <div class="flex items-center gap-2">
-                          <StarIcon class="size-3.5 text-sky-500 shrink-0" />
-                          <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
-                          <span class="text-xs text-slate-400">Public holiday</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-
-                    <!-- Summary row -->
-                    <TableRow v-else>
-                      <!-- Date -->
-                      <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                        {{ formatDate(row.data.date) }}
-                        <span
-                          v-if="row.data.date === localDateString(new Date())"
-                          class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
-                        >Today</span>
-                        <span
-                          v-if="pendingRequestForDate(row.data.date)"
-                          class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
-                          :title="`Pending adjustment request: ${pendingRequestForDate(row.data.date)!.reason}`"
-                        >Pending</span>
-                      </TableCell>
-
-                      <!-- Hours -->
-                      <TableCell>
-                        <span
-                          v-if="row.data.totalWorkedHours > 0"
-                          class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
-                        >
-                          {{ row.data.totalWorkedHours.toFixed(2) }}h
-                        </span>
-                        <span v-else class="text-slate-400 text-xs">—</span>
-                      </TableCell>
-
-                      <!-- Flex delta -->
-                      <TableCell>
-                        <template v-if="flexDeltaForDay(row.data) !== null">
-                          <span
-                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold font-mono"
-                            :class="flexDeltaForDay(row.data)! >= 0
-                              ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                              : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
-                          >
-                            <component
-                              :is="flexDeltaForDay(row.data)! >= 0 ? TrendingUpIcon : TrendingDownIcon"
-                              class="size-3"
-                            />
-                            {{ formatHours(flexDeltaForDay(row.data)!) }}
-                          </span>
-                          <CoffeeIcon
-                            v-if="breakAutoDeductedMinutesForDay(row.data)"
-                            class="size-3.5 text-amber-500 shrink-0"
-                            :title="`No break logged — ${breakAutoDeductedMinutesForDay(row.data)} min minimum break auto-deducted`"
-                          />
-                        </template>
-                        <span v-else class="text-slate-400 text-xs">—</span>
-                      </TableCell>
-
-                      <!-- Sessions timeline -->
-                      <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[220px] truncate">
-                        <div v-for="s in row.data.sessions.filter(s => s.status === 'Closed')" :key="s.id" class="truncate">
-                          {{ sessionTimeline(s) }}
-                        </div>
-                        <span v-if="row.data.sessions.filter(s => s.status === 'Closed').length === 0" class="text-slate-400">—</span>
-                      </TableCell>
-
-                      <!-- WFH -->
-                      <TableCell class="text-center">
-                        <div class="flex items-center justify-center gap-1.5">
-                          <Switch
-                            :model-value="row.data.workDay?.workedFromHome ?? false"
-                            :disabled="savingDate === row.data.date"
-                            @update:model-value="toggleWfh(row.data)"
-                          />
-                          <component
-                            :is="(row.data.workDay?.workedFromHome ?? false) ? HomeIcon : BuildingIcon"
-                            class="size-3.5"
-                            :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-indigo-500' : 'text-slate-400'"
-                          />
-                        </div>
-                      </TableCell>
-
-                      <!-- Vacation -->
-                      <TableCell class="text-center">
-                        <span
-                          v-if="row.data.vacationAmount === 1.0"
-                          class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
-                          :title="row.data.vacationTypeName ?? undefined"
-                        >Full</span>
-                        <span
-                          v-else-if="row.data.vacationAmount === 0.5"
-                          class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
-                          :title="row.data.vacationTypeName ?? undefined"
-                        >Half</span>
-                        <span v-else class="text-slate-400 text-xs">—</span>
-                      </TableCell>
-
-                      <!-- Description -->
-                      <TableCell class="max-w-[200px]">
-                        <div v-if="editingDate === row.data.date" class="flex items-start gap-1.5">
-                          <textarea
-                            v-model="editingDescription"
-                            rows="2"
-                            class="input-field resize-none text-xs py-1 px-2 flex-1"
-                            placeholder="Add a description…"
-                            @keydown.enter.exact.prevent="saveDescription(row.data.date)"
-                            @keydown.escape="cancelEdit"
-                          />
-                          <div class="flex flex-col gap-1">
-                            <Button
-                              size="icon"
-                              class="size-6"
-                              :disabled="savingDate === row.data.date"
-                              @click="saveDescription(row.data.date)"
-                            >
-                              <Loader2Icon v-if="savingDate === row.data.date" class="size-3 animate-spin" />
-                              <CheckIcon v-else class="size-3" />
-                            </Button>
-                            <Button size="icon" variant="ghost" class="size-6" @click="cancelEdit">
-                              <MinusIcon class="size-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        <button
-                          v-else
-                          class="group flex cursor-pointer items-center gap-1.5 text-left w-full disabled:cursor-not-allowed"
-                          :disabled="row.data.sessions.every(s => s.status !== 'Closed')"
-                          @click="row.data.sessions.some(s => s.status === 'Closed') ? startEdit(row.data) : undefined"
-                        >
-                          <span class="text-xs text-slate-600 dark:text-slate-400 truncate" :title="row.data.workDay?.description ?? undefined">
-                            {{ row.data.workDay?.description || (row.data.sessions.some(s => s.status === 'Closed') ? "Add description…" : "—") }}
-                          </span>
-                          <PencilIcon
-                            v-if="row.data.sessions.some(s => s.status === 'Closed')"
-                            class="size-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 shrink-0"
-                          />
-                        </button>
-                      </TableCell>
-                    </TableRow>
-                  </template>
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-      </div>
-    </div>
-
-    <!-- Adjustment request dialog -->
-    <Dialog v-model:open="showAdjustDialog">
-      <DialogContent class="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Request time adjustment</DialogTitle>
-        </DialogHeader>
-
-        <div class="space-y-4 py-1">
-          <p class="text-sm text-slate-500 dark:text-slate-400">
-            Enter the session times you need recorded. Existing sessions for the selected date are prefilled. An admin can approve with one click.
-          </p>
-
-          <div class="space-y-1.5">
-            <Label>Date</Label>
-            <Input v-model="adjForm.date" type="date" class="cursor-pointer" />
-          </div>
-
-          <div
-            v-if="pendingForSelectedDate"
-            class="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
-          >
-            <ClockIcon class="size-3.5 shrink-0" />
-            You already have a pending adjustment request for this date.
-          </div>
-
-          <!-- Sessions -->
-          <div class="space-y-2">
-            <div v-if="adjPrefilling" class="flex items-center gap-2 text-xs text-slate-400 py-1">
-              <Loader2Icon class="size-3 animate-spin" />
-              Loading existing sessions…
-            </div>
-            <template v-else>
-              <div
-                v-for="(session, si) in adjForm.sessions"
-                :key="si"
-                class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2.5"
-              >
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    Session {{ si + 1 }}
-                    <span v-if="session.workSessionId" class="text-slate-400">(prefilled)</span>
-                  </span>
-                  <Button
-                    v-if="adjForm.sessions.length > 1"
-                    size="icon"
-                    variant="ghost"
-                    class="size-6"
-                    @click="removeSession(si)"
-                  >
-                    <XIcon class="size-3" />
-                  </Button>
-                </div>
-
-                <div class="grid grid-cols-2 gap-2">
-                  <div class="space-y-1">
-                    <Label class="text-xs text-slate-500">Clock In <span class="text-destructive">*</span></Label>
-                    <Input v-model="session.clockIn" type="time" />
-                  </div>
-                  <div class="space-y-1">
-                    <Label class="text-xs text-slate-500">Clock Out <span class="text-destructive">*</span></Label>
-                    <Input v-model="session.clockOut" type="time" />
-                  </div>
-                </div>
-
-                <!-- Breaks -->
+              <div v-else>
                 <div
-                  v-if="session.breaks.length"
-                  class="ml-2 pl-2.5 border-l-2 border-slate-100 dark:border-slate-800 space-y-2"
+                  v-if="!today || (today.closedSessions.length === 0 && !today.openSession)"
+                  class="flex flex-col items-center gap-2 py-8 text-center"
                 >
-                  <div
-                    v-for="(b, bi) in session.breaks"
-                    :key="bi"
-                    class="grid grid-cols-2 gap-2 items-end"
-                  >
-                    <div class="space-y-1">
-                      <Label class="text-xs text-slate-400">Break Start</Label>
-                      <Input v-model="b.breakStart" type="time" class="h-8 text-xs" />
-                    </div>
-                    <div class="flex gap-1 items-end">
-                      <div class="flex-1 space-y-1">
-                        <Label class="text-xs text-slate-400">Break End</Label>
-                        <Input v-model="b.breakEnd" type="time" class="h-8 text-xs" />
-                      </div>
-                      <Button size="icon" variant="ghost" class="size-8 shrink-0" @click="removeBreak(si, bi)">
-                        <XIcon class="size-3" />
-                      </Button>
-                    </div>
-                  </div>
+                  <ClockIcon class="size-8 text-slate-300 dark:text-slate-600" />
+                  <p class="text-sm text-slate-500 dark:text-slate-400">
+                    No sessions yet. Use the button above to clock in.
+                  </p>
                 </div>
 
+                <div v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+                  <!-- Open session -->
+                  <div
+                    v-if="today?.openSession"
+                    class="flex items-center gap-3 px-4 py-3"
+                  >
+                    <span class="inline-flex size-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span class="text-sm font-mono text-slate-700 dark:text-slate-300 flex-1">
+                      {{ sessionTimeline(today.openSession) }}
+                    </span>
+                    <span
+                      class="text-xs px-2 py-0.5 rounded-full font-medium"
+                      :class="isOnBreak
+                        ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                        : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'"
+                    >
+                      {{ isOnBreak ? 'On break' : 'Active' }}
+                    </span>
+                  </div>
+
+                  <!-- Closed sessions -->
+                  <div
+                    v-for="session in today?.closedSessions"
+                    :key="session.id"
+                    class="flex items-center gap-3 px-4 py-3"
+                  >
+                    <span class="inline-flex size-2 rounded-full bg-slate-300 dark:bg-slate-600" />
+                    <span class="text-sm font-mono text-slate-700 dark:text-slate-300 flex-1">
+                      {{ sessionTimeline(session) }}
+                    </span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 font-medium">
+                      Closed
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </TabsContent>
+
+        <!-- ── History tab ─────────────────────────────────────────────── -->
+        <TabsContent value="history" class="space-y-4">
+          <div v-if="pendingRequests.length > 0" class="card p-4 space-y-2">
+            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <SendIcon class="size-3.5 text-amber-500" />
+              Pending adjustment requests
+            </h2>
+            <div
+              v-for="req in pendingRequests"
+              :key="req.id"
+              class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/30"
+            >
+              <span class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">{{ formatDate(req.date) }}</span>
+              <span class="text-slate-500 dark:text-slate-400 truncate">{{ req.reason }}</span>
+            </div>
+          </div>
+
+          <div class="card overflow-hidden">
+            <div v-if="loadingSummaries" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
+                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+                <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+              </div>
+            </div>
+
+            <Table v-else>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Hours</TableHead>
+                  <TableHead>Δ</TableHead>
+                  <TableHead>Sessions</TableHead>
+                  <TableHead class="text-center">WFH</TableHead>
+                  <TableHead class="text-center">Vacation</TableHead>
+                  <TableHead>Description</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableEmpty v-if="mergedHistory.length === 0" :colspan="7">
+                  <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                  <p class="text-slate-500 dark:text-slate-400">No clocked days yet.</p>
+                </TableEmpty>
+
+                <template v-else v-for="row in mergedHistory" :key="row.data.date + '-' + row.kind">
+                  <!-- Holiday row -->
+                  <TableRow
+                    v-if="row.kind === 'holiday'"
+                    class="bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50/70 dark:hover:bg-sky-950/30"
+                  >
+                    <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      {{ formatDate(row.data.date) }}
+                    </TableCell>
+                    <TableCell :colspan="6">
+                      <div class="flex items-center gap-2">
+                        <StarIcon class="size-3.5 text-sky-500 shrink-0" />
+                        <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
+                        <span class="text-xs text-slate-400">Public holiday</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+
+                  <!-- Summary row -->
+                  <TableRow v-else>
+                    <!-- Date -->
+                    <TableCell class="font-medium text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                      {{ formatDate(row.data.date) }}
+                      <span
+                        v-if="row.data.date === localDateString(new Date())"
+                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
+                      >Today</span>
+                      <span
+                        v-if="pendingRequestForDate(row.data.date)"
+                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300"
+                        :title="`Pending adjustment request: ${pendingRequestForDate(row.data.date)!.reason}`"
+                      >Pending</span>
+                    </TableCell>
+
+                    <!-- Hours -->
+                    <TableCell>
+                      <span
+                        v-if="row.data.totalWorkedHours > 0"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                      >
+                        {{ row.data.totalWorkedHours.toFixed(2) }}h
+                      </span>
+                      <span v-else class="text-slate-400 text-xs">—</span>
+                    </TableCell>
+
+                    <!-- Flex delta -->
+                    <TableCell>
+                      <template v-if="flexDeltaForDay(row.data) !== null">
+                        <span
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold font-mono"
+                          :class="flexDeltaForDay(row.data)! >= 0
+                            ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
+                        >
+                          <component
+                            :is="flexDeltaForDay(row.data)! >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                            class="size-3"
+                          />
+                          {{ formatHours(flexDeltaForDay(row.data)!) }}
+                        </span>
+                        <CoffeeIcon
+                          v-if="breakAutoDeductedMinutesForDay(row.data)"
+                          class="size-3.5 text-amber-500 shrink-0"
+                          :title="`No break logged — ${breakAutoDeductedMinutesForDay(row.data)} min minimum break auto-deducted`"
+                        />
+                      </template>
+                      <span v-else class="text-slate-400 text-xs">—</span>
+                    </TableCell>
+
+                    <!-- Sessions timeline -->
+                    <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[220px] truncate">
+                      <div v-for="s in row.data.sessions.filter(s => s.status === 'Closed')" :key="s.id" class="truncate">
+                        {{ sessionTimeline(s) }}
+                      </div>
+                      <span v-if="row.data.sessions.filter(s => s.status === 'Closed').length === 0" class="text-slate-400">—</span>
+                    </TableCell>
+
+                    <!-- WFH -->
+                    <TableCell class="text-center">
+                      <div class="flex items-center justify-center gap-1.5">
+                        <Switch
+                          :model-value="row.data.workDay?.workedFromHome ?? false"
+                          :disabled="savingDate === row.data.date"
+                          @update:model-value="toggleWfh(row.data)"
+                        />
+                        <component
+                          :is="(row.data.workDay?.workedFromHome ?? false) ? HomeIcon : BuildingIcon"
+                          class="size-3.5"
+                          :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-indigo-500' : 'text-slate-400'"
+                        />
+                      </div>
+                    </TableCell>
+
+                    <!-- Vacation -->
+                    <TableCell class="text-center">
+                      <span
+                        v-if="row.data.vacationAmount === 1.0"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
+                        :title="row.data.vacationTypeName ?? undefined"
+                      >Full</span>
+                      <span
+                        v-else-if="row.data.vacationAmount === 0.5"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300"
+                        :title="row.data.vacationTypeName ?? undefined"
+                      >Half</span>
+                      <span v-else class="text-slate-400 text-xs">—</span>
+                    </TableCell>
+
+                    <!-- Description -->
+                    <TableCell class="max-w-[200px]">
+                      <div v-if="editingDate === row.data.date" class="flex items-start gap-1.5">
+                        <textarea
+                          v-model="editingDescription"
+                          rows="2"
+                          class="input-field resize-none text-xs py-1 px-2 flex-1"
+                          placeholder="Add a description…"
+                          @keydown.enter.exact.prevent="saveDescription(row.data.date)"
+                          @keydown.escape="cancelEdit"
+                        />
+                        <div class="flex flex-col gap-1">
+                          <Button
+                            size="icon"
+                            class="size-6"
+                            :disabled="savingDate === row.data.date"
+                            @click="saveDescription(row.data.date)"
+                          >
+                            <Loader2Icon v-if="savingDate === row.data.date" class="size-3 animate-spin" />
+                            <CheckIcon v-else class="size-3" />
+                          </Button>
+                          <Button size="icon" variant="ghost" class="size-6" @click="cancelEdit">
+                            <MinusIcon class="size-3" />
+                          </Button>
+                        </div>
+                      </div>
+                      <button
+                        v-else
+                        class="group flex cursor-pointer items-center gap-1.5 text-left w-full disabled:cursor-not-allowed"
+                        :disabled="row.data.sessions.every(s => s.status !== 'Closed')"
+                        @click="row.data.sessions.some(s => s.status === 'Closed') ? startEdit(row.data) : undefined"
+                      >
+                        <span class="text-xs text-slate-600 dark:text-slate-400 truncate" :title="row.data.workDay?.description ?? undefined">
+                          {{ row.data.workDay?.description || (row.data.sessions.some(s => s.status === 'Closed') ? "Add description…" : "—") }}
+                        </span>
+                        <PencilIcon
+                          v-if="row.data.sessions.some(s => s.status === 'Closed')"
+                          class="size-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 shrink-0"
+                        />
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                </template>
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+    </div>
+  </div>
+
+  <!-- Adjustment request dialog -->
+  <Dialog v-model:open="showAdjustDialog">
+    <DialogContent class="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>Request time adjustment</DialogTitle>
+      </DialogHeader>
+
+      <div class="space-y-4 py-1">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+          Enter the session times you need recorded. Existing sessions for the selected date are prefilled. An admin can approve with one click.
+        </p>
+
+        <div class="space-y-1.5">
+          <Label>Date</Label>
+          <Input v-model="adjForm.date" type="date" class="cursor-pointer" />
+        </div>
+
+        <div
+          v-if="pendingForSelectedDate"
+          class="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+        >
+          <ClockIcon class="size-3.5 shrink-0" />
+          You already have a pending adjustment request for this date.
+        </div>
+
+        <!-- Sessions -->
+        <div class="space-y-2">
+          <div v-if="adjPrefilling" class="flex items-center gap-2 text-xs text-slate-400 py-1">
+            <Loader2Icon class="size-3 animate-spin" />
+            Loading existing sessions…
+          </div>
+          <template v-else>
+            <div
+              v-for="(session, si) in adjForm.sessions"
+              :key="si"
+              class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 space-y-2.5"
+            >
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-slate-600 dark:text-slate-400">
+                  Session {{ si + 1 }}
+                  <span v-if="session.workSessionId" class="text-slate-400">(prefilled)</span>
+                </span>
                 <Button
+                  v-if="adjForm.sessions.length > 1"
+                  size="icon"
                   variant="ghost"
-                  size="sm"
-                  class="h-7 text-xs text-slate-500 px-2"
-                  @click="addBreak(si)"
+                  class="size-6"
+                  @click="removeSession(si)"
                 >
-                  + Add break
+                  <XIcon class="size-3" />
                 </Button>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div class="space-y-1">
+                  <Label class="text-xs text-slate-500">Clock In <span class="text-destructive">*</span></Label>
+                  <Input v-model="session.clockIn" type="time" />
+                </div>
+                <div class="space-y-1">
+                  <Label class="text-xs text-slate-500">Clock Out <span class="text-destructive">*</span></Label>
+                  <Input v-model="session.clockOut" type="time" />
+                </div>
+              </div>
+
+              <!-- Breaks -->
+              <div
+                v-if="session.breaks.length"
+                class="ml-2 pl-2.5 border-l-2 border-slate-100 dark:border-slate-800 space-y-2"
+              >
+                <div
+                  v-for="(b, bi) in session.breaks"
+                  :key="bi"
+                  class="grid grid-cols-2 gap-2 items-end"
+                >
+                  <div class="space-y-1">
+                    <Label class="text-xs text-slate-400">Break Start</Label>
+                    <Input v-model="b.breakStart" type="time" class="h-8 text-xs" />
+                  </div>
+                  <div class="flex gap-1 items-end">
+                    <div class="flex-1 space-y-1">
+                      <Label class="text-xs text-slate-400">Break End</Label>
+                      <Input v-model="b.breakEnd" type="time" class="h-8 text-xs" />
+                    </div>
+                    <Button size="icon" variant="ghost" class="size-8 shrink-0" @click="removeBreak(si, bi)">
+                      <XIcon class="size-3" />
+                    </Button>
+                  </div>
+                </div>
               </div>
 
               <Button
                 variant="ghost"
                 size="sm"
                 class="h-7 text-xs text-slate-500 px-2"
-                @click="addSession"
+                @click="addBreak(si)"
               >
-                + Add session
+                + Add break
               </Button>
-            </template>
-          </div>
+            </div>
 
-          <div class="space-y-1.5">
-            <Label>Reason <span class="text-destructive">*</span></Label>
-            <textarea
-              v-model="adjForm.reason"
-              rows="3"
-              class="input-field resize-none"
-              placeholder="Why couldn't you log your time at the normal time?"
-            />
-          </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="h-7 text-xs text-slate-500 px-2"
+              @click="addSession"
+            >
+              + Add session
+            </Button>
+          </template>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" @click="showAdjustDialog = false">Cancel</Button>
-          <Button
-            :disabled="adjSubmitting || adjPrefilling || !!pendingForSelectedDate"
-            @click="submitAdjustmentRequest"
-          >
-            <Loader2Icon v-if="adjSubmitting" class="size-4 animate-spin" />
-            Send request
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </AuthenticatedLayout>
+        <div class="space-y-1.5">
+          <Label>Reason <span class="text-destructive">*</span></Label>
+          <textarea
+            v-model="adjForm.reason"
+            rows="3"
+            class="input-field resize-none"
+            placeholder="Why couldn't you log your time at the normal time?"
+          />
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" @click="showAdjustDialog = false">Cancel</Button>
+        <Button
+          :disabled="adjSubmitting || adjPrefilling || !!pendingForSelectedDate"
+          @click="submitAdjustmentRequest"
+        >
+          <Loader2Icon v-if="adjSubmitting" class="size-4 animate-spin" />
+          Send request
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>

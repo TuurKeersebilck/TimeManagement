@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from "vue-router";
 import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import NotFoundView from "../views/NotFoundView.vue";
+import AuthenticatedLayout from "../layouts/AuthenticatedLayout.vue";
 import { authService } from "../services/authService";
 import { setupService } from "../services/setupService";
 
@@ -39,103 +40,104 @@ const routes: Array<RouteRecordRaw> = [
     meta: { guest: true },
   },
 
-  // Shared (employee + admin) — admins are redirected to /admin/dashboard below
-  {
-    path: "/",
-    name: "time-tracking",
-    component: () => import("../views/TimeTrackingView.vue"),
-    meta: { requiresAuth: true },
-  },
   {
     path: "/time-tracking",
     redirect: "/",
-  },
-
-  // Employee routes
-  {
-    path: "/vacations",
-    name: "vacations",
-    component: () => import("../views/VacationsView.vue"),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/team-calendar",
-    name: "team-calendar",
-    component: () => import("../views/TeamCalendarView.vue"),
-    meta: { requiresAuth: true },
-  },
-
-  // Admin-only routes
-  {
-    path: "/admin/dashboard",
-    name: "admin-dashboard",
-    component: () => import("../views/admin/AdminDashboardView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/time-logs",
-    name: "admin-time-logs",
-    component: () => import("../views/admin/TimeLogsView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
     path: "/admin/vacations",
     redirect: "/team-calendar",
   },
-  {
-    path: "/admin/employees",
-    name: "admin-employees",
-    component: () => import("../views/admin/EmployeesView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/employees/:id",
-    name: "admin-employee-detail",
-    component: () => import("../views/admin/EmployeeDetailView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/vacation-types",
-    name: "admin-vacation-types",
-    component: () => import("../views/admin/VacationTypesView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/settings",
-    name: "admin-settings",
-    component: () => import("../views/admin/AppSettingsView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/export",
-    name: "admin-export",
-    component: () => import("../views/admin/ExportView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/adjustment-requests",
-    name: "admin-adjustment-requests",
-    component: () => import("../views/admin/AdjustmentRequestsView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
-  {
-    path: "/admin/settlements",
-    name: "admin-settlements",
-    component: () => import("../views/admin/SettlementsView.vue"),
-    meta: { requiresAuth: true, requiresAdmin: true },
-  },
 
+  // Authenticated app shell — Sidebar/header mount once here and persist
+  // across navigation instead of remounting on every route change.
   {
-    path: "/account",
-    name: "account",
-    component: () => import("../views/AccountView.vue"),
+    path: "/",
+    component: AuthenticatedLayout,
     meta: { requiresAuth: true },
-  },
-  {
-    path: "/help",
-    name: "help",
-    component: () => import("../views/HelpView.vue"),
-    meta: { requiresAuth: true },
+    children: [
+      // Shared (employee + admin) — admins are redirected to /admin/dashboard below
+      {
+        path: "",
+        name: "time-tracking",
+        component: () => import("../views/TimeTrackingView.vue"),
+      },
+
+      // Employee routes
+      {
+        path: "vacations",
+        name: "vacations",
+        component: () => import("../views/VacationsView.vue"),
+      },
+      {
+        path: "team-calendar",
+        name: "team-calendar",
+        component: () => import("../views/TeamCalendarView.vue"),
+      },
+      {
+        path: "account",
+        name: "account",
+        component: () => import("../views/AccountView.vue"),
+      },
+      {
+        path: "help",
+        name: "help",
+        component: () => import("../views/HelpView.vue"),
+      },
+
+      // Admin-only routes
+      {
+        path: "admin",
+        meta: { requiresAdmin: true },
+        children: [
+          {
+            path: "dashboard",
+            name: "admin-dashboard",
+            component: () => import("../views/admin/AdminDashboardView.vue"),
+          },
+          {
+            path: "time-logs",
+            name: "admin-time-logs",
+            component: () => import("../views/admin/TimeLogsView.vue"),
+          },
+          {
+            path: "employees",
+            name: "admin-employees",
+            component: () => import("../views/admin/EmployeesView.vue"),
+          },
+          {
+            path: "employees/:id",
+            name: "admin-employee-detail",
+            component: () => import("../views/admin/EmployeeDetailView.vue"),
+          },
+          {
+            path: "vacation-types",
+            name: "admin-vacation-types",
+            component: () => import("../views/admin/VacationTypesView.vue"),
+          },
+          {
+            path: "settings",
+            name: "admin-settings",
+            component: () => import("../views/admin/AppSettingsView.vue"),
+          },
+          {
+            path: "export",
+            name: "admin-export",
+            component: () => import("../views/admin/ExportView.vue"),
+          },
+          {
+            path: "adjustment-requests",
+            name: "admin-adjustment-requests",
+            component: () => import("../views/admin/AdjustmentRequestsView.vue"),
+          },
+          {
+            path: "settlements",
+            name: "admin-settlements",
+            component: () => import("../views/admin/SettlementsView.vue"),
+          },
+        ],
+      },
+    ],
   },
 
   { path: "/:pathMatch(.*)*", name: "not-found", component: NotFoundView },

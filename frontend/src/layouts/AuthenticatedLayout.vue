@@ -46,7 +46,7 @@ const handleLogout = async (): Promise<void> => {
 
       <!-- Page content -->
       <main class="flex-1 overflow-y-auto">
-        <slot />
+        <router-view />
       </main>
 
     </div>

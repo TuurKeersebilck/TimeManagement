@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
-import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type AdminTimeLog, type AdminVacationDay, type Employee } from "../../services/adminService";
 import { holidayService, type PublicHoliday } from "../../services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
@@ -323,294 +322,161 @@ onMounted(async () => {
 </script>
 
 <template>
-  <AuthenticatedLayout>
-    <div class="p-6 lg:p-8">
-      <div class="max-w-6xl mx-auto">
-        <!-- Header -->
-        <div class="mb-8">
-          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">All Time Logs</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Overview of all employee time logs
+  <div class="p-6 lg:p-8">
+    <div class="max-w-6xl mx-auto">
+      <!-- Header -->
+      <div class="mb-8">
+        <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">All Time Logs</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          Overview of all employee time logs
+        </p>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <div class="stat-card">
+          <p
+            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
+          >
+            Employees
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ employees.length }}</span>
           </p>
         </div>
-
-        <!-- Stats -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          <div class="stat-card">
-            <p
-              class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-            >
-              Employees
-            </p>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-              <span v-else>{{ employees.length }}</span>
-            </p>
-          </div>
-          <div class="stat-card">
-            <p
-              class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-            >
-              Entries shown
-            </p>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-              <span v-else>{{ allLogs.length }}</span>
-            </p>
-          </div>
-          <div class="stat-card">
-            <p
-              class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-            >
-              This week
-            </p>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-              <span v-else>{{ hoursThisWeek }}h</span>
-            </p>
-          </div>
-          <div class="stat-card">
-            <p
-              class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-            >
-              This month
-            </p>
-            <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-              <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-              <span v-else>{{ hoursThisMonth }}h</span>
-            </p>
-          </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="card p-4 mb-3 flex flex-wrap items-end gap-3">
-          <div class="flex-1 min-w-[180px] space-y-1.5">
-            <Label>Employee</Label>
-            <Select v-model="selectedEmployeeId">
-              <SelectTrigger class="w-full">
-                <SelectValue placeholder="All employees" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All employees</SelectItem>
-                <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
-                  {{ emp.fullName }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="flex-1 min-w-[150px] space-y-1.5">
-            <Label>From</Label>
-            <Input v-model="dateFrom" type="date" class="cursor-pointer" />
-          </div>
-          <div class="flex-1 min-w-[150px] space-y-1.5">
-            <Label>To</Label>
-            <Input v-model="dateTo" type="date" class="cursor-pointer" />
-          </div>
-          <Button v-if="hasFilters" variant="outline" @click="clearFilters" class="shrink-0">
-            Clear filters
-          </Button>
-        </div>
-
-        <!-- Quick filter chips -->
-        <div class="flex flex-wrap gap-2 mb-4">
-          <button
-            v-for="chip in [
-              { label: 'Today', value: 'today' },
-              { label: 'This week', value: 'this-week' },
-              { label: 'This month', value: 'this-month' },
-              { label: 'Last month', value: 'last-month' },
-            ]"
-            :key="chip.value"
-            :class="[
-              'px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer',
-              activePreset === chip.value
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
-            ]"
-            @click="setFilter(chip.value as 'today' | 'this-week' | 'this-month' | 'last-month')"
+        <div class="stat-card">
+          <p
+            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
           >
-            {{ chip.label }}
-          </button>
+            Entries shown
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ allLogs.length }}</span>
+          </p>
+        </div>
+        <div class="stat-card">
+          <p
+            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
+          >
+            This week
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ hoursThisWeek }}h</span>
+          </p>
+        </div>
+        <div class="stat-card">
+          <p
+            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
+          >
+            This month
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ hoursThisMonth }}h</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="card p-4 mb-3 flex flex-wrap items-end gap-3">
+        <div class="flex-1 min-w-[180px] space-y-1.5">
+          <Label>Employee</Label>
+          <Select v-model="selectedEmployeeId">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="All employees" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All employees</SelectItem>
+              <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
+                {{ emp.fullName }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="flex-1 min-w-[150px] space-y-1.5">
+          <Label>From</Label>
+          <Input v-model="dateFrom" type="date" class="cursor-pointer" />
+        </div>
+        <div class="flex-1 min-w-[150px] space-y-1.5">
+          <Label>To</Label>
+          <Input v-model="dateTo" type="date" class="cursor-pointer" />
+        </div>
+        <Button v-if="hasFilters" variant="outline" @click="clearFilters" class="shrink-0">
+          Clear filters
+        </Button>
+      </div>
+
+      <!-- Quick filter chips -->
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button
+          v-for="chip in [
+            { label: 'Today', value: 'today' },
+            { label: 'This week', value: 'this-week' },
+            { label: 'This month', value: 'this-month' },
+            { label: 'Last month', value: 'last-month' },
+          ]"
+          :key="chip.value"
+          :class="[
+            'px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer',
+            activePreset === chip.value
+              ? 'bg-indigo-600 text-white'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
+          ]"
+          @click="setFilter(chip.value as 'today' | 'this-week' | 'this-month' | 'last-month')"
+        >
+          {{ chip.label }}
+        </button>
+      </div>
+
+      <!-- Table -->
+      <div class="card overflow-hidden">
+        <!-- Loading skeleton -->
+        <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+          <div v-for="i in 6" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
+            <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
+          </div>
         </div>
 
-        <!-- Table -->
-        <div class="card overflow-hidden">
-          <!-- Loading skeleton -->
-          <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
-            <div v-for="i in 6" :key="i" class="flex items-center gap-4 px-4 py-3.5">
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
-              <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse" />
-            </div>
-          </div>
+        <Table v-else>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Timeline</TableHead>
+              <TableHead>Total</TableHead>
+              <TableHead>WFH</TableHead>
+              <TableHead>Description</TableHead>
+            </TableRow>
+          </TableHeader>
 
-          <Table v-else>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Timeline</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>WFH</TableHead>
-                <TableHead>Description</TableHead>
-              </TableRow>
-            </TableHeader>
-
-            <!-- Single-employee view: merged rows with vacation days + week subtotals -->
-            <TableBody v-if="mergedRows !== null">
-              <TableEmpty v-if="mergedRows.length === 0" :colspan="6">
-                <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
-              </TableEmpty>
-              <template v-else v-for="(row, i) in mergedRows" :key="i">
-                <!-- Regular time log row -->
-                <TableRow v-if="row.kind === 'log'">
-                  <TableCell>
-                    <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                      {{ row.data.employeeName }}
-                    </p>
-                    <p class="text-xs text-slate-400 dark:text-slate-500">{{ row.data.employeeEmail }}</p>
-                  </TableCell>
-                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ formatDate(row.data.date) }}
-                  </TableCell>
-                  <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
-                    <div v-if="row.data.sessions.length" class="flex flex-col gap-0.5">
-                      <div
-                        v-for="(session, si) in row.data.sessions"
-                        :key="si"
-                        class="flex items-center gap-1 whitespace-nowrap"
-                        :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
-                      >
-                        <template v-if="session.breaks.length">
-                          {{ formatTime(session.clockIn) }} → {{ formatTime(session.breaks[0].breakStart) }}
-                          <CoffeeIcon class="shrink-0 size-3 text-amber-400" />
-                          {{ formatTime(session.breaks[session.breaks.length - 1].breakEnd) }} → {{ formatTime(session.clockOut) }}
-                        </template>
-                        <template v-else>
-                          {{ formatTime(session.clockIn) }} → {{ formatTime(session.clockOut) }}
-                        </template>
-                      </div>
-                    </div>
-                    <span v-else class="text-slate-400">—</span>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
-                    >
-                      {{ row.data.totalHours?.toFixed(2) ?? "0.00" }}h
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span v-if="row.data.workedFromHome" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                      WFH
-                    </span>
-                    <span v-else class="text-slate-400 text-xs">—</span>
-                  </TableCell>
-                  <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px]">
-                    <div v-if="row.data.description" class="flex items-center gap-1.5 min-w-0">
-                      <span
-                        class="truncate"
-                        :ref="(el) => checkDescOverflow(el as Element | null, `${row.data.userId}-${row.data.date}`)"
-                      >{{ row.data.description }}</span>
-                      <button
-                        v-if="descOverflow[`${row.data.userId}-${row.data.date}`]"
-                        class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                        title="View full description"
-                        @click="openDescription(row.data)"
-                      >
-                        <MessageSquareTextIcon class="size-3.5" />
-                      </button>
-                    </div>
-                    <span v-else class="text-slate-400">—</span>
-                  </TableCell>
-                </TableRow>
-
-                <!-- Holiday row -->
-                <TableRow
-                  v-else-if="row.kind === 'holiday'"
-                  class="bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50/70 dark:hover:bg-sky-950/30"
-                >
-                  <TableCell :colspan="2" class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ formatDate(row.data.date) }}
-                  </TableCell>
-                  <TableCell :colspan="4">
-                    <div class="flex items-center gap-2">
-                      <StarIcon class="size-3.5 text-sky-500 shrink-0" />
-                      <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
-                      <span class="text-xs text-slate-400 dark:text-slate-500">Public holiday</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-
-                <!-- Vacation day row -->
-                <TableRow
-                  v-else-if="row.kind === 'vacation'"
-                  class="bg-violet-50/40 dark:bg-violet-950/20 hover:bg-violet-50/70 dark:hover:bg-violet-950/30"
-                >
-                  <TableCell>
-                    <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                      {{ row.data.employeeName }}
-                    </p>
-                  </TableCell>
-                  <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                    {{ formatDate(row.data.date) }}
-                  </TableCell>
-                  <TableCell :colspan="4">
-                    <div class="flex items-center gap-2">
-                      <CalendarIcon class="size-3.5 text-violet-500 shrink-0" />
-                      <div
-                        class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
-                        :style="{ backgroundColor: row.data.vacationTypeColor ?? '#6366f1' }"
-                      />
-                      <span class="text-sm text-slate-600 dark:text-slate-400">
-                        {{ row.data.vacationTypeName }}
-                      </span>
-                      <span class="text-xs text-slate-400 dark:text-slate-500">
-                        {{ row.data.amount === 1 ? "Full day" : "Half day" }}
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-
-                <!-- Week subtotal row -->
-                <TableRow
-                  v-else-if="row.kind === 'week-subtotal'"
-                  class="bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/80"
-                >
-                  <TableCell :colspan="6" class="py-2">
-                    <div class="flex items-center justify-between px-1">
-                      <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.label }}</span>
-                      <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        {{ row.hours.toFixed(2) }}h
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </template>
-            </TableBody>
-
-            <!-- All-employees view: paginated -->
-            <TableBody v-else>
-              <TableEmpty v-if="allLogs.length === 0" :colspan="6">
-                <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
-              </TableEmpty>
-              <TableRow v-for="log in paginatedLogs" :key="`${log.userId}-${log.date}`">
+          <!-- Single-employee view: merged rows with vacation days + week subtotals -->
+          <TableBody v-if="mergedRows !== null">
+            <TableEmpty v-if="mergedRows.length === 0" :colspan="6">
+              <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+              <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
+            </TableEmpty>
+            <template v-else v-for="(row, i) in mergedRows" :key="i">
+              <!-- Regular time log row -->
+              <TableRow v-if="row.kind === 'log'">
                 <TableCell>
                   <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
-                    {{ log.employeeName }}
+                    {{ row.data.employeeName }}
                   </p>
-                  <p class="text-xs text-slate-400 dark:text-slate-500">{{ log.employeeEmail }}</p>
+                  <p class="text-xs text-slate-400 dark:text-slate-500">{{ row.data.employeeEmail }}</p>
                 </TableCell>
                 <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                  {{ formatDate(log.date) }}
+                  {{ formatDate(row.data.date) }}
                 </TableCell>
                 <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
-                  <div v-if="log.sessions.length" class="flex flex-col gap-0.5">
+                  <div v-if="row.data.sessions.length" class="flex flex-col gap-0.5">
                     <div
-                      v-for="(session, si) in log.sessions"
+                      v-for="(session, si) in row.data.sessions"
                       :key="si"
                       class="flex items-center gap-1 whitespace-nowrap"
                       :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
@@ -631,26 +497,26 @@ onMounted(async () => {
                   <span
                     class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
                   >
-                    {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+                    {{ row.data.totalHours?.toFixed(2) ?? "0.00" }}h
                   </span>
                 </TableCell>
                 <TableCell>
-                  <span v-if="log.workedFromHome" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                  <span v-if="row.data.workedFromHome" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
                     WFH
                   </span>
                   <span v-else class="text-slate-400 text-xs">—</span>
                 </TableCell>
                 <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px]">
-                  <div v-if="log.description" class="flex items-center gap-1.5 min-w-0">
+                  <div v-if="row.data.description" class="flex items-center gap-1.5 min-w-0">
                     <span
                       class="truncate"
-                      :ref="(el) => checkDescOverflow(el as Element | null, `${log.userId}-${log.date}`)"
-                    >{{ log.description }}</span>
+                      :ref="(el) => checkDescOverflow(el as Element | null, `${row.data.userId}-${row.data.date}`)"
+                    >{{ row.data.description }}</span>
                     <button
-                      v-if="descOverflow[`${log.userId}-${log.date}`]"
+                      v-if="descOverflow[`${row.data.userId}-${row.data.date}`]"
                       class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                       title="View full description"
-                      @click="openDescription(log)"
+                      @click="openDescription(row.data)"
                     >
                       <MessageSquareTextIcon class="size-3.5" />
                     </button>
@@ -658,61 +524,192 @@ onMounted(async () => {
                   <span v-else class="text-slate-400">—</span>
                 </TableCell>
               </TableRow>
-            </TableBody>
-          </Table>
 
-          <!-- Pagination (all-employees view only) -->
-          <div
-            v-if="!loading && mergedRows === null && totalPages > 1"
-            class="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800"
-          >
-            <p class="text-xs text-slate-500 dark:text-slate-400">
-              Showing {{ (currentPage - 1) * pageSize + 1 }}–{{
-                Math.min(currentPage * pageSize, allLogs.length)
-              }}
-              of {{ allLogs.length }}
-            </p>
-            <div class="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                class="size-7"
-                :disabled="currentPage === 1"
-                @click="currentPage--"
+              <!-- Holiday row -->
+              <TableRow
+                v-else-if="row.kind === 'holiday'"
+                class="bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50/70 dark:hover:bg-sky-950/30"
               >
-                <ChevronLeftIcon class="size-3.5" />
-              </Button>
-              <span class="text-xs text-slate-600 dark:text-slate-400 px-2"
-                >{{ currentPage }} / {{ totalPages }}</span
+                <TableCell :colspan="2" class="font-medium text-slate-900 dark:text-slate-100">
+                  {{ formatDate(row.data.date) }}
+                </TableCell>
+                <TableCell :colspan="4">
+                  <div class="flex items-center gap-2">
+                    <StarIcon class="size-3.5 text-sky-500 shrink-0" />
+                    <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">Public holiday</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+
+              <!-- Vacation day row -->
+              <TableRow
+                v-else-if="row.kind === 'vacation'"
+                class="bg-violet-50/40 dark:bg-violet-950/20 hover:bg-violet-50/70 dark:hover:bg-violet-950/30"
               >
-              <Button
-                variant="ghost"
-                size="icon"
-                class="size-7"
-                :disabled="currentPage === totalPages"
-                @click="currentPage++"
+                <TableCell>
+                  <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                    {{ row.data.employeeName }}
+                  </p>
+                </TableCell>
+                <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                  {{ formatDate(row.data.date) }}
+                </TableCell>
+                <TableCell :colspan="4">
+                  <div class="flex items-center gap-2">
+                    <CalendarIcon class="size-3.5 text-violet-500 shrink-0" />
+                    <div
+                      class="w-2 h-2 rounded-full shrink-0 ring-1 ring-black/10"
+                      :style="{ backgroundColor: row.data.vacationTypeColor ?? '#6366f1' }"
+                    />
+                    <span class="text-sm text-slate-600 dark:text-slate-400">
+                      {{ row.data.vacationTypeName }}
+                    </span>
+                    <span class="text-xs text-slate-400 dark:text-slate-500">
+                      {{ row.data.amount === 1 ? "Full day" : "Half day" }}
+                    </span>
+                  </div>
+                </TableCell>
+              </TableRow>
+
+              <!-- Week subtotal row -->
+              <TableRow
+                v-else-if="row.kind === 'week-subtotal'"
+                class="bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/80"
               >
-                <ChevronRightIcon class="size-3.5" />
-              </Button>
-            </div>
+                <TableCell :colspan="6" class="py-2">
+                  <div class="flex items-center justify-between px-1">
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.label }}</span>
+                    <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      {{ row.hours.toFixed(2) }}h
+                    </span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            </template>
+          </TableBody>
+
+          <!-- All-employees view: paginated -->
+          <TableBody v-else>
+            <TableEmpty v-if="allLogs.length === 0" :colspan="6">
+              <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+              <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
+            </TableEmpty>
+            <TableRow v-for="log in paginatedLogs" :key="`${log.userId}-${log.date}`">
+              <TableCell>
+                <p class="font-medium text-slate-900 dark:text-slate-100 text-sm">
+                  {{ log.employeeName }}
+                </p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">{{ log.employeeEmail }}</p>
+              </TableCell>
+              <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                {{ formatDate(log.date) }}
+              </TableCell>
+              <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
+                <div v-if="log.sessions.length" class="flex flex-col gap-0.5">
+                  <div
+                    v-for="(session, si) in log.sessions"
+                    :key="si"
+                    class="flex items-center gap-1 whitespace-nowrap"
+                    :class="session.status === 'Invalidated' ? 'line-through opacity-40' : ''"
+                  >
+                    <template v-if="session.breaks.length">
+                      {{ formatTime(session.clockIn) }} → {{ formatTime(session.breaks[0].breakStart) }}
+                      <CoffeeIcon class="shrink-0 size-3 text-amber-400" />
+                      {{ formatTime(session.breaks[session.breaks.length - 1].breakEnd) }} → {{ formatTime(session.clockOut) }}
+                    </template>
+                    <template v-else>
+                      {{ formatTime(session.clockIn) }} → {{ formatTime(session.clockOut) }}
+                    </template>
+                  </div>
+                </div>
+                <span v-else class="text-slate-400">—</span>
+              </TableCell>
+              <TableCell>
+                <span
+                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                >
+                  {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+                </span>
+              </TableCell>
+              <TableCell>
+                <span v-if="log.workedFromHome" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                  WFH
+                </span>
+                <span v-else class="text-slate-400 text-xs">—</span>
+              </TableCell>
+              <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[180px]">
+                <div v-if="log.description" class="flex items-center gap-1.5 min-w-0">
+                  <span
+                    class="truncate"
+                    :ref="(el) => checkDescOverflow(el as Element | null, `${log.userId}-${log.date}`)"
+                  >{{ log.description }}</span>
+                  <button
+                    v-if="descOverflow[`${log.userId}-${log.date}`]"
+                    class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    title="View full description"
+                    @click="openDescription(log)"
+                  >
+                    <MessageSquareTextIcon class="size-3.5" />
+                  </button>
+                </div>
+                <span v-else class="text-slate-400">—</span>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+
+        <!-- Pagination (all-employees view only) -->
+        <div
+          v-if="!loading && mergedRows === null && totalPages > 1"
+          class="flex items-center justify-between px-4 py-3 border-t border-slate-100 dark:border-slate-800"
+        >
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Showing {{ (currentPage - 1) * pageSize + 1 }}–{{
+              Math.min(currentPage * pageSize, allLogs.length)
+            }}
+            of {{ allLogs.length }}
+          </p>
+          <div class="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-7"
+              :disabled="currentPage === 1"
+              @click="currentPage--"
+            >
+              <ChevronLeftIcon class="size-3.5" />
+            </Button>
+            <span class="text-xs text-slate-600 dark:text-slate-400 px-2"
+              >{{ currentPage }} / {{ totalPages }}</span
+            >
+            <Button
+              variant="ghost"
+              size="icon"
+              class="size-7"
+              :disabled="currentPage === totalPages"
+              @click="currentPage++"
+            >
+              <ChevronRightIcon class="size-3.5" />
+            </Button>
           </div>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Description dialog -->
-    <Dialog v-model:open="descriptionDialog.open">
-      <DialogContent class="max-w-md" @open-auto-focus.prevent>
-        <DialogHeader>
-          <DialogTitle>Description</DialogTitle>
-          <DialogDescription>
-            {{ descriptionDialog.employee }} &mdash; {{ descriptionDialog.date }}
-          </DialogDescription>
-        </DialogHeader>
-        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-          {{ descriptionDialog.text }}
-        </p>
-      </DialogContent>
-    </Dialog>
-  </AuthenticatedLayout>
+  <!-- Description dialog -->
+  <Dialog v-model:open="descriptionDialog.open">
+    <DialogContent class="max-w-md" @open-auto-focus.prevent>
+      <DialogHeader>
+        <DialogTitle>Description</DialogTitle>
+        <DialogDescription>
+          {{ descriptionDialog.employee }} &mdash; {{ descriptionDialog.date }}
+        </DialogDescription>
+      </DialogHeader>
+      <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+        {{ descriptionDialog.text }}
+      </p>
+    </DialogContent>
+  </Dialog>
 </template>

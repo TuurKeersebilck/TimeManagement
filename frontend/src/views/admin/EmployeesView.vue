@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import { adminService, type Employee } from "../../services/adminService";
 import { inviteService, type Invite } from "../../services/inviteService";
 import { useAppToast } from "@/composables/useAppToast";
@@ -154,241 +153,239 @@ function deleteEmployee(emp: Employee) {
 </script>
 
 <template>
-  <AuthenticatedLayout>
-    <div class="p-6 lg:p-8">
-      <div class="max-w-4xl mx-auto space-y-8">
-        <!-- Active employees section -->
-        <div>
-          <div class="flex items-center justify-between mb-6">
-            <div>
-              <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Employees</h1>
-              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Click an employee to manage their vacation types, balance and hours targets</p>
-            </div>
-            <Button
-              v-if="!showInviteForm"
-              size="sm"
-              @click="showInviteForm = true"
-            >
-              <MailIcon class="size-4 mr-1.5" />
-              Invite employee
-            </Button>
+  <div class="p-6 lg:p-8">
+    <div class="max-w-4xl mx-auto space-y-8">
+      <!-- Active employees section -->
+      <div>
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Employees</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Click an employee to manage their vacation types, balance and hours targets</p>
           </div>
-
-          <!-- Inline invite form -->
-          <div
-            v-if="showInviteForm"
-            class="card p-4 mb-4 flex items-end gap-3"
+          <Button
+            v-if="!showInviteForm"
+            size="sm"
+            @click="showInviteForm = true"
           >
-            <div class="flex-1 space-y-1.5">
-              <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Email address</label>
-              <Input
-                v-model="inviteEmail"
-                type="email"
-                placeholder="employee@company.com"
-                autofocus
-                @keydown.enter.prevent="sendInvite"
-              />
-            </div>
-            <Button @click="sendInvite" :disabled="inviteLoading || !inviteEmail.trim()">
-              <Loader2Icon v-if="inviteLoading" class="size-4 animate-spin mr-1.5" />
-              Send invite
-            </Button>
-            <Button variant="ghost" @click="showInviteForm = false; inviteEmail = ''">
-              Cancel
-            </Button>
-          </div>
-
-          <div class="card overflow-hidden">
-            <!-- Loading skeleton -->
-            <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
-              <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-36 animate-pulse" />
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse" />
-              </div>
-            </div>
-
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>This week</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableEmpty v-if="activeEmployees.length === 0" :colspan="4">
-                  <UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                  <p class="text-slate-500 dark:text-slate-400">No employees found.</p>
-                </TableEmpty>
-                <TableRow
-                  v-for="employee in activeEmployees"
-                  :key="employee.id"
-                  class="group"
-                >
-                  <TableCell
-                    class="font-medium text-slate-900 dark:text-slate-100 cursor-pointer"
-                    @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
-                  >
-                    {{ employee.fullName }}
-                  </TableCell>
-                  <TableCell
-                    class="text-slate-600 dark:text-slate-400 cursor-pointer"
-                    @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
-                  >
-                    {{ employee.email }}
-                  </TableCell>
-                  <TableCell
-                    class="cursor-pointer"
-                    @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
-                  >
-                    <div class="flex items-center gap-2">
-                      <span class="text-sm text-slate-700 dark:text-slate-300">
-                        {{ employee.weeklyHoursLogged.toFixed(1) }}h
-                        <span v-if="employee.resolvedWeeklyTarget != null" class="text-slate-400 dark:text-slate-500">
-                          / {{ employee.resolvedWeeklyTarget }}h
-                        </span>
-                      </span>
-                      <span
-                        v-if="weekStatus(employee) !== 'none'"
-                        :class="[
-                          'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
-                          weekStatus(employee) === 'on-track'
-                            ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
-                            : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
-                        ]"
-                      >
-                        {{ weekStatus(employee) === "on-track" ? "On track" : "Behind" }}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell class="text-right w-20">
-                    <div class="flex items-center justify-end gap-1">
-                      <button
-                        class="p-1.5 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
-                        title="Disable employee"
-                        @click.stop="disableEmployee(employee)"
-                      >
-                        <BanIcon class="size-4" />
-                      </button>
-                      <ChevronRightIcon
-                        class="size-4 text-slate-400 dark:text-slate-500 cursor-pointer"
-                        @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
-                      />
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+            <MailIcon class="size-4 mr-1.5" />
+            Invite employee
+          </Button>
         </div>
 
-        <!-- Disabled employees section -->
-        <div v-if="!loading && disabledEmployees.length > 0">
-          <div class="mb-4">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Disabled employees</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">These accounts are deactivated. Re-enable or permanently delete them.</p>
+        <!-- Inline invite form -->
+        <div
+          v-if="showInviteForm"
+          class="card p-4 mb-4 flex items-end gap-3"
+        >
+          <div class="flex-1 space-y-1.5">
+            <label class="text-sm font-medium text-slate-700 dark:text-slate-300">Email address</label>
+            <Input
+              v-model="inviteEmail"
+              type="email"
+              placeholder="employee@company.com"
+              autofocus
+              @keydown.enter.prevent="sendInvite"
+            />
           </div>
-
-          <div class="card overflow-hidden opacity-80">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow
-                  v-for="employee in disabledEmployees"
-                  :key="employee.id"
-                  class="group"
-                >
-                  <TableCell class="font-medium text-slate-500 dark:text-slate-400">
-                    <div class="flex items-center gap-2">
-                      {{ employee.fullName }}
-                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                        Disabled
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell class="text-slate-400 dark:text-slate-500">
-                    {{ employee.email }}
-                  </TableCell>
-                  <TableCell class="text-right w-24">
-                    <div class="flex items-center justify-end gap-1">
-                      <button
-                        class="p-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
-                        title="Re-enable employee"
-                        @click="enableEmployee(employee)"
-                      >
-                        <CircleCheckIcon class="size-4" />
-                      </button>
-                      <button
-                        class="p-1.5 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer"
-                        title="Delete permanently"
-                        @click="deleteEmployee(employee)"
-                      >
-                        <Trash2Icon class="size-4" />
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <Button @click="sendInvite" :disabled="inviteLoading || !inviteEmail.trim()">
+            <Loader2Icon v-if="inviteLoading" class="size-4 animate-spin mr-1.5" />
+            Send invite
+          </Button>
+          <Button variant="ghost" @click="showInviteForm = false; inviteEmail = ''">
+            Cancel
+          </Button>
         </div>
 
-        <!-- Pending invitations section -->
-        <div v-if="invitesLoading || pendingInvites.length > 0">
-          <div class="mb-4">
-            <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Pending invitations</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Invites expire 48 hours after being sent</p>
+        <div class="card overflow-hidden">
+          <!-- Loading skeleton -->
+          <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+            <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-36 animate-pulse" />
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse" />
+            </div>
           </div>
 
-          <div class="card overflow-hidden">
-            <div v-if="invitesLoading" class="divide-y divide-slate-100 dark:divide-slate-800">
-              <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3.5">
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse" />
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse" />
-              </div>
-            </div>
-
-            <Table v-else>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Expires</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow
-                  v-for="invite in pendingInvites"
-                  :key="invite.id"
+          <Table v-else>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>This week</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableEmpty v-if="activeEmployees.length === 0" :colspan="4">
+                <UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+                <p class="text-slate-500 dark:text-slate-400">No employees found.</p>
+              </TableEmpty>
+              <TableRow
+                v-for="employee in activeEmployees"
+                :key="employee.id"
+                class="group"
+              >
+                <TableCell
+                  class="font-medium text-slate-900 dark:text-slate-100 cursor-pointer"
+                  @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
                 >
-                  <TableCell class="text-slate-700 dark:text-slate-300">
-                    {{ invite.email }}
-                  </TableCell>
-                  <TableCell class="text-sm text-slate-500 dark:text-slate-400">
-                    {{ formatExpiresAt(invite.expiresAt) }}
-                  </TableCell>
-                  <TableCell class="text-right">
-                    <button
-                      class="p-1 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer"
-                      title="Cancel invite"
-                      @click="cancelInvite(invite)"
+                  {{ employee.fullName }}
+                </TableCell>
+                <TableCell
+                  class="text-slate-600 dark:text-slate-400 cursor-pointer"
+                  @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                >
+                  {{ employee.email }}
+                </TableCell>
+                <TableCell
+                  class="cursor-pointer"
+                  @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                >
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">
+                      {{ employee.weeklyHoursLogged.toFixed(1) }}h
+                      <span v-if="employee.resolvedWeeklyTarget != null" class="text-slate-400 dark:text-slate-500">
+                        / {{ employee.resolvedWeeklyTarget }}h
+                      </span>
+                    </span>
+                    <span
+                      v-if="weekStatus(employee) !== 'none'"
+                      :class="[
+                        'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium',
+                        weekStatus(employee) === 'on-track'
+                          ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
+                      ]"
                     >
-                      <XIcon class="size-4" />
+                      {{ weekStatus(employee) === "on-track" ? "On track" : "Behind" }}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell class="text-right w-20">
+                  <div class="flex items-center justify-end gap-1">
+                    <button
+                      class="p-1.5 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                      title="Disable employee"
+                      @click.stop="disableEmployee(employee)"
+                    >
+                      <BanIcon class="size-4" />
                     </button>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                    <ChevronRightIcon
+                      class="size-4 text-slate-400 dark:text-slate-500 cursor-pointer"
+                      @click="router.push({ name: 'admin-employee-detail', params: { id: employee.id } })"
+                    />
+                  </div>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <!-- Disabled employees section -->
+      <div v-if="!loading && disabledEmployees.length > 0">
+        <div class="mb-4">
+          <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Disabled employees</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">These accounts are deactivated. Re-enable or permanently delete them.</p>
+        </div>
+
+        <div class="card overflow-hidden opacity-80">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow
+                v-for="employee in disabledEmployees"
+                :key="employee.id"
+                class="group"
+              >
+                <TableCell class="font-medium text-slate-500 dark:text-slate-400">
+                  <div class="flex items-center gap-2">
+                    {{ employee.fullName }}
+                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                      Disabled
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell class="text-slate-400 dark:text-slate-500">
+                  {{ employee.email }}
+                </TableCell>
+                <TableCell class="text-right w-24">
+                  <div class="flex items-center justify-end gap-1">
+                    <button
+                      class="p-1.5 rounded hover:bg-emerald-50 dark:hover:bg-emerald-950 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors cursor-pointer"
+                      title="Re-enable employee"
+                      @click="enableEmployee(employee)"
+                    >
+                      <CircleCheckIcon class="size-4" />
+                    </button>
+                    <button
+                      class="p-1.5 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer"
+                      title="Delete permanently"
+                      @click="deleteEmployee(employee)"
+                    >
+                      <Trash2Icon class="size-4" />
+                    </button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <!-- Pending invitations section -->
+      <div v-if="invitesLoading || pendingInvites.length > 0">
+        <div class="mb-4">
+          <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">Pending invitations</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Invites expire 48 hours after being sent</p>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div v-if="invitesLoading" class="divide-y divide-slate-100 dark:divide-slate-800">
+            <div v-for="i in 2" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse" />
+              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse" />
+            </div>
           </div>
+
+          <Table v-else>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Email</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow
+                v-for="invite in pendingInvites"
+                :key="invite.id"
+              >
+                <TableCell class="text-slate-700 dark:text-slate-300">
+                  {{ invite.email }}
+                </TableCell>
+                <TableCell class="text-sm text-slate-500 dark:text-slate-400">
+                  {{ formatExpiresAt(invite.expiresAt) }}
+                </TableCell>
+                <TableCell class="text-right">
+                  <button
+                    class="p-1 rounded hover:bg-destructive/10 text-slate-400 hover:text-destructive transition-colors cursor-pointer"
+                    title="Cancel invite"
+                    @click="cancelInvite(invite)"
+                  >
+                    <XIcon class="size-4" />
+                  </button>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>
-  </AuthenticatedLayout>
+  </div>
 </template>

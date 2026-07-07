@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import AuthenticatedLayout from "@/layouts/AuthenticatedLayout.vue";
 import {
   adjustmentRequestService,
   type AdjustmentRequest,
@@ -174,135 +173,133 @@ onMounted(load);
 </script>
 
 <template>
-  <AuthenticatedLayout>
-    <div class="p-6 lg:p-8">
-      <div class="max-w-6xl mx-auto">
-        <!-- Header -->
-        <div class="flex items-center justify-between mb-8">
-          <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
-              Adjustment Requests
-            </h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Employee time adjustment requests requiring approval
-            </p>
-          </div>
-          <div class="w-64">
-            <Input v-model="search" placeholder="Search employee, date, reason…" />
-          </div>
+  <div class="p-6 lg:p-8">
+    <div class="max-w-6xl mx-auto">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-8">
+        <div>
+          <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            Adjustment Requests
+          </h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+            Employee time adjustment requests requiring approval
+          </p>
         </div>
-
-        <!-- Table -->
-        <div class="card overflow-hidden">
-          <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
-            <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
-              <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-36 animate-pulse" />
-              <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
-            </div>
-          </div>
-
-          <Table v-else>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Requested Times</TableHead>
-                <TableHead>Reason</TableHead>
-                <TableHead>Requested At</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableEmpty v-if="filtered.length === 0" :colspan="7">
-                <ClipboardListIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-                <p class="text-slate-500 dark:text-slate-400">
-                  {{ search ? "No requests match your search." : "No adjustment requests yet." }}
-                </p>
-              </TableEmpty>
-              <TableRow v-for="r in filtered" :key="r.id">
-                <TableCell class="font-medium text-slate-900 dark:text-slate-100">
-                  {{ r.employeeName }}
-                </TableCell>
-                <TableCell class="text-slate-600 dark:text-slate-400">
-                  {{ fmtDate(r.date) }}
-                </TableCell>
-                <TableCell
-                  class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[280px] truncate"
-                >
-                  {{ formatSnapshot(r.desiredDaySnapshot) }}
-                </TableCell>
-                <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
-                  <div class="flex items-center gap-1.5 min-w-0">
-                    <span class="truncate">{{ r.reason }}</span>
-                    <button
-                      class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                      title="View full reason"
-                      @click="openReason(r)"
-                    >
-                      <MessageSquareTextIcon class="size-3.5" />
-                    </button>
-                  </div>
-                </TableCell>
-                <TableCell class="text-slate-500 dark:text-slate-400 text-sm whitespace-nowrap">
-                  {{ fmtDate(r.requestedAt) }}
-                </TableCell>
-                <TableCell>
-                  <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold"
-                    :class="STATUS_CLASSES[r.status]"
-                  >
-                    {{ STATUS_LABELS[r.status] }}
-                  </span>
-                </TableCell>
-                <TableCell class="text-right">
-                  <div v-if="r.status === 'Pending'" class="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-7 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
-                      title="Approve"
-                      :disabled="approvingId === r.id || rejectingId === r.id"
-                      @click="approveRequest(r)"
-                    >
-                      <Loader2Icon v-if="approvingId === r.id" class="size-3.5 animate-spin" />
-                      <CheckIcon v-else class="size-3.5" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
-                      title="Reject"
-                      :disabled="rejectingId === r.id || approvingId === r.id"
-                      @click="rejectRequest(r)"
-                    >
-                      <Loader2Icon v-if="rejectingId === r.id" class="size-3.5 animate-spin" />
-                      <XIcon v-else class="size-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+        <div class="w-64">
+          <Input v-model="search" placeholder="Search employee, date, reason…" />
         </div>
       </div>
-    </div>
 
-    <!-- Reason dialog -->
-    <Dialog v-model:open="reasonDialog.open">
-      <DialogContent class="max-w-md" @open-auto-focus.prevent>
-        <DialogHeader>
-          <DialogTitle>Adjustment Reason</DialogTitle>
-          <DialogDescription>
-            {{ reasonDialog.employee }} &mdash; {{ reasonDialog.date }}
-          </DialogDescription>
-        </DialogHeader>
-        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-          {{ reasonDialog.text }}
-        </p>
-      </DialogContent>
-    </Dialog>
-  </AuthenticatedLayout>
+      <!-- Table -->
+      <div class="card overflow-hidden">
+        <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+          <div v-for="i in 5" :key="i" class="flex items-center gap-4 px-4 py-3.5">
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-36 animate-pulse" />
+            <div class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
+          </div>
+        </div>
+
+        <Table v-else>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Requested Times</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Requested At</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableEmpty v-if="filtered.length === 0" :colspan="7">
+              <ClipboardListIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+              <p class="text-slate-500 dark:text-slate-400">
+                {{ search ? "No requests match your search." : "No adjustment requests yet." }}
+              </p>
+            </TableEmpty>
+            <TableRow v-for="r in filtered" :key="r.id">
+              <TableCell class="font-medium text-slate-900 dark:text-slate-100">
+                {{ r.employeeName }}
+              </TableCell>
+              <TableCell class="text-slate-600 dark:text-slate-400">
+                {{ fmtDate(r.date) }}
+              </TableCell>
+              <TableCell
+                class="font-mono text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[280px] truncate"
+              >
+                {{ formatSnapshot(r.desiredDaySnapshot) }}
+              </TableCell>
+              <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
+                <div class="flex items-center gap-1.5 min-w-0">
+                  <span class="truncate">{{ r.reason }}</span>
+                  <button
+                    class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                    title="View full reason"
+                    @click="openReason(r)"
+                  >
+                    <MessageSquareTextIcon class="size-3.5" />
+                  </button>
+                </div>
+              </TableCell>
+              <TableCell class="text-slate-500 dark:text-slate-400 text-sm whitespace-nowrap">
+                {{ fmtDate(r.requestedAt) }}
+              </TableCell>
+              <TableCell>
+                <span
+                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold"
+                  :class="STATUS_CLASSES[r.status]"
+                >
+                  {{ STATUS_LABELS[r.status] }}
+                </span>
+              </TableCell>
+              <TableCell class="text-right">
+                <div v-if="r.status === 'Pending'" class="flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="size-7 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
+                    title="Approve"
+                    :disabled="approvingId === r.id || rejectingId === r.id"
+                    @click="approveRequest(r)"
+                  >
+                    <Loader2Icon v-if="approvingId === r.id" class="size-3.5 animate-spin" />
+                    <CheckIcon v-else class="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="size-7 text-slate-400 hover:text-red-500 dark:hover:text-red-400"
+                    title="Reject"
+                    :disabled="rejectingId === r.id || approvingId === r.id"
+                    @click="rejectRequest(r)"
+                  >
+                    <Loader2Icon v-if="rejectingId === r.id" class="size-3.5 animate-spin" />
+                    <XIcon v-else class="size-3.5" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reason dialog -->
+  <Dialog v-model:open="reasonDialog.open">
+    <DialogContent class="max-w-md" @open-auto-focus.prevent>
+      <DialogHeader>
+        <DialogTitle>Adjustment Reason</DialogTitle>
+        <DialogDescription>
+          {{ reasonDialog.employee }} &mdash; {{ reasonDialog.date }}
+        </DialogDescription>
+      </DialogHeader>
+      <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+        {{ reasonDialog.text }}
+      </p>
+    </DialogContent>
+  </Dialog>
 </template>
