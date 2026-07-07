@@ -1,44 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { vacationService, type TeamVacationDay } from "@/services/vacationService";
-import { adminService, type Employee } from "@/services/adminService";
 import { holidayService, type PublicHoliday } from "@/services/holidayService";
 import { employeeColor, employeeColorWash } from "@/lib/employeeColors";
-import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "lucide-vue-next";
+import TeamYearCalendarOverlay from "@/components/TeamYearCalendarOverlay.vue";
+import { ChevronLeftIcon, ChevronRightIcon, XIcon, Maximize2Icon } from "lucide-vue-next";
 
 const toast = useAppToast();
-const { isAdmin } = useAuth();
 
 const vacationDays = ref<TeamVacationDay[]>([]);
-const employees = ref<Employee[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
 const loading = ref(false);
-
-// ─── Filters ──────────────────────────────────────────────────────────────────
-
-const filterEmployee = ref<string>("all");
-
-const filteredDays = computed(() => {
-  if (filterEmployee.value === "all") return vacationDays.value;
-  return vacationDays.value.filter((d) => d.userId === filterEmployee.value);
-});
-
-const clearFilters = () => {
-  filterEmployee.value = "all";
-  selectedIso.value = null;
-};
-
-const hasFilters = computed(() => filterEmployee.value !== "all");
+const yearOverlayOpen = ref(false);
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 
@@ -106,7 +81,7 @@ const calendarDays = computed<CalDay[]>(() => {
 
 const vacationsByDate = computed(() => {
   const map = new Map<string, TeamVacationDay[]>();
-  for (const d of filteredDays.value) {
+  for (const d of vacationDays.value) {
     if (!map.has(d.date)) map.set(d.date, []);
     map.get(d.date)!.push(d);
   }
@@ -173,24 +148,8 @@ watch(currentMonth, (d) => {
   fetchHolidaysForYear(d.getFullYear());
 });
 
-onMounted(async () => {
-  loading.value = true;
-  try {
-    const requests: [ReturnType<typeof vacationService.getTeamVacationDays>, Promise<Employee[]>] = [
-      vacationService.getTeamVacationDays({
-        year: currentMonth.value.getFullYear(),
-        month: currentMonth.value.getMonth() + 1,
-      }),
-      isAdmin.value ? adminService.getEmployees() : Promise.resolve([]),
-    ];
-    const [days, emps] = await Promise.all(requests);
-    vacationDays.value = days;
-    employees.value = emps;
-  } catch {
-    toast.error("Failed to load team vacation data");
-  } finally {
-    loading.value = false;
-  }
+onMounted(() => {
+  fetchVacationDays();
   fetchHolidaysForYear(currentMonth.value.getFullYear());
 });
 
@@ -200,27 +159,6 @@ const MAX_VISIBLE = 3;
 
 <template>
   <div>
-    <!-- Filters -->
-    <div class="flex flex-wrap items-center gap-3 mb-6">
-      <!-- Employee filter: admin only -->
-      <Select v-if="isAdmin" v-model="filterEmployee">
-        <SelectTrigger class="w-48">
-          <SelectValue placeholder="All employees" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All employees</SelectItem>
-          <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
-            {{ emp.fullName }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-
-      <Button v-if="hasFilters" variant="ghost" size="sm" @click="clearFilters">
-        <XIcon class="size-3.5" />
-        Clear
-      </Button>
-    </div>
-
     <!-- Month navigation -->
     <div class="flex items-center justify-between mb-3">
       <div class="flex items-center gap-1">
@@ -234,7 +172,13 @@ const MAX_VISIBLE = 3;
           {{ monthLabel }}
         </span>
       </div>
-      <Button variant="outline" size="sm" @click="goToday">Today</Button>
+      <div class="flex items-center gap-2">
+        <Button variant="outline" size="sm" @click="goToday">Today</Button>
+        <Button variant="outline" size="sm" @click="yearOverlayOpen = true">
+          <Maximize2Icon class="size-3.5" />
+          Year view
+        </Button>
+      </div>
     </div>
 
     <!-- Calendar -->
@@ -374,5 +318,7 @@ const MAX_VISIBLE = 3;
         </div>
       </div>
     </Transition>
+
+    <TeamYearCalendarOverlay v-model:open="yearOverlayOpen" />
   </div>
 </template>
