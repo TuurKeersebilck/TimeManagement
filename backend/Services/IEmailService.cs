@@ -18,4 +18,6 @@ public interface IEmailService
     Task SendAdjustmentOutcomeEmailAsync(string toEmail, string toName, DateOnly date, bool approved);
 
     Task SendInviteEmailAsync(string toEmail, string inviteLink);
+
+    Task SendCalendarTokenExpiringEmailAsync(string toEmail, string toName, DateTimeOffset expiresAt);
 }

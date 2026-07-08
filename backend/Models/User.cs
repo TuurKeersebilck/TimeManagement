@@ -9,6 +9,7 @@ public class User : IdentityUser
     public bool IsDisabled { get; set; } = false;
     public string? CalendarTokenHash { get; set; }
     public DateTimeOffset? CalendarTokenExpiresAt { get; set; }
+    public DateTimeOffset? CalendarTokenExpiryNotifiedAt { get; set; }
     /// <summary>Bitmask of default-WFH weekdays: bit (1 &lt;&lt; (int)DayOfWeek) set means WFH defaults on for that day.</summary>
     public int DefaultWfhWeekdaysMask { get; set; } = 0;
     public ICollection<TimeAdjustmentRequest> AdjustmentRequests { get; set; } = new List<TimeAdjustmentRequest>();

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 
 namespace TimeManagementBackend.Services;
@@ -12,6 +13,7 @@ public class MissedClockInReminderService(
     ILogger<MissedClockInReminderService> logger) : BackgroundService
 {
     private DateOnly _lastRunDate = DateOnly.MinValue;
+    private DateOnly _lastCalendarExpiryWeekStart = DateOnly.MinValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,6 +27,16 @@ public class MissedClockInReminderService(
             {
                 _lastRunDate = DateOnly.FromDateTime(now);
                 await SendRemindersAsync(stoppingToken);
+
+                // Calendar token expiry only needs a weekly check — the 14-day warning
+                // window comfortably absorbs the up-to-6-day gap between weekly runs.
+                var currentWeekStart = TimeCalculationHelper.GetCurrentWeekBounds().Start;
+                if (currentWeekStart != _lastCalendarExpiryWeekStart)
+                {
+                    _lastCalendarExpiryWeekStart = currentWeekStart;
+                    await SendCalendarTokenExpiryRemindersAsync(stoppingToken);
+                }
+
                 if (now.Day == 1)
                     await GenerateMonthlySettlementsAsync(stoppingToken);
             }
@@ -174,6 +186,55 @@ public class MissedClockInReminderService(
         catch (Exception ex)
         {
             logger.LogError(ex, "MissedClockInReminderService encountered an error.");
+        }
+    }
+
+    // ── Calendar token expiry reminder ────────────────────────────────────────
+
+    private const int CalendarTokenExpiryWarningDays = 14;
+
+    private async Task SendCalendarTokenExpiryRemindersAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+
+            var now = DateTimeOffset.UtcNow;
+            var warningCutoff = now.AddDays(CalendarTokenExpiryWarningDays);
+
+            var expiringUsers = await db.Users
+                .Where(u => u.CalendarTokenHash != null
+                         && u.CalendarTokenExpiresAt != null
+                         && u.CalendarTokenExpiresAt > now
+                         && u.CalendarTokenExpiresAt <= warningCutoff
+                         && u.CalendarTokenExpiryNotifiedAt == null
+                         && u.Email != null)
+                .ToListAsync(ct);
+
+            foreach (var user in expiringUsers)
+            {
+                try
+                {
+                    await emailService.SendCalendarTokenExpiringEmailAsync(
+                        user.Email!, user.FullName, user.CalendarTokenExpiresAt!.Value);
+                    user.CalendarTokenExpiryNotifiedAt = now;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to send calendar-token-expiring email to {UserId}", user.Id);
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+
+            logger.LogInformation(
+                "CalendarTokenExpiryReminder: sent {Count} reminder(s).", expiringUsers.Count);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "SendCalendarTokenExpiryRemindersAsync encountered an error.");
         }
     }
 
