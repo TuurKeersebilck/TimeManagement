@@ -802,6 +802,10 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new ResourceNotFoundException("Employee not found.");
 
+        if (await SettlementLockHelper.IsMonthSettledAsync(_context, userId, dto.EffectiveDate, ct))
+            throw new ValidationException(
+                "Cannot create a time bank adjustment for a month that has already been settled.");
+
         var adjustment = new TimeBankAdjustment
         {
             UserId = userId,
@@ -837,13 +841,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             throw new ValidationException(
                 "This adjustment was created automatically by a monthly settlement and cannot be deleted manually.");
 
-        var hasSettledMonth = await _context.MonthlySettlements.AnyAsync(
-            s => s.UserId == adjustment.UserId
-              && s.Year == adjustment.EffectiveDate.Year
-              && s.Month == adjustment.EffectiveDate.Month
-              && s.Status == SettlementStatus.Settled, ct);
-
-        if (hasSettledMonth)
+        if (await SettlementLockHelper.IsMonthSettledAsync(_context, adjustment.UserId, adjustment.EffectiveDate, ct))
             throw new ValidationException(
                 "Cannot delete a time bank adjustment from a month that has already been settled.");
 
