@@ -10,6 +10,8 @@ public class User : IdentityUser
     public string? CalendarTokenHash { get; set; }
     public DateTimeOffset? CalendarTokenExpiresAt { get; set; }
     public DateTimeOffset? CalendarTokenExpiryNotifiedAt { get; set; }
+    /// <summary>Bitmask of default-WFH weekdays: bit (1 &lt;&lt; (int)DayOfWeek) set means WFH defaults on for that day.</summary>
+    public int DefaultWfhWeekdaysMask { get; set; } = 0;
     public ICollection<TimeAdjustmentRequest> AdjustmentRequests { get; set; } = new List<TimeAdjustmentRequest>();
     public ICollection<WorkSession> WorkSessions { get; set; } = new List<WorkSession>();
     public ICollection<WorkDay> WorkDays { get; set; } = new List<WorkDay>();

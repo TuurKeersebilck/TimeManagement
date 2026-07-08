@@ -413,7 +413,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 
-    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, int timezoneOffsetMinutes = 0, CancellationToken ct = default)
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
     {
         var dateFrom = new DateOnly(year, month, 1);
         var dateTo = dateFrom.AddMonths(1).AddDays(-1);
@@ -601,8 +601,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                     CsvEscape(log.EmployeeEmail),
                     log.Date.ToString("yyyy-MM-dd"),
                     log.Date.DayOfWeek.ToString(),
-                    FormatExportTime(session.ClockIn, timezoneOffsetMinutes),
-                    FormatExportTime(session.ClockOut, timezoneOffsetMinutes),
+                    FormatExportTime(session.ClockIn),
+                    FormatExportTime(session.ClockOut),
                     breakHours.ToString("F2", CultureInfo.InvariantCulture),
                     session.Hours.ToString("F2", CultureInfo.InvariantCulture),
                     log.WorkedFromHome ? "Yes" : "No",
@@ -653,15 +653,21 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return sb.ToString();
     }
 
-    private static string FormatExportTime(DateTimeOffset? utcTime, int timezoneOffsetMinutes)
+    // Payroll exports render times in the app's fixed business timezone so every employee's
+    // Clock In/Out lines up regardless of which admin (or which browser timezone) runs the export.
+    private static readonly TimeZoneInfo s_exportTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+
+    private static string FormatExportTime(DateTimeOffset? utcTime)
     {
         if (utcTime == null) return "";
-        var local = utcTime.Value.ToOffset(TimeSpan.FromMinutes(timezoneOffsetMinutes));
+        var local = TimeZoneInfo.ConvertTime(utcTime.Value, s_exportTimeZone);
         return local.ToString("HH:mm");
     }
 
     private static string CsvEscape(string value)
     {
+        if (value.Length > 0 && (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@'))
+            value = "'" + value;
         if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
             return $"\"{value.Replace("\"", "\"\"")}\"";
         return value;
@@ -796,6 +802,10 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new ResourceNotFoundException("Employee not found.");
 
+        if (await SettlementLockHelper.IsMonthSettledAsync(_context, userId, dto.EffectiveDate, ct))
+            throw new ValidationException(
+                "Cannot create a time bank adjustment for a month that has already been settled.");
+
         var adjustment = new TimeBankAdjustment
         {
             UserId = userId,
@@ -831,13 +841,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             throw new ValidationException(
                 "This adjustment was created automatically by a monthly settlement and cannot be deleted manually.");
 
-        var hasSettledMonth = await _context.MonthlySettlements.AnyAsync(
-            s => s.UserId == adjustment.UserId
-              && s.Year == adjustment.EffectiveDate.Year
-              && s.Month == adjustment.EffectiveDate.Month
-              && s.Status == SettlementStatus.Settled, ct);
-
-        if (hasSettledMonth)
+        if (await SettlementLockHelper.IsMonthSettledAsync(_context, adjustment.UserId, adjustment.EffectiveDate, ct))
             throw new ValidationException(
                 "Cannot delete a time bank adjustment from a month that has already been settled.");
 
