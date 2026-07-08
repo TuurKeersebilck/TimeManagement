@@ -95,6 +95,16 @@ public class WorkSessionsController(
         return Ok(await service.GetMyWorkScheduleAsync(user.Id, ct));
     }
 
+    [HttpPut("default-wfh-weekdays")]
+    public async Task<IActionResult> SetDefaultWfhWeekdays([FromBody] SetDefaultWfhWeekdaysDto dto, CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        await service.SetDefaultWfhWeekdaysAsync(user.Id, dto.Weekdays, ct);
+        return NoContent();
+    }
+
     [HttpGet("overtime")]
     public async Task<ActionResult<OvertimeResultDto>> GetOvertime(
         [FromQuery] int? year,

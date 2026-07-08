@@ -196,6 +196,10 @@ const totalHoursThisMonth = computed(() => {
 
 const WEEKDAY_NAMES: DayOfWeek[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
+// Indexed by JS Date#getDay() (0 = Sunday … 6 = Saturday), matching the backend DayOfWeek enum.
+const ALL_DAY_NAMES: DayOfWeek[] =
+  ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 const weeklyTarget = computed<number | null>(() => {
   if (!schedule.value) return null;
   const weekdayHours = schedule.value.workdayTargets
@@ -744,6 +748,10 @@ onMounted(async () => {
     (async () => {
       try {
         schedule.value = await workSessionService.getMySchedule();
+        const todayName = ALL_DAY_NAMES[new Date().getDay()];
+        if (schedule.value.defaultWfhWeekdays.includes(todayName)) {
+          wfh.value = true;
+        }
       } catch {}
     })(),
     (async () => {

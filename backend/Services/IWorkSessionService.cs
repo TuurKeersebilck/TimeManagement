@@ -14,5 +14,6 @@ public interface IWorkSessionService
     Task<IEnumerable<WorkDaySummaryDto>> GetSummariesAsync(string userId, DateOnly? dateFrom, DateOnly? dateTo, CancellationToken ct = default);
 
     Task<WorkScheduleDto> GetMyWorkScheduleAsync(string userId, CancellationToken ct = default);
+    Task SetDefaultWfhWeekdaysAsync(string userId, List<DayOfWeek> weekdays, CancellationToken ct = default);
     Task<WorkDayDto> UpdateDayAsync(string userId, DateOnly date, UpdateWorkDayDto dto, CancellationToken ct = default);
 }

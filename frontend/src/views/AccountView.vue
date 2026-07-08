@@ -3,6 +3,8 @@ import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { authService, type ChangePasswordPayload, type UpdateProfilePayload } from "../services/authService";
 import { calendarFeedService } from "../services/calendarFeedService";
+import { workSessionService } from "../services/workSessionService";
+import type { DayOfWeek } from "../services/holidayService";
 import { useAuth } from "@/composables/useAuth";
 import { useApiCall } from "@/composables/useApiCall";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
@@ -12,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useTheme } from "@/composables/useTheme";
-import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon, SwatchBookIcon, CalendarIcon, CopyIcon, RefreshCwIcon, ExternalLinkIcon } from "lucide-vue-next";
+import { Loader2Icon, CheckIcon, KeyRoundIcon, UserIcon, SwatchBookIcon, CalendarIcon, CopyIcon, RefreshCwIcon, ExternalLinkIcon, HomeIcon } from "lucide-vue-next";
 
 const { isDark, toggleTheme, palette, togglePalette } = useTheme();
 const { confirm } = useConfirmDialog();
@@ -102,6 +104,54 @@ const {
     router.push("/login");
   },
 });
+
+// ─── Default work-from-home days ───────────────────────────────────────────────
+
+const WFH_DAYS: { value: DayOfWeek; label: string }[] = [
+  { value: "Monday", label: "Mon" },
+  { value: "Tuesday", label: "Tue" },
+  { value: "Wednesday", label: "Wed" },
+  { value: "Thursday", label: "Thu" },
+  { value: "Friday", label: "Fri" },
+  { value: "Saturday", label: "Sat" },
+  { value: "Sunday", label: "Sun" },
+];
+
+const wfhLoading = ref(false);
+const wfhSaving = ref(false);
+const wfhDays = ref<Set<DayOfWeek>>(new Set());
+
+async function initWfhDays() {
+  wfhLoading.value = true;
+  try {
+    const schedule = await workSessionService.getMySchedule();
+    wfhDays.value = new Set(schedule.defaultWfhWeekdays);
+  } catch {
+    // silently ignore — section just starts empty
+  } finally {
+    wfhLoading.value = false;
+  }
+}
+
+watch(currentUser, (user) => { if (user) initWfhDays(); }, { immediate: true });
+
+async function toggleWfhDay(day: DayOfWeek) {
+  const previous = wfhDays.value;
+  const next = new Set(previous);
+  if (next.has(day)) next.delete(day);
+  else next.add(day);
+  wfhDays.value = next;
+
+  wfhSaving.value = true;
+  try {
+    await workSessionService.setDefaultWfhWeekdays([...next]);
+  } catch {
+    toast.error("Failed to save work-from-home defaults");
+    wfhDays.value = previous;
+  } finally {
+    wfhSaving.value = false;
+  }
+}
 
 // ─── Calendar feed ────────────────────────────────────────────────────────────
 // The raw token is only available at generation time (only the hash is stored server-side).
@@ -376,6 +426,41 @@ function webcalUrl(feedUrl: string) {
             </div>
             <Switch :model-value="palette === 'slate'" @update:model-value="togglePalette" />
           </div>
+        </div>
+      </div>
+
+      <!-- Default work-from-home days section -->
+      <div class="card p-6 space-y-5 mt-6">
+        <div class="flex items-center gap-3 pb-1">
+          <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
+            <HomeIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Work-from-home defaults</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Prefill the WFH toggle on these days when you clock in</p>
+          </div>
+        </div>
+
+        <div v-if="wfhLoading" class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+          <Loader2Icon class="size-4 animate-spin" />
+          Loading…
+        </div>
+        <div v-else class="flex flex-wrap gap-2">
+          <button
+            v-for="day in WFH_DAYS"
+            :key="day.value"
+            type="button"
+            :disabled="wfhSaving"
+            :class="[
+              'px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50',
+              wfhDays.has(day.value)
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-transparent text-slate-600 dark:text-slate-300 border-border hover:bg-slate-50 dark:hover:bg-slate-800',
+            ]"
+            @click="toggleWfhDay(day.value)"
+          >
+            {{ day.label }}
+          </button>
         </div>
       </div>
 
