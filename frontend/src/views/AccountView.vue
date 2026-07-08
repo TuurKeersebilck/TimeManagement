@@ -445,14 +445,14 @@ function webcalUrl(feedUrl: string) {
           <Loader2Icon class="size-4 animate-spin" />
           Loading…
         </div>
-        <div v-else class="flex flex-wrap gap-2">
+        <div v-else class="grid grid-cols-7 gap-2">
           <button
             v-for="day in WFH_DAYS"
             :key="day.value"
             type="button"
             :disabled="wfhSaving"
             :class="[
-              'px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50',
+              'px-2 py-1.5 rounded-lg text-sm font-medium border transition-colors disabled:opacity-50',
               wfhDays.has(day.value)
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-transparent text-slate-600 dark:text-slate-300 border-border hover:bg-slate-50 dark:hover:bg-slate-800',

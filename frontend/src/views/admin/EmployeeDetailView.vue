@@ -54,6 +54,7 @@ import {
   CheckCircleIcon,
   ScaleIcon,
   InfoIcon,
+  RotateCcwIcon,
 } from "lucide-vue-next";
 import {
   settlementService,
@@ -140,6 +141,11 @@ const saveWorkdayTargets = async () => {
   }
 };
 
+const resetWorkdayDay = async (day: DayOfWeek) => {
+  employeeWorkdayTargets.value[day] = "";
+  await saveWorkdayTargets();
+};
+
 const saveMinBreak = async () => {
   savingMinBreak.value = true;
   try {
@@ -151,6 +157,11 @@ const saveMinBreak = async () => {
   } finally {
     savingMinBreak.value = false;
   }
+};
+
+const resetMinBreak = async () => {
+  minBreakForm.value = "";
+  await saveMinBreak();
 };
 
 // ─── Assign dialog ────────────────────────────────────────────────────────────
@@ -601,15 +612,27 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
               class="flex items-center justify-between gap-3 px-4 py-2"
             >
               <span class="text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
-              <Input
-                v-model="employeeWorkdayTargets[day]"
-                type="number"
-                min="0"
-                max="24"
-                step="0.5"
-                :placeholder="String(globalWorkdayTargets[day])"
-                class="w-24 h-8 text-sm"
-              />
+              <div class="flex items-center gap-1">
+                <Input
+                  v-model="employeeWorkdayTargets[day]"
+                  type="number"
+                  min="0"
+                  max="24"
+                  step="0.5"
+                  :placeholder="String(globalWorkdayTargets[day])"
+                  class="w-24 h-8 text-sm"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  :class="employeeWorkdayTargets[day] === '' && 'invisible pointer-events-none'"
+                  :disabled="savingWorkdayTargets || employeeWorkdayTargets[day] === ''"
+                  title="Reset to default"
+                  @click="resetWorkdayDay(day)"
+                >
+                  <RotateCcwIcon class="size-3.5 text-slate-400" />
+                </Button>
+              </div>
             </div>
           </div>
           <Button size="sm" :disabled="savingWorkdayTargets" @click="saveWorkdayTargets">
@@ -621,15 +644,27 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
           <div class="flex items-end gap-3 pt-1 border-t border-slate-100 dark:border-slate-800">
             <div class="space-y-1.5 pt-4">
               <Label class="text-xs">Min. break (min) — leave blank to use default</Label>
-              <Input
-                v-model="minBreakForm"
-                type="number"
-                min="1"
-                max="120"
-                step="1"
-                placeholder="default"
-                class="w-28 h-8 text-sm"
-              />
+              <div class="flex items-center gap-1">
+                <Input
+                  v-model="minBreakForm"
+                  type="number"
+                  min="1"
+                  max="120"
+                  step="1"
+                  placeholder="default"
+                  class="w-28 h-8 text-sm"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  :class="minBreakForm === '' && 'invisible pointer-events-none'"
+                  :disabled="savingMinBreak || minBreakForm === ''"
+                  title="Reset to default"
+                  @click="resetMinBreak"
+                >
+                  <RotateCcwIcon class="size-3.5 text-slate-400" />
+                </Button>
+              </div>
             </div>
             <Button size="sm" :disabled="savingMinBreak" @click="saveMinBreak">
               <Loader2Icon v-if="savingMinBreak" class="size-3.5 animate-spin" />
