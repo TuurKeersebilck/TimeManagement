@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 
 namespace TimeManagementBackend.Services;
@@ -12,6 +13,7 @@ public class MissedClockInReminderService(
     ILogger<MissedClockInReminderService> logger) : BackgroundService
 {
     private DateOnly _lastRunDate = DateOnly.MinValue;
+    private DateOnly _lastCalendarExpiryWeekStart = DateOnly.MinValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -25,7 +27,16 @@ public class MissedClockInReminderService(
             {
                 _lastRunDate = DateOnly.FromDateTime(now);
                 await SendRemindersAsync(stoppingToken);
-                await SendCalendarTokenExpiryRemindersAsync(stoppingToken);
+
+                // Calendar token expiry only needs a weekly check — the 14-day warning
+                // window comfortably absorbs the up-to-6-day gap between weekly runs.
+                var currentWeekStart = TimeCalculationHelper.GetCurrentWeekBounds().Start;
+                if (currentWeekStart != _lastCalendarExpiryWeekStart)
+                {
+                    _lastCalendarExpiryWeekStart = currentWeekStart;
+                    await SendCalendarTokenExpiryRemindersAsync(stoppingToken);
+                }
+
                 if (now.Day == 1)
                     await GenerateMonthlySettlementsAsync(stoppingToken);
             }
