@@ -1,4 +1,5 @@
 import api from "./api";
+import type { DayOfWeek, WorkdayTargetDto } from "./holidayService";
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
@@ -48,16 +49,12 @@ export interface WorkDaySummaryDto {
   vacationTypeName: string | null;
 }
 
-export interface WorkdayTargetEntry {
-  dayOfWeek: number; // 0=Sun…6=Sat
-  hours: number;
-}
-
 export interface WorkScheduleDto {
-  workdayTargets: WorkdayTargetEntry[];
+  workdayTargets: WorkdayTargetDto[];
   minimumBreakMinutes: number | null;
   dailyOvertimeAllowanceHours: number | null;
   weeklyOvertimeAllowanceHours: number | null;
+  defaultWfhWeekdays: DayOfWeek[];
 }
 
 // ── Overtime ───────────────────────────────────────────────────────────────────
@@ -77,7 +74,7 @@ export interface OvertimeResultDto {
   runningBalanceHours: number;
   complianceFlags: Array<{
     date: string;
-    type: number;
+    type: "DailyOvertime" | "WeeklyOvertime";
     hoursWorked: number;
     threshold: number;
   }>;
@@ -154,6 +151,10 @@ getSummaries(dateFrom?: string, dateTo?: string): Promise<WorkDaySummaryDto[]> {
 
   getMySchedule(): Promise<WorkScheduleDto> {
     return api.get("/worksessions/my-schedule").then((r) => r.data);
+  },
+
+  setDefaultWfhWeekdays(weekdays: DayOfWeek[]): Promise<void> {
+    return api.put("/worksessions/default-wfh-weekdays", { weekdays }).then(() => undefined);
   },
 
   getOvertime(year?: number, month?: number): Promise<OvertimeResultDto> {

@@ -82,6 +82,7 @@ public class CalendarService(AppDbContext db) : ICalendarService
 
         user.CalendarTokenHash = hash;
         user.CalendarTokenExpiresAt = expiresAt;
+        user.CalendarTokenExpiryNotifiedAt = null;
 
         await db.SaveChangesAsync(ct);
 

@@ -265,15 +265,29 @@ void ConfigureAuthentication(WebApplicationBuilder builder)
                     context.Token = cookieToken;
                 return Task.CompletedTask;
             },
-            OnTokenValidated = context =>
+            OnTokenValidated = async context =>
             {
                 var blacklist = context.HttpContext.RequestServices
                     .GetRequiredService<ITokenBlacklistService>();
                 var jti = context.Principal?.FindFirst(
                     System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Jti)?.Value;
                 if (jti != null && blacklist.IsRevoked(jti))
+                {
                     context.Fail("Token has been revoked.");
-                return Task.CompletedTask;
+                    return;
+                }
+
+                // Re-check IsDisabled on every request rather than only revoking the token that
+                // was active at disable-time — a disabled employee may hold several valid tokens
+                // (multiple devices, "remember me" sessions up to 90 days) that a single-jti
+                // revoke wouldn't reach.
+                var userManager = context.HttpContext.RequestServices
+                    .GetRequiredService<UserManager<User>>();
+                var user = context.Principal == null
+                    ? null
+                    : await userManager.GetUserAsync(context.Principal);
+                if (user == null || user.IsDisabled)
+                    context.Fail("Account has been disabled.");
             }
         };
     });

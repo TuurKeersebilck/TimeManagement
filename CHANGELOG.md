@@ -1,5 +1,32 @@
 # Changelog
 
+## [v0.6.4] - 2026-07-09
+
+### New Features
+
+- Employees can set default work-from-home weekdays in Account settings — the Clock In/Out screen prefills the WFH toggle on matching days, though it can still be flipped before clocking in.
+- Calendar subscription links now warn before they expire — employees get an email once their 365-day calendar feed token has 14 days left, prompting them to regenerate it before their calendar silently stops updating.
+- Employees can now see their own pending adjustment requests instead of only finding out about a duplicate via an error after refilling the form — the History tab lists pending requests and flags matching rows, and the request dialog warns and blocks a second submission for the same date.
+- Team calendar and year view now show a color legend mapping each employee to their chip color.
+
+### Improvements
+
+- Navigating between pages no longer rebuilds the sidebar and header on every click — the app shell now persists across routes, so local UI state (like the Admin nav section being expanded) survives navigation and pages feel snappier to switch between.
+- Per-employee workday-target and minimum-break overrides now have a one-click reset back to the default, instead of requiring the field to be cleared by hand.
+
+### Bug Fixes
+
+- Admin working-hours-target settings (both the global default and per-employee overrides) wrote to a legacy table nothing actually read — no daily/weekly hour target was being enforced for anyone. Both settings now write to the table the overtime engine actually reads.
+- "Today's Δ" and the "This week" progress bar on Time Tracking always compared against a target of 0 hours, since the backend's day-of-week was compared as a string against a JS number — broken for every user, every day. This also fixes today's target not applying the leave-fraction adjustment.
+- Settlement compliance flags shown to admins were always labeled "Weekly overtime" regardless of the actual violation, due to the same string/number comparison bug.
+- A future-dated flex balance adjustment within the current month could be counted before the days it was meant to offset had actually occurred.
+- Auto-invalidating a stale open session left its break record open too, an accumulating data-integrity leak that didn't affect totals. The session's max-hours fallback was also brought in line with its configured default.
+- Refreshing public holidays could silently fail — leaving the admin with a false success message — or wipe existing holidays on an empty response; adding one custom holiday for a year could also permanently block that year's automatic refresh.
+- Disabling an employee didn't revoke their active session — their existing login kept working for clock-in/out and vacation requests until it naturally expired (up to 90 days with "remember me").
+- Payroll CSV export was vulnerable to formula injection via employee-entered descriptions and vacation notes, and rendered every employee's clock times in the exporting admin's browser timezone instead of a fixed org timezone.
+- Adjustment requests and flex balance adjustments could still be created or approved against an already-settled month, bypassing the existing lock on deleting them.
+- Removed a dead admin endpoint and an unused registration call; an admin's own name no longer appears twice in the "manage vacation on behalf of" dropdown.
+
 ## [v0.6.3] - 2026-07-07
 
 ### New Features

@@ -344,11 +344,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         return new EmployeeTargetDto
         {
-            DailyHours = target?.DailyHours,
-            WeeklyHours = target?.WeeklyHours,
-            ResolvedDailyHours = target?.DailyHours ?? config?.DefaultDailyHours,
-            ResolvedWeeklyHours = target?.WeeklyHours ?? config?.DefaultWeeklyHours,
-            HasOverride = target != null && (target.DailyHours.HasValue || target.WeeklyHours.HasValue || target.MinimumBreakMinutes.HasValue),
+            HasOverride = target?.MinimumBreakMinutes.HasValue ?? false,
             MinimumBreakMinutes = target?.MinimumBreakMinutes,
             ResolvedMinimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
         };
@@ -363,8 +359,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             _context.EmployeeTargets.Add(target);
         }
 
-        target.DailyHours = dto.DailyHours;
-        target.WeeklyHours = dto.WeeklyHours;
         target.MinimumBreakMinutes = dto.MinimumBreakMinutes;
         await _context.SaveChangesAsync(ct);
 
@@ -419,7 +413,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 
-    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, int timezoneOffsetMinutes = 0, CancellationToken ct = default)
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
     {
         var dateFrom = new DateOnly(year, month, 1);
         var dateTo = dateFrom.AddMonths(1).AddDays(-1);
@@ -607,8 +601,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                     CsvEscape(log.EmployeeEmail),
                     log.Date.ToString("yyyy-MM-dd"),
                     log.Date.DayOfWeek.ToString(),
-                    FormatExportTime(session.ClockIn, timezoneOffsetMinutes),
-                    FormatExportTime(session.ClockOut, timezoneOffsetMinutes),
+                    FormatExportTime(session.ClockIn),
+                    FormatExportTime(session.ClockOut),
                     breakHours.ToString("F2", CultureInfo.InvariantCulture),
                     session.Hours.ToString("F2", CultureInfo.InvariantCulture),
                     log.WorkedFromHome ? "Yes" : "No",
@@ -659,15 +653,21 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return sb.ToString();
     }
 
-    private static string FormatExportTime(DateTimeOffset? utcTime, int timezoneOffsetMinutes)
+    // Payroll exports render times in the app's fixed business timezone so every employee's
+    // Clock In/Out lines up regardless of which admin (or which browser timezone) runs the export.
+    private static readonly TimeZoneInfo s_exportTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+
+    private static string FormatExportTime(DateTimeOffset? utcTime)
     {
         if (utcTime == null) return "";
-        var local = utcTime.Value.ToOffset(TimeSpan.FromMinutes(timezoneOffsetMinutes));
+        var local = TimeZoneInfo.ConvertTime(utcTime.Value, s_exportTimeZone);
         return local.ToString("HH:mm");
     }
 
     private static string CsvEscape(string value)
     {
+        if (value.Length > 0 && (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@'))
+            value = "'" + value;
         if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
             return $"\"{value.Replace("\"", "\"\"")}\"";
         return value;
@@ -687,11 +687,18 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<IEnumerable<WorkdayTargetDto>> SetEmployeeWorkdayTargetsAsync(
         string userId, IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
     {
+        var targetList = targets.ToList();
+        var submittedDays = targetList.Select(t => t.DayOfWeek).ToHashSet();
+
         var existing = await _context.WorkdayTargets
             .Where(t => t.UserId == userId)
             .ToListAsync(ct);
 
-        foreach (var dto in targets)
+        // The submitted set is authoritative — a day missing from it means "inherit
+        // the global default again", so any existing override for that day is cleared.
+        _context.WorkdayTargets.RemoveRange(existing.Where(t => !submittedDays.Contains(t.DayOfWeek)));
+
+        foreach (var dto in targetList)
         {
             var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
             if (row == null)
@@ -795,6 +802,10 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var user = await _userManager.FindByIdAsync(userId)
             ?? throw new ResourceNotFoundException("Employee not found.");
 
+        if (await SettlementLockHelper.IsMonthSettledAsync(_context, userId, dto.EffectiveDate, ct))
+            throw new ValidationException(
+                "Cannot create a time bank adjustment for a month that has already been settled.");
+
         var adjustment = new TimeBankAdjustment
         {
             UserId = userId,
@@ -830,13 +841,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             throw new ValidationException(
                 "This adjustment was created automatically by a monthly settlement and cannot be deleted manually.");
 
-        var hasSettledMonth = await _context.MonthlySettlements.AnyAsync(
-            s => s.UserId == adjustment.UserId
-              && s.Year == adjustment.EffectiveDate.Year
-              && s.Month == adjustment.EffectiveDate.Month
-              && s.Status == SettlementStatus.Settled, ct);
-
-        if (hasSettledMonth)
+        if (await SettlementLockHelper.IsMonthSettledAsync(_context, adjustment.UserId, adjustment.EffectiveDate, ct))
             throw new ValidationException(
                 "Cannot delete a time bank adjustment from a month that has already been settled.");
 

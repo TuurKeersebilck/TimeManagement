@@ -166,6 +166,38 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         await SendMessageAsync(message, $"invite to {toEmail}");
     }
 
+    public async Task SendCalendarTokenExpiringEmailAsync(string toEmail, string toName, DateTimeOffset expiresAt)
+    {
+        var daysLeft = Math.Max(0, (expiresAt.UtcDateTime.Date - DateTime.UtcNow.Date).Days);
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Logr", config.From));
+        message.To.Add(new MailboxAddress(toName, toEmail));
+        message.Subject = "Your calendar subscription link is expiring soon";
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                  <h2 style="color:#1e293b">Calendar Subscription Expiring Soon</h2>
+                  <p style="color:#475569">Hi {toName},</p>
+                  <p style="color:#475569">
+                    Your vacation calendar subscription link expires in <strong>{daysLeft} day{(daysLeft == 1 ? "" : "s")}</strong>,
+                    on <strong>{expiresAt:dddd, MMMM d yyyy}</strong>. Once it expires, your calendar app will stop receiving updates.
+                  </p>
+                  <p style="color:#475569">
+                    Open the app and regenerate your calendar link from Account settings to keep it up to date.
+                  </p>
+                  <p style="color:#94a3b8;font-size:13px">
+                    Regenerating replaces the old link, so you'll need to re-subscribe in your calendar app with the new one.
+                  </p>
+                </div>
+                """
+        };
+
+        await SendMessageAsync(message, $"calendar-token-expiring to {toEmail}");
+    }
+
     private async Task SendMessageAsync(MimeMessage message, string context)
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutSeconds));

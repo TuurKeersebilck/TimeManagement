@@ -68,21 +68,6 @@ public class TimeAdjustmentRequestsController(
         return NoContent();
     }
 
-    [HttpPut("admin/{userId}/{date}/direct-edit")]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
-    public async Task<IActionResult> AdminDirectEdit(
-        string userId,
-        DateOnly date,
-        [FromBody] AdminDirectEditDto dto,
-        CancellationToken ct)
-    {
-        var admin = await GetCurrentUserAsync();
-        if (admin == null) return Unauthorized();
-
-        await service.AdminDirectEditAsync(userId, date, dto.Snapshot, admin.Id, ct);
-        return NoContent();
-    }
-
     /// <summary>
     /// One-click approve link from admin email. Returns an HTML confirmation page.
     /// No authentication required — the token itself is the credential.

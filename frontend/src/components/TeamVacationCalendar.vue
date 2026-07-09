@@ -88,6 +88,14 @@ const vacationsByDate = computed(() => {
   return map;
 });
 
+const legendEmployees = computed(() => {
+  const byUser = new Map<string, string>();
+  for (const d of vacationDays.value) byUser.set(d.userId, d.employeeName);
+  return [...byUser.entries()]
+    .map(([userId, name]) => ({ userId, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
+
 const holidaysByDate = computed(() => {
   const map = new Map<string, PublicHoliday>();
   for (const h of holidays.value) map.set(h.date, h);
@@ -172,6 +180,25 @@ const MAX_VISIBLE = 3;
           {{ monthLabel }}
         </span>
       </div>
+
+      <!-- Employee legend -->
+      <div
+        v-if="legendEmployees.length"
+        class="flex items-center gap-x-3 gap-y-1.5 flex-wrap text-xs text-slate-500 dark:text-slate-400"
+      >
+        <span
+          v-for="employee in legendEmployees"
+          :key="employee.userId"
+          class="flex items-center gap-1.5"
+        >
+          <span
+            class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
+            :style="{ backgroundColor: employeeColor(employee.userId) }"
+          />
+          {{ employee.name }}
+        </span>
+      </div>
+
       <div class="flex items-center gap-2">
         <Button variant="outline" size="sm" @click="goToday">Today</Button>
         <Button variant="outline" size="sm" @click="yearOverlayOpen = true">

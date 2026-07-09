@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -30,6 +31,10 @@ public class TimeAdjustmentRequestService(
 
         if (dto.Date > DateOnly.FromDateTime(DateTime.UtcNow))
             throw new ValidationException("Cannot submit an adjustment request for a future date.");
+
+        if (await SettlementLockHelper.IsMonthSettledAsync(db, userId, dto.Date, ct))
+            throw new ValidationException(
+                "Cannot submit an adjustment request for a month that has already been settled.");
 
         var existingPending = await db.TimeAdjustmentRequests
             .AnyAsync(r => r.UserId == userId && r.Date == dto.Date &&
@@ -178,6 +183,15 @@ public class TimeAdjustmentRequestService(
             return $"Request was automatically rejected: {ex.Message}";
         }
 
+        if (await SettlementLockHelper.IsMonthSettledAsync(db, request.UserId, request.Date, ct))
+        {
+            request.Status = AdjustmentRequestStatus.Rejected;
+            request.TokenUsed = true;
+            request.ReviewedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return "Request was automatically rejected: the month has already been settled.";
+        }
+
         await ReconcileWorkSessionsAsync(request.UserId, request.Date, snapshot, ct);
 
         request.Status = AdjustmentRequestStatus.Approved;
@@ -215,6 +229,11 @@ public class TimeAdjustmentRequestService(
             ?? throw new ValidationException("Adjustment request has an invalid snapshot.");
 
         ValidateSnapshot(snapshot);
+
+        if (await SettlementLockHelper.IsMonthSettledAsync(db, request.UserId, request.Date, ct))
+            throw new ValidationException(
+                "Cannot approve an adjustment request for a month that has already been settled.");
+
         await ReconcileWorkSessionsAsync(request.UserId, request.Date, snapshot, ct);
 
         request.Status = AdjustmentRequestStatus.Approved;
@@ -263,18 +282,6 @@ public class TimeAdjustmentRequestService(
             try { await emailService.SendAdjustmentOutcomeEmailAsync(request.User.Email, request.User.FullName, request.Date, approved: false); }
             catch (Exception ex) { logger.LogError(ex, "Failed to send rejection email for {RequestId}", requestId); }
         }
-    }
-
-    public async Task AdminDirectEditAsync(
-        string userId, DateOnly date, DesiredDaySnapshotDto snapshot, string adminUserId, CancellationToken ct = default)
-    {
-        ValidateSnapshot(snapshot);
-        await ReconcileWorkSessionsAsync(userId, date, snapshot, ct);
-        await db.SaveChangesAsync(ct);
-
-        var msg = $"An admin has adjusted your time log for {date:d MMM yyyy}.";
-        try { await notificationService.NotifyUserAsync(userId, msg, NotificationType.AdminHoursAdjusted, ct); }
-        catch (Exception ex) { logger.LogError(ex, "Failed to send AdminHoursAdjusted notification to {UserId}", userId); }
     }
 
     // ── Core reconcile (replaces UpsertClockEventAsync) ───────────────────────

@@ -1,4 +1,5 @@
 import apiClient from "./api";
+import type { WorkdayTargetDto } from "./holidayService";
 
 export interface AdminBreak {
   breakStart: string;
@@ -36,10 +37,6 @@ export interface Employee {
 }
 
 export interface EmployeeTarget {
-  dailyHours?: number | null;
-  weeklyHours?: number | null;
-  resolvedDailyHours?: number | null;
-  resolvedWeeklyHours?: number | null;
   hasOverride: boolean;
   minimumBreakMinutes?: number | null;
   resolvedMinimumBreakMinutes?: number | null;
@@ -122,8 +119,18 @@ export const adminService = {
     return res.data;
   },
 
-  async setEmployeeTarget(userId: string, data: { dailyHours?: number | null; weeklyHours?: number | null; minimumBreakMinutes?: number | null }): Promise<EmployeeTarget> {
+  async setEmployeeTarget(userId: string, data: { minimumBreakMinutes?: number | null }): Promise<EmployeeTarget> {
     const res = await apiClient.put<EmployeeTarget>(`/admin/employees/${userId}/target`, data);
+    return res.data;
+  },
+
+  async getEmployeeWorkdayTargets(userId: string): Promise<WorkdayTargetDto[]> {
+    const res = await apiClient.get<WorkdayTargetDto[]>(`/admin/employees/${userId}/workday-targets`);
+    return res.data;
+  },
+
+  async setEmployeeWorkdayTargets(userId: string, targets: WorkdayTargetDto[]): Promise<WorkdayTargetDto[]> {
+    const res = await apiClient.put<WorkdayTargetDto[]>(`/admin/employees/${userId}/workday-targets`, { targets });
     return res.data;
   },
 
@@ -133,9 +140,8 @@ export const adminService = {
   },
 
   async downloadPayrollExport(year: number, month: number, userId?: string): Promise<void> {
-    const timezoneOffsetMinutes = -new Date().getTimezoneOffset();
     const response = await apiClient.get("/admin/export", {
-      params: { year, month, userId: userId || undefined, timezoneOffsetMinutes },
+      params: { year, month, userId: userId || undefined },
       responseType: "blob",
     });
     const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));

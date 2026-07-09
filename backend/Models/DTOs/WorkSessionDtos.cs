@@ -114,4 +114,12 @@ public class WorkScheduleDto
     public int? MinimumBreakMinutes { get; set; }
     public decimal? DailyOvertimeAllowanceHours { get; set; }
     public decimal? WeeklyOvertimeAllowanceHours { get; set; }
+
+    /// <summary>Weekdays the employee has configured to default the WFH toggle to on when clocking in.</summary>
+    public List<DayOfWeek> DefaultWfhWeekdays { get; set; } = [];
+}
+
+public class SetDefaultWfhWeekdaysDto
+{
+    public List<DayOfWeek> Weekdays { get; set; } = [];
 }
