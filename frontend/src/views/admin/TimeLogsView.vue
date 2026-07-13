@@ -31,6 +31,8 @@ import {
   MessageSquareTextIcon,
   CalendarIcon,
   StarIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
 } from "lucide-vue-next";
 import {
   Dialog,
@@ -186,14 +188,38 @@ const hoursThisWeek = computed(() => {
     .toFixed(2);
 });
 
-const hoursThisMonth = computed(() => {
-  const now = new Date();
-  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  return allLogs.value
-    .filter((l) => l.date.startsWith(ym))
-    .reduce((sum, l) => sum + (l.totalHours ?? 0), 0)
-    .toFixed(2);
-});
+const flexBalance = ref<number | null>(null);
+const flexBalanceLoading = ref(false);
+
+function formatFlexHours(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
+const fetchFlexBalance = async () => {
+  flexBalanceLoading.value = true;
+  try {
+    if (selectedEmployeeId.value === "all") {
+      const results = await Promise.all(
+        employees.value.map((emp) => adminService.getEmployeeOvertime(emp.id))
+      );
+      flexBalance.value = results.reduce((sum, r) => sum + r.runningBalanceHours, 0);
+    } else {
+      const result = await adminService.getEmployeeOvertime(selectedEmployeeId.value);
+      flexBalance.value = result.runningBalanceHours;
+    }
+  } catch {
+    flexBalance.value = null;
+    toast.error("Failed to load flex balance");
+  } finally {
+    flexBalanceLoading.value = false;
+  }
+};
+
+watch(selectedEmployeeId, fetchFlexBalance);
 
 // ─── Predefined filters ───────────────────────────────────────────────────────
 
@@ -318,6 +344,7 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  fetchFlexBalance();
 });
 </script>
 
@@ -371,11 +398,20 @@ onMounted(async () => {
           <p
             class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
           >
-            This month
+            {{ selectedEmployeeId === "all" ? "Total flex balance" : "Flex balance" }}
           </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ hoursThisMonth }}h</span>
+          <p class="text-3xl font-bold flex items-center gap-1.5">
+            <span v-if="flexBalanceLoading || flexBalance === null" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <template v-else>
+              <component
+                :is="flexBalance >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                class="size-5 shrink-0"
+                :class="flexBalance >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+              />
+              <span :class="flexBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+                {{ formatFlexHours(flexBalance) }}
+              </span>
+            </template>
           </p>
         </div>
       </div>

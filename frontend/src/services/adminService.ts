@@ -1,5 +1,6 @@
 import apiClient from "./api";
 import type { WorkdayTargetDto } from "./holidayService";
+import type { OvertimeResultDto } from "./workSessionService";
 
 export interface AdminBreak {
   breakStart: string;
@@ -136,6 +137,13 @@ export const adminService = {
 
   async getWeeklySummary(userId: string, weeks = 8): Promise<WeekSummary[]> {
     const res = await apiClient.get<WeekSummary[]>(`/admin/employees/${userId}/weekly-summary`, { params: { weeks } });
+    return res.data;
+  },
+
+  async getEmployeeOvertime(userId: string, year?: number, month?: number): Promise<OvertimeResultDto> {
+    const res = await apiClient.get<OvertimeResultDto>(`/admin/employees/${userId}/overtime`, {
+      params: { year, month },
+    });
     return res.data;
   },
 
