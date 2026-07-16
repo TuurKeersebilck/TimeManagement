@@ -36,12 +36,12 @@ public class WorkSessionsController(
     }
 
     [HttpPost("break/start")]
-    public async Task<ActionResult<BreakRecordDto>> StartBreak(CancellationToken ct)
+    public async Task<ActionResult<BreakRecordDto>> StartBreak([FromBody] StartBreakDto dto, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var result = await service.StartBreakAsync(user.Id, ct);
+        var result = await service.StartBreakAsync(user.Id, dto, ct);
         return CreatedAtAction(nameof(GetToday), result);
     }
 

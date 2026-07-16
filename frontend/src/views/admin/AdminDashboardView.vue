@@ -45,9 +45,21 @@ const employeesLoggedToday = computed(() => {
   return employees.value.filter((e) => ids.has(e.id));
 });
 
+const employeesOnVacationToday = computed(() => {
+  const vacationAmountByUserId = new Map<string, number>();
+  for (const vacationDay of upcomingVacations.value) {
+    if (vacationDay.date !== todayStr) continue;
+    const currentAmount = vacationAmountByUserId.get(vacationDay.userId) ?? 0;
+    vacationAmountByUserId.set(vacationDay.userId, currentAmount + vacationDay.amount);
+  }
+
+  const fullDayEntries = [...vacationAmountByUserId].filter(([, amount]) => amount >= 1);
+  return new Set(fullDayEntries.map(([userId]) => userId));
+});
+
 const employeesNotLoggedToday = computed(() => {
   const ids = new Set(todayLogs.value.map((l) => l.userId));
-  return employees.value.filter((e) => !ids.has(e.id));
+  return employees.value.filter((e) => !ids.has(e.id) && !employeesOnVacationToday.value.has(e.id));
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

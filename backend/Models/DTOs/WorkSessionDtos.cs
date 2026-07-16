@@ -25,7 +25,10 @@ public class ClockOutDto
     public string? Description { get; set; }
 }
 
-public class StartBreakDto { }
+public class StartBreakDto
+{
+    public DateTimeOffset? RecordedAt { get; set; }
+}
 
 public class EndBreakDto
 {
