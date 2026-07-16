@@ -93,6 +93,10 @@ export interface ClockOutPayload {
   description?: string;
 }
 
+export interface StartBreakPayload {
+  recordedAt?: string;
+}
+
 export interface EndBreakPayload {
   recordedAt?: string;
 }
@@ -130,8 +134,9 @@ export const workSessionService = {
     return api.post("/worksessions/clock-out", payload).then((r) => r.data);
   },
 
-  startBreak(): Promise<BreakRecordDto> {
-    return api.post("/worksessions/break/start").then((r) => r.data);
+  startBreak(offsetMinutes = 0): Promise<BreakRecordDto> {
+    const payload: StartBreakPayload = { recordedAt: recordedAt(offsetMinutes) };
+    return api.post("/worksessions/break/start", payload).then((r) => r.data);
   },
 
   endBreak(offsetMinutes = 0): Promise<BreakRecordDto> {

@@ -108,11 +108,10 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
         }
     }
 
-    public async Task<BreakRecordDto> StartBreakAsync(string userId, CancellationToken ct = default)
+    public async Task<BreakRecordDto> StartBreakAsync(string userId, StartBreakDto dto, CancellationToken ct = default)
     {
-        // Not truncated to the minute: break-start never reconciles a client time, and
-        // truncation made the live break counter start with up to 59s already elapsed
-        var serverStamp = DateTimeOffset.UtcNow;
+        var serverStamp = TruncateToMinute(DateTimeOffset.UtcNow);
+        var effectiveTime = ResolveEffectiveTime(dto.RecordedAt, serverStamp);
 
         await using var tx = await db.Database.BeginTransactionAsync(
             System.Data.IsolationLevel.Serializable, ct);
@@ -126,6 +125,20 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
             if (session.Breaks.Any(b => b.BreakEnd == null))
                 throw new ValidationException("You are already on a break.");
 
+            if (effectiveTime < session.ClockIn)
+                throw new ValidationException(
+                    $"Break cannot start before clock-in at {session.ClockIn:HH:mm} UTC.");
+
+            var lastBreakEnd = session.Breaks
+                .Where(b => b.BreakEnd != null)
+                .Select(b => b.BreakEnd!.Value)
+                .OrderByDescending(t => t)
+                .FirstOrDefault();
+
+            if (lastBreakEnd != default && effectiveTime < lastBreakEnd)
+                throw new ValidationException(
+                    $"Break cannot start before the previous break ended at {lastBreakEnd:HH:mm} UTC.");
+
             var vacationTotal = await db.VacationDays
                 .Where(v => v.UserId == userId && v.Date == session.Date)
                 .SumAsync(v => (decimal?)v.Amount, ct) ?? 0m;
@@ -136,7 +149,7 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
             var breakRecord = new BreakRecord
             {
                 WorkSessionId = session.Id,
-                BreakStart = serverStamp,
+                BreakStart = effectiveTime,
                 BreakStartServerStamp = serverStamp,
             };
 
