@@ -511,8 +511,9 @@ async function handleClockOut() {
 async function handleStartBreak() {
   acting.value = "startBreak";
   try {
-    await workSessionService.startBreak();
+    await workSessionService.startBreak(minuteOffset.value);
     await refreshToday();
+    minuteOffset.value = 0;
     toast.success("Break started");
   } catch (err) {
     toast.error(extractApiError(err, "Failed to start break"));
@@ -970,7 +971,7 @@ onUnmounted(() => {
 
               <!-- Time offset adjuster (only when an action is available) -->
               <div
-                v-if="canClockIn || canClockOut || canEndBreak"
+                v-if="canClockIn || canClockOut || canStartBreak || canEndBreak"
                 class="flex items-center justify-center gap-4"
               >
                 <Button variant="outline" size="icon" :disabled="minuteOffset <= -5" @click="adjustMinutes(-1)">
