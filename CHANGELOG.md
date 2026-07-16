@@ -1,5 +1,15 @@
 # Changelog
 
+## [v0.6.5] - 2026-07-16
+
+### New Features
+
+- Admin time logs page now shows the employee's (or, with "All" selected, every employee's combined) live running flex balance in place of a plain "This month" hours total, surfacing an overtime endpoint that already existed but wasn't used anywhere. The dashboard's "not logged today" list no longer flags employees who are on a full-day vacation, since they aren't expected to log time.
+
+### Bug Fixes
+
+- Shifting the clock time before starting a break had no effect — break start was always stamped with the actual current server time, unlike clock-in, clock-out, and end-break, which all honored the shift. Break start now reconciles a shifted time the same way the other three actions do, and is rejected if it would land before clock-in or before the previous break ended.
+
 ## [v0.6.4] - 2026-07-09
 
 ### New Features
