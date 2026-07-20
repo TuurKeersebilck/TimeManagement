@@ -415,80 +415,47 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
     public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
     {
-        var dateFrom = new DateOnly(year, month, 1);
-        var dateTo = dateFrom.AddMonths(1).AddDays(-1);
+        var monthStart = new DateOnly(year, month, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var lastDate = monthEnd < today ? monthEnd : today;
 
-        var sessionsQuery = _context.WorkSessions
-            .AsNoTracking()
-            .Include(s => s.User)
-            .Include(s => s.Breaks)
-            .Where(s => s.Status == WorkSessionStatus.Closed && s.Date >= dateFrom && s.Date <= dateTo);
-
+        var employeesQuery = _context.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee);
         if (!string.IsNullOrEmpty(userId))
-            sessionsQuery = sessionsQuery.Where(s => s.UserId == userId);
+            employeesQuery = employeesQuery.Where(u => u.Id == userId);
+        var employees = await employeesQuery.OrderBy(u => u.FullName).ToListAsync(ct);
+        var employeeIds = employees.Select(e => e.Id).ToList();
 
-        var rawSessions = await sessionsQuery.ToListAsync(ct);
+        var daySummaries = await GetAllDaySummariesAsync(userId, monthStart, lastDate, ct);
+        var hoursByUserDate = daySummaries.ToDictionary(s => (s.UserId, s.Date), s => s);
 
-        var userIdListCsv = rawSessions.Select(s => s.UserId).Distinct().ToList();
-        var dateListCsv = rawSessions.Select(s => s.Date).Distinct().ToList();
-        var workDaysCsv = await _context.WorkDays
+        var workdayTargets = await _context.WorkdayTargets
             .AsNoTracking()
-            .Where(d => userIdListCsv.Contains(d.UserId) && dateListCsv.Contains(d.Date))
+            .Where(t => t.UserId == null || employeeIds.Contains(t.UserId))
             .ToListAsync(ct);
+        var globalWorkdayTargets = workdayTargets.Where(t => t.UserId == null).ToList();
 
-        var logs = rawSessions
-            .GroupBy(s => new { s.UserId, s.Date })
-            .Select(g =>
-            {
-                var first = g.First();
-                var workDay = workDaysCsv.FirstOrDefault(d => d.UserId == g.Key.UserId && d.Date == g.Key.Date);
-                return new AdminDaySummaryDto
-                {
-                    UserId = g.Key.UserId,
-                    EmployeeName = first.User.FullName,
-                    EmployeeEmail = first.User.Email ?? string.Empty,
-                    Date = g.Key.Date,
-                    TotalHours = g.Sum(CalcSessionHours),
-                    Description = workDay?.Description,
-                    WorkedFromHome = workDay?.WorkedFromHome ?? false,
-                    Sessions = g
-                        .OrderBy(s => s.ClockIn)
-                        .Select(s => new AdminSessionDto
-                        {
-                            ClockIn = s.ClockIn,
-                            ClockOut = s.ClockOut,
-                            Status = s.Status,
-                            Hours = CalcSessionHours(s),
-                            Breaks = s.Breaks
-                                .OrderBy(b => b.BreakStart)
-                                .Select(b => new AdminBreakDto { BreakStart = b.BreakStart, BreakEnd = b.BreakEnd })
-                                .ToList(),
-                        })
-                        .ToList(),
-                };
-            })
-            .OrderBy(s => s.EmployeeName)
-            .ThenBy(s => s.Date)
-            .ToList();
+        decimal GetBaseWeekdayTarget(string empUserId, DayOfWeek dayOfWeek)
+        {
+            var target = workdayTargets.FirstOrDefault(t => t.UserId == empUserId && t.DayOfWeek == dayOfWeek)
+                       ?? globalWorkdayTargets.FirstOrDefault(t => t.DayOfWeek == dayOfWeek);
+            return target?.Hours ?? 0m;
+        }
 
-        var publicHolidays = (await _context.PublicHolidays
+        var holidaysQuery = _context.PublicHolidays
             .AsNoTracking()
-            .Where(h => h.Date.Year == year && h.Date.Month == month && !h.IsWorkingDay)
-            .OrderBy(h => h.Date)
-            .ToListAsync(ct))
+            .Where(h => h.Date.Year == year && h.Date.Month == month && !h.IsWorkingDay);
+        var holidayByDate = (await holidaysQuery.ToListAsync(ct))
             .Where(h => h.Date.DayOfWeek != DayOfWeek.Saturday && h.Date.DayOfWeek != DayOfWeek.Sunday)
-            .ToList();
+            .ToDictionary(h => h.Date, h => h.Name);
 
         var vacationsQuery = _context.VacationDays
             .AsNoTracking()
             .Where(d => d.Date.Year == year && d.Date.Month == month);
-
         if (!string.IsNullOrEmpty(userId))
             vacationsQuery = vacationsQuery.Where(d => d.UserId == userId);
 
-        var vacations = await vacationsQuery
-            .OrderBy(d => d.User.FullName)
-            .ThenBy(d => d.Date)
+        var vacationsByUserDate = (await vacationsQuery
             .Select(d => new AdminVacationDayDto
             {
                 Id = d.Id,
@@ -500,168 +467,80 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
                 Amount = d.Amount,
                 Note = d.Note,
             })
-            .ToListAsync(ct);
+            .ToListAsync(ct))
+            .GroupBy(v => (v.UserId, v.Date))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(v => v.Amount).First());
 
         var settlementsQuery = _context.MonthlySettlements
             .AsNoTracking()
-            .Where(s => s.Year == year && s.Month == month);
-
+            .Where(s => s.Year == year && s.Month == month && s.Status == SettlementStatus.Settled);
         if (!string.IsNullOrEmpty(userId))
             settlementsQuery = settlementsQuery.Where(s => s.UserId == userId);
+        var paidOvertimeByUser = await settlementsQuery
+            .ToDictionaryAsync(s => s.UserId, s => s.PaidOutHours ?? 0m, ct);
 
-        var settlements = await settlementsQuery.ToListAsync(ct);
-        var settlementByUser = settlements.ToDictionary(s => s.UserId);
+        var rows = new List<(DateOnly Date, string EmployeeName, double Hours, string VacationType, string Description)>();
+
+        foreach (var emp in employees)
+        {
+            for (var date = monthStart; date <= lastDate; date = date.AddDays(1))
+            {
+                var baseTarget = GetBaseWeekdayTarget(emp.Id, date.DayOfWeek);
+                holidayByDate.TryGetValue(date, out var holidayName);
+                var isHoliday = baseTarget > 0 && holidayName != null;
+                var hasVacation = vacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
+                hoursByUserDate.TryGetValue((emp.Id, date), out var daySummary);
+                var workedHours = daySummary?.TotalHours ?? 0.0;
+
+                if (baseTarget == 0 && workedHours == 0 && !hasVacation && !isHoliday)
+                    continue;
+
+                string vacationTypeCell;
+                if (isHoliday)
+                    vacationTypeCell = $"Holiday: {holidayName}";
+                else if (hasVacation)
+                    vacationTypeCell = vacation!.VacationTypeName;
+                else if (baseTarget > 0 && workedHours == 0)
+                    vacationTypeCell = "Missing Log";
+                else
+                    vacationTypeCell = "";
+
+                var description = hasVacation && !string.IsNullOrEmpty(vacation!.Note)
+                    ? vacation.Note
+                    : daySummary?.Description ?? "";
+
+                rows.Add((date, emp.FullName, workedHours, vacationTypeCell, description ?? ""));
+            }
+        }
 
         var sb = new System.Text.StringBuilder();
-        var monthName = new System.Globalization.CultureInfo("en-GB").DateTimeFormat.GetMonthName(month);
 
-        sb.AppendLine($"Payroll Report,{monthName} {year}");
-        sb.AppendLine($"Generated,{DateTime.UtcNow:yyyy-MM-dd HH:mm} UTC");
+        sb.AppendLine("OVERTIME SUMMARY");
+        sb.AppendLine("Employee,Approved Overtime Hours");
+        foreach (var emp in employees)
+        {
+            var approvedOvertime = paidOvertimeByUser.TryGetValue(emp.Id, out var hours)
+                ? hours.ToString("F2", CultureInfo.InvariantCulture)
+                : "";
+            sb.AppendLine(string.Join(",", CsvEscape(emp.FullName), approvedOvertime));
+        }
         sb.AppendLine();
 
-        // ── Section 1: Summary ──────────────────────────────────────────────
-        sb.AppendLine("SUMMARY");
-        sb.AppendLine("Name,Email,Days Worked,Regular Hours,Overtime Paid,Carried Forward,Total Hours,Vacation Days,Outcome,Notes");
+        sb.AppendLine("Date,Day,Employee,Hours Worked,Vacation Type,Description");
 
-        var vacsByEmployee = vacations.GroupBy(v => v.UserId).ToDictionary(g => g.Key, g => g.ToList());
-
-        // Collect all employee IDs in sorted name order (use first log entry for name/email)
-        var employeeOrder = logs
-            .GroupBy(l => l.UserId)
-            .Select(g => (UserId: g.Key, Name: g.First().EmployeeName, Email: g.First().EmployeeEmail))
-            .OrderBy(e => e.Name)
-            .ToList();
-
-        // Also include employees with vacations but no clock events
-        var employeesWithVacsOnly = vacations
-            .GroupBy(v => v.UserId)
-            .Where(g => !employeeOrder.Any(e => e.UserId == g.Key))
-            .Select(g => (UserId: g.Key, Name: g.First().EmployeeName, Email: string.Empty))
-            .OrderBy(e => e.Name);
-
-        var allEmployees = employeeOrder.Concat(employeesWithVacsOnly).ToList();
-
-        foreach (var emp in allEmployees)
+        foreach (var row in rows.OrderBy(r => r.Date).ThenBy(r => r.EmployeeName))
         {
-            var empLogs = logs.Where(l => l.UserId == emp.UserId).ToList();
-            var daysWorked = empLogs.Select(l => l.Date).Distinct().Count();
-            var totalHours = empLogs.Sum(l => l.TotalHours);
-            var vacDays = vacsByEmployee.TryGetValue(emp.UserId, out var vList)
-                ? vList.Sum(v => (double)v.Amount)
-                : 0.0;
-
-            settlementByUser.TryGetValue(emp.UserId, out var settlement);
-            // Regular hours exclude the full computed overtime so carried-forward hours are never paid as regular
-            var computedOvertime = (double)(settlement?.OvertimeHours ?? 0m);
-            var regularHours = Math.Max(0, totalHours - computedOvertime);
-            // Until confirmed, show the computed overtime; after confirming, only the paid-out portion
-            var overtimePaid = (double)(settlement?.PaidOutHours ?? settlement?.OvertimeHours ?? 0m);
-            var carriedForward = settlement?.CarriedForwardHours;
-            var outcome = settlement?.Outcome.HasValue == true ? settlement.Outcome!.Value.ToString() : "";
-            var notes = settlement?.Notes ?? "";
-
             sb.AppendLine(string.Join(",",
-                CsvEscape(emp.Name),
-                CsvEscape(emp.Email),
-                daysWorked,
-                regularHours.ToString("F2", CultureInfo.InvariantCulture),
-                overtimePaid.ToString("F2", CultureInfo.InvariantCulture),
-                carriedForward?.ToString("F2", CultureInfo.InvariantCulture) ?? "",
-                totalHours.ToString("F2", CultureInfo.InvariantCulture),
-                vacDays.ToString("F1", CultureInfo.InvariantCulture),
-                CsvEscape(outcome),
-                CsvEscape(notes)
+                row.Date.ToString("yyyy-MM-dd"),
+                row.Date.DayOfWeek.ToString(),
+                CsvEscape(row.EmployeeName),
+                row.Hours.ToString("F2", CultureInfo.InvariantCulture),
+                CsvEscape(row.VacationType),
+                CsvEscape(row.Description)
             ));
         }
 
-        // ── Section 2: Daily Detail ─────────────────────────────────────────
-        var vacationLookup = vacations
-            .GroupBy(v => (v.UserId, v.Date))
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        sb.AppendLine();
-        sb.AppendLine("DAILY DETAIL");
-        sb.AppendLine("Employee,Email,Date,Day,Clock In,Clock Out,Break Duration (h),Net Hours,WFH,Vacation,Description");
-
-        foreach (var log in logs)
-        {
-            var dayVacs = vacationLookup.TryGetValue((log.UserId, log.Date), out var vl) ? vl : null;
-            var vacationCell = dayVacs != null
-                ? string.Join("; ", dayVacs.Select(v => $"{(v.Amount == 1.0m ? "Full" : "Half")} ({v.VacationTypeName})"))
-                : "";
-
-            foreach (var session in log.Sessions)
-            {
-                var breakHours = session.Breaks
-                    .Where(b => b.BreakEnd.HasValue)
-                    .Sum(b => (b.BreakEnd!.Value - b.BreakStart).TotalHours);
-
-                sb.AppendLine(string.Join(",",
-                    CsvEscape(log.EmployeeName),
-                    CsvEscape(log.EmployeeEmail),
-                    log.Date.ToString("yyyy-MM-dd"),
-                    log.Date.DayOfWeek.ToString(),
-                    FormatExportTime(session.ClockIn),
-                    FormatExportTime(session.ClockOut),
-                    breakHours.ToString("F2", CultureInfo.InvariantCulture),
-                    session.Hours.ToString("F2", CultureInfo.InvariantCulture),
-                    log.WorkedFromHome ? "Yes" : "No",
-                    CsvEscape(vacationCell),
-                    CsvEscape(log.Description ?? "")
-                ));
-            }
-        }
-
-        // ── Section 3: Vacation Days ────────────────────────────────────────
-        if (vacations.Count != 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("VACATION DAYS");
-            sb.AppendLine("Employee,Email,Date,Day,Type,Amount,Note");
-
-            foreach (var v in vacations)
-            {
-                sb.AppendLine(string.Join(",",
-                    CsvEscape(v.EmployeeName),
-                    CsvEscape(allEmployees.FirstOrDefault(e => e.UserId == v.UserId).Email ?? ""),
-                    v.Date.ToString("yyyy-MM-dd"),
-                    v.Date.DayOfWeek.ToString(),
-                    CsvEscape(v.VacationTypeName),
-                    ((double)v.Amount).ToString("F1", CultureInfo.InvariantCulture),
-                    CsvEscape(v.Note ?? "")
-                ));
-            }
-        }
-
-        // ── Section 4: Public Holidays ──────────────────────────────────────
-        if (publicHolidays.Count != 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("PUBLIC HOLIDAYS");
-            sb.AppendLine("Date,Day,Name");
-
-            foreach (var h in publicHolidays)
-            {
-                sb.AppendLine(string.Join(",",
-                    h.Date.ToString("yyyy-MM-dd"),
-                    h.Date.DayOfWeek.ToString(),
-                    CsvEscape(h.Name)
-                ));
-            }
-        }
-
         return sb.ToString();
-    }
-
-    // Payroll exports render times in the app's fixed business timezone so every employee's
-    // Clock In/Out lines up regardless of which admin (or which browser timezone) runs the export.
-    private static readonly TimeZoneInfo s_exportTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
-
-    private static string FormatExportTime(DateTimeOffset? utcTime)
-    {
-        if (utcTime == null) return "";
-        var local = TimeZoneInfo.ConvertTime(utcTime.Value, s_exportTimeZone);
-        return local.ToString("HH:mm");
     }
 
     private static string CsvEscape(string value)
