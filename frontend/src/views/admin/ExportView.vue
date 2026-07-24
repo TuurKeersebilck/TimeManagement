@@ -140,7 +140,7 @@ onMounted(async () => {
         <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-600 dark:text-slate-400 space-y-1">
           <p class="font-medium text-slate-700 dark:text-slate-300 mb-2">The CSV includes:</p>
           <ul class="space-y-1 list-disc list-inside">
-            <li>Overtime summary: approved paid overtime hours per employee (blank until confirmed)</li>
+            <li>Overtime summary: approved paid overtime hours, settlement outcome, and settlement notes per employee (blank until confirmed)</li>
             <li>One row per employee per working day, with hours worked</li>
             <li>Vacation type, public holiday, or a "Missing Log" flag when nothing was recorded</li>
             <li>Description: the vacation note, or the employee's work note</li>

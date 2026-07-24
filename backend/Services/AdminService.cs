@@ -476,8 +476,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .Where(s => s.Year == year && s.Month == month && s.Status == SettlementStatus.Settled);
         if (!string.IsNullOrEmpty(userId))
             settlementsQuery = settlementsQuery.Where(s => s.UserId == userId);
-        var paidOvertimeByUser = await settlementsQuery
-            .ToDictionaryAsync(s => s.UserId, s => s.PaidOutHours ?? 0m, ct);
+        var settlementByUser = await settlementsQuery
+            .ToDictionaryAsync(s => s.UserId, s => s, ct);
 
         var rows = new List<(DateOnly Date, string EmployeeName, double Hours, string VacationType, string Description)>();
 
@@ -516,13 +516,14 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var sb = new System.Text.StringBuilder();
 
         sb.AppendLine("OVERTIME SUMMARY");
-        sb.AppendLine("Employee,Approved Overtime Hours");
+        sb.AppendLine("Employee,Approved Overtime Hours,Outcome,Notes");
         foreach (var emp in employees)
         {
-            var approvedOvertime = paidOvertimeByUser.TryGetValue(emp.Id, out var hours)
-                ? hours.ToString("F2", CultureInfo.InvariantCulture)
-                : "";
-            sb.AppendLine(string.Join(",", CsvEscape(emp.FullName), approvedOvertime));
+            settlementByUser.TryGetValue(emp.Id, out var settlement);
+            var approvedOvertime = settlement?.PaidOutHours?.ToString("F2", CultureInfo.InvariantCulture) ?? "";
+            var outcome = settlement?.Outcome?.ToString() ?? "";
+            var notes = settlement?.Notes ?? "";
+            sb.AppendLine(string.Join(",", CsvEscape(emp.FullName), approvedOvertime, CsvEscape(outcome), CsvEscape(notes)));
         }
         sb.AppendLine();
 
