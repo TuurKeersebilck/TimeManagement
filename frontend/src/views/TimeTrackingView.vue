@@ -80,6 +80,7 @@ const description = ref("");
 const wfh = ref(false);
 const todayVacation = ref<VacationDay | null>(null);
 const holidays = ref<PublicHoliday[]>([]);
+const allVacationDays = ref<VacationDay[]>([]);
 
 // Adjustment request dialog
 const showAdjustDialog = ref(false);
@@ -201,7 +202,9 @@ const ALL_DAY_NAMES: DayOfWeek[] =
 // Resolves each day of the current week against the overtime endpoint's per-day target
 // (holiday/vacation-adjusted) rather than the raw schedule, so a vacation day or public
 // holiday already taken this week correctly lowers the weekly target. The overtime endpoint
-// caps at today, so any remaining days later this week fall back to the raw weekday default.
+// caps at today, so later-in-the-week days it hasn't resolved yet are computed the same way
+// client-side (raw weekday hours reduced by any already-booked vacation/holiday for that date),
+// mirroring OvertimeCalculationService.GetEffectiveTarget on the backend.
 const weeklyTarget = computed<number | null>(() => {
   if (!schedule.value) return null;
 
@@ -219,10 +222,19 @@ const weeklyTarget = computed<number | null>(() => {
     const resolved = overtime.value?.perDay.find((p) => p.date === dateStr);
     if (resolved) {
       total += resolved.targetHours;
-    } else {
-      const dayName = ALL_DAY_NAMES[d.getDay()];
-      total += schedule.value.workdayTargets.find((t) => t.dayOfWeek === dayName)?.hours ?? 0;
+      continue;
     }
+
+    const holiday = holidays.value.find((h) => h.date === dateStr);
+    if (holiday && !holiday.isWorkingDay) continue;
+
+    const dayName = ALL_DAY_NAMES[d.getDay()];
+    const rawHours = schedule.value.workdayTargets.find((t) => t.dayOfWeek === dayName)?.hours ?? 0;
+    const leaveFraction = Math.min(
+      1,
+      allVacationDays.value.filter((v) => v.date === dateStr).reduce((sum, v) => sum + v.amount, 0)
+    );
+    total += rawHours * (1 - leaveFraction);
   }
 
   return total > 0 ? total : null;
@@ -615,6 +627,14 @@ async function loadHolidays() {
   }
 }
 
+async function loadAllVacationDays() {
+  try {
+    allVacationDays.value = await vacationService.getVacationDays();
+  } catch {
+    // Non-critical
+  }
+}
+
 // ─── History actions ──────────────────────────────────────────────────────────
 
 function startEdit(summary: WorkDaySummaryDto) {
@@ -788,6 +808,7 @@ onMounted(async () => {
     })(),
     loadTodayVacation(),
     loadHolidays(),
+    loadAllVacationDays(),
     loadPendingRequests(),
   ]);
 });
