@@ -194,18 +194,38 @@ const totalHoursThisMonth = computed(() => {
     .reduce((sum, s) => sum + s.totalWorkedHours, 0);
 });
 
-const WEEKDAY_NAMES: DayOfWeek[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-
 // Indexed by JS Date#getDay() (0 = Sunday … 6 = Saturday), matching the backend DayOfWeek enum.
 const ALL_DAY_NAMES: DayOfWeek[] =
   ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Resolves each day of the current week against the overtime endpoint's per-day target
+// (holiday/vacation-adjusted) rather than the raw schedule, so a vacation day or public
+// holiday already taken this week correctly lowers the weekly target. The overtime endpoint
+// caps at today, so any remaining days later this week fall back to the raw weekday default.
 const weeklyTarget = computed<number | null>(() => {
   if (!schedule.value) return null;
-  const weekdayHours = schedule.value.workdayTargets
-    .filter((t) => WEEKDAY_NAMES.includes(t.dayOfWeek))
-    .reduce((sum, t) => sum + t.hours, 0);
-  return weekdayHours > 0 ? weekdayHours : null;
+
+  const now = new Date();
+  const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - daysFromMonday);
+
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const dateStr = localDateString(d);
+
+    const resolved = overtime.value?.perDay.find((p) => p.date === dateStr);
+    if (resolved) {
+      total += resolved.targetHours;
+    } else {
+      const dayName = ALL_DAY_NAMES[d.getDay()];
+      total += schedule.value.workdayTargets.find((t) => t.dayOfWeek === dayName)?.hours ?? 0;
+    }
+  }
+
+  return total > 0 ? total : null;
 });
 
 const weeklyProgress = computed(() =>
