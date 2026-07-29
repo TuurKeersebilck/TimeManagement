@@ -80,7 +80,7 @@ const description = ref("");
 const wfh = ref(false);
 const todayVacation = ref<VacationDay | null>(null);
 const holidays = ref<PublicHoliday[]>([]);
-const allVacationDays = ref<VacationDay[]>([]);
+const weekVacations = ref<VacationDay[]>([]);
 
 // Adjustment request dialog
 const showAdjustDialog = ref(false);
@@ -232,7 +232,7 @@ const weeklyTarget = computed<number | null>(() => {
     const rawHours = schedule.value.workdayTargets.find((t) => t.dayOfWeek === dayName)?.hours ?? 0;
     const leaveFraction = Math.min(
       1,
-      allVacationDays.value.filter((v) => v.date === dateStr).reduce((sum, v) => sum + v.amount, 0)
+      weekVacations.value.filter((v) => v.date === dateStr).reduce((sum, v) => sum + v.amount, 0)
     );
     total += rawHours * (1 - leaveFraction);
   }
@@ -627,9 +627,20 @@ async function loadHolidays() {
   }
 }
 
-async function loadAllVacationDays() {
+async function loadWeekVacations() {
   try {
-    allVacationDays.value = await vacationService.getVacationDays();
+    const now = new Date();
+    const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - daysFromMonday);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+
+    weekVacations.value = await vacationService.getVacationDays(
+      undefined,
+      localDateString(weekStart),
+      localDateString(weekEnd)
+    );
   } catch {
     // Non-critical
   }
@@ -808,7 +819,7 @@ onMounted(async () => {
     })(),
     loadTodayVacation(),
     loadHolidays(),
-    loadAllVacationDays(),
+    loadWeekVacations(),
     loadPendingRequests(),
   ]);
 });
