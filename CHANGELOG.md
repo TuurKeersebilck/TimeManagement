@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.6.6] - 2026-07-29
+
+### Improvements
+
+- Payroll export is now a single flat table — one row per employee per day, with hours worked and a Vacation Type column that also flags public holidays and days with nothing logged ("Missing Log") — replacing the previous four-section report that broke work down per clock-in session. A compact Overtime Summary section still lists each employee's approved paid overtime hours, settlement outcome, and notes.
+
+### Bug Fixes
+
+- Icon badges, links, and calendar "today"/selected-day highlights that were hardcoded to indigo now follow the Warm/Slate palette switch in Account settings, instead of staying indigo regardless of the selected palette.
+- The Time Tracking page's "This week" target showed a flat weekly-hours goal regardless of vacation days or public holidays taken that week. It now correctly reduces the target for full- and half-day vacation and holidays, including days later in the week that are already booked.
+
 ## [v0.6.5] - 2026-07-16
 
 ### New Features
