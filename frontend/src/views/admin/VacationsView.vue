@@ -269,9 +269,9 @@ const MAX_VISIBLE = 3;
             :class="[
               'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-24 p-1.5 transition-colors',
               !cell.isCurrentMonth && 'bg-slate-50/60 dark:bg-slate-900/40',
-              cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
+              cell.isToday && 'bg-primary/10',
               selectedIso === cell.iso
-                ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500'
+                ? 'ring-2 ring-inset ring-primary'
                 : '',
               vacationsByDate.has(cell.iso)
                 ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
@@ -284,7 +284,7 @@ const MAX_VISIBLE = 3;
               :class="[
                 'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
                 cell.isToday
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-primary text-primary-foreground'
                   : cell.isCurrentMonth
                     ? 'text-slate-700 dark:text-slate-200'
                     : 'text-slate-300 dark:text-slate-600',

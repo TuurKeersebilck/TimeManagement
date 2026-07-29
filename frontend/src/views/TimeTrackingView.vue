@@ -1193,7 +1193,7 @@ onUnmounted(() => {
                       {{ formatDate(row.data.date) }}
                       <span
                         v-if="row.data.date === localDateString(new Date())"
-                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
+                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary"
                       >Today</span>
                       <span
                         v-if="pendingRequestForDate(row.data.date)"
@@ -1206,7 +1206,7 @@ onUnmounted(() => {
                     <TableCell>
                       <span
                         v-if="row.data.totalWorkedHours > 0"
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-primary/10 text-primary"
                       >
                         {{ row.data.totalWorkedHours.toFixed(2) }}h
                       </span>
@@ -1256,7 +1256,7 @@ onUnmounted(() => {
                         <component
                           :is="(row.data.workDay?.workedFromHome ?? false) ? HomeIcon : BuildingIcon"
                           class="size-3.5"
-                          :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-indigo-500' : 'text-slate-400'"
+                          :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-primary' : 'text-slate-400'"
                         />
                       </div>
                     </TableCell>
