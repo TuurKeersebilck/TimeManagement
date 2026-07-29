@@ -43,7 +43,7 @@ onMounted(fetchUnreadCount);
         <BellIcon class="size-5" />
         <span
           v-if="unreadCount > 0"
-          class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center leading-none"
+          class="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center leading-none"
         >
           {{ unreadCount > 99 ? "99+" : unreadCount }}
         </span>
@@ -56,7 +56,7 @@ onMounted(fetchUnreadCount);
         <span class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</span>
         <button
           v-if="unreadCount > 0"
-          class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+          class="text-xs text-primary hover:underline"
           @click="markAllAsRead"
         >
           Mark all as read
@@ -82,14 +82,14 @@ onMounted(fetchUnreadCount);
             'flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors',
             n.isRead
               ? 'bg-white dark:bg-slate-900'
-              : 'bg-indigo-50/60 dark:bg-indigo-950/20 hover:bg-indigo-50 dark:hover:bg-indigo-950/40',
+              : 'bg-primary/10 hover:bg-primary/15',
           ]"
           @click="handleMarkAsRead(n)"
         >
           <span
             :class="[
               'mt-1.5 size-2 rounded-full shrink-0',
-              n.isRead ? 'bg-transparent' : 'bg-indigo-500',
+              n.isRead ? 'bg-transparent' : 'bg-primary',
             ]"
           />
           <div class="flex-1 min-w-0">

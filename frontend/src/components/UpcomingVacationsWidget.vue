@@ -242,7 +242,7 @@ const displayDate = (iso: string) =>
                   :class="[
                     'text-[11px] font-medium w-6 h-6 flex items-center justify-center rounded-full transition-colors',
                     cell.isToday
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : cell.isCurrentMonth
                         ? 'text-slate-700 dark:text-slate-200 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
                         : 'text-slate-300 dark:text-slate-600 group-hover:bg-slate-100 dark:group-hover:bg-slate-800',

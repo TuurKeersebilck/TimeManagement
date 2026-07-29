@@ -538,10 +538,10 @@ onMounted(async () => {
                     :class="[
                       'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors select-none',
                       !cell.isCurrentMonth && 'opacity-40',
-                      cell.isToday && 'bg-indigo-50/60 dark:bg-indigo-950/20',
+                      cell.isToday && 'bg-primary/10',
                       cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
-                      openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500' : '',
-                      highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-indigo-50 dark:bg-indigo-950/30' : '',
+                      openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-primary' : '',
+                      highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-primary/10' : '',
                       cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
                         ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
                         : 'cursor-default pointer-events-none',
@@ -552,7 +552,7 @@ onMounted(async () => {
                       :class="[
                         'text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1',
                         cell.isToday
-                          ? 'bg-indigo-600 text-white'
+                          ? 'bg-primary text-primary-foreground'
                           : cell.isWeekend
                             ? 'text-slate-400 dark:text-slate-600'
                             : cell.isCurrentMonth
@@ -636,7 +636,7 @@ onMounted(async () => {
                       :class="[
                         'flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
                         popoverEditingId === entry.id
-                          ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                          ? 'bg-primary/10 border-primary/30 text-primary'
                           : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
                       ]"
                       @click="fillFormForEntry(entry)"
@@ -654,7 +654,7 @@ onMounted(async () => {
                       :class="[
                         'flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors',
                         !isPopoverEditMode
-                          ? 'bg-indigo-50 dark:bg-indigo-950 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                          ? 'bg-primary/10 border-primary/30 text-primary'
                           : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700',
                       ]"
                       @click="switchToNewMode"

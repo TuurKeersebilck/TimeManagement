@@ -185,7 +185,7 @@ const vacationTypes = computed(() => {
                   Holiday
                 </span>
                 <span class="flex items-center gap-1.5">
-                  <span class="w-3 h-3 rounded-full bg-indigo-600 inline-block" />
+                  <span class="w-3 h-3 rounded-full bg-primary inline-block" />
                   Today
                 </span>
               </div>

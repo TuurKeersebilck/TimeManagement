@@ -195,7 +195,7 @@ onMounted(async () => {
             </h2>
             <button
               @click="router.push({ name: 'admin-time-logs' })"
-              class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
+              class="text-xs text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
             >
               View all logs →
             </button>
@@ -253,7 +253,7 @@ onMounted(async () => {
                   >
                 </div>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 shrink-0"
+                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary shrink-0"
                 >
                   {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
                 </span>
@@ -326,7 +326,7 @@ onMounted(async () => {
               </h2>
               <button
                 @click="router.push({ name: 'team-calendar' })"
-                class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
+                class="text-xs text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
               >
                 Calendar →
               </button>
