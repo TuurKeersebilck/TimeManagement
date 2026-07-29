@@ -69,9 +69,13 @@ export const vacationService = {
     return res.data;
   },
 
-  async getVacationDays(employeeId?: string): Promise<VacationDay[]> {
+  async getVacationDays(
+    employeeId?: string,
+    dateFrom?: string,
+    dateTo?: string
+  ): Promise<VacationDay[]> {
     const url = employeeId ? `/vacations/employees/${employeeId}` : "/vacations";
-    const res = await apiClient.get<VacationDay[]>(url);
+    const res = await apiClient.get<VacationDay[]>(url, { params: { dateFrom, dateTo } });
     return res.data;
   },
 
