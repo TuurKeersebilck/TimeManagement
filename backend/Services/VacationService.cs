@@ -49,11 +49,16 @@ public class VacationService(AppDbContext db) : IVacationService
         }).OrderBy(b => b.VacationTypeName);
     }
 
-    public async Task<IEnumerable<VacationDayDto>> GetMyVacationDaysAsync(string userId, CancellationToken ct = default)
+    public async Task<IEnumerable<VacationDayDto>> GetMyVacationDaysAsync(string userId, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
-        return await _db.VacationDays
-            .AsNoTracking()
-            .Where(d => d.UserId == userId)
+        var query = _db.VacationDays.AsNoTracking().Where(d => d.UserId == userId);
+
+        if (dateFrom.HasValue)
+            query = query.Where(d => d.Date >= dateFrom.Value);
+        if (dateTo.HasValue)
+            query = query.Where(d => d.Date <= dateTo.Value);
+
+        return await query
             .OrderByDescending(d => d.Date)
             .Select(d => new VacationDayDto
             {

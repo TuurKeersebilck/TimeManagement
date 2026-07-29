@@ -1,6 +1,6 @@
 {
   "name": "time-management-frontend",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,7 +16,7 @@
     "@tailwindcss/vite": "^4.3.1",
     "@tanstack/vue-table": "^8.21.3",
     "@vueuse/core": "^14.2.1",
-    "axios": "^1.16.0",
+    "axios": "^1.18.0",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

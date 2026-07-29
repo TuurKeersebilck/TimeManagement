@@ -253,8 +253,8 @@ function webcalUrl(feedUrl: string) {
       <!-- Profile section -->
       <div class="card p-6 space-y-5 mb-6">
         <div class="flex items-center gap-3 pb-1">
-          <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
-            <UserIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+          <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <UserIcon class="size-4 text-primary" />
           </div>
           <div>
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Profile</p>
@@ -299,8 +299,8 @@ function webcalUrl(feedUrl: string) {
       <!-- Password section -->
       <div class="card p-6 space-y-5">
         <div class="flex items-center gap-3 pb-1">
-          <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
-            <KeyRoundIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+          <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <KeyRoundIcon class="size-4 text-primary" />
           </div>
           <div>
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Change password</p>
@@ -432,8 +432,8 @@ function webcalUrl(feedUrl: string) {
       <!-- Default work-from-home days section -->
       <div class="card p-6 space-y-5 mt-6">
         <div class="flex items-center gap-3 pb-1">
-          <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
-            <HomeIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+          <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <HomeIcon class="size-4 text-primary" />
           </div>
           <div>
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Work-from-home defaults</p>
@@ -467,8 +467,8 @@ function webcalUrl(feedUrl: string) {
       <!-- Calendar subscription section -->
       <div class="card p-6 space-y-5 mt-6">
         <div class="flex items-center gap-3 pb-1">
-          <div class="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
-            <CalendarIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+          <div class="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <CalendarIcon class="size-4 text-primary" />
           </div>
           <div>
             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Calendar subscription</p>
@@ -527,7 +527,7 @@ function webcalUrl(feedUrl: string) {
             <div class="flex flex-col gap-2 text-sm">
               <a
                 :href="webcalUrl(calendarFeedUrl)"
-                class="inline-flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 hover:underline"
+                class="inline-flex items-center gap-1.5 text-primary hover:underline"
               >
                 <ExternalLinkIcon class="size-3.5" />
                 Subscribe in calendar app

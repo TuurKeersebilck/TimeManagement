@@ -80,6 +80,7 @@ const description = ref("");
 const wfh = ref(false);
 const todayVacation = ref<VacationDay | null>(null);
 const holidays = ref<PublicHoliday[]>([]);
+const weekVacations = ref<VacationDay[]>([]);
 
 // Adjustment request dialog
 const showAdjustDialog = ref(false);
@@ -194,18 +195,49 @@ const totalHoursThisMonth = computed(() => {
     .reduce((sum, s) => sum + s.totalWorkedHours, 0);
 });
 
-const WEEKDAY_NAMES: DayOfWeek[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
-
 // Indexed by JS Date#getDay() (0 = Sunday … 6 = Saturday), matching the backend DayOfWeek enum.
 const ALL_DAY_NAMES: DayOfWeek[] =
   ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Resolves each day of the current week against the overtime endpoint's per-day target
+// (holiday/vacation-adjusted) rather than the raw schedule, so a vacation day or public
+// holiday already taken this week correctly lowers the weekly target. The overtime endpoint
+// caps at today, so later-in-the-week days it hasn't resolved yet are computed the same way
+// client-side (raw weekday hours reduced by any already-booked vacation/holiday for that date),
+// mirroring OvertimeCalculationService.GetEffectiveTarget on the backend.
 const weeklyTarget = computed<number | null>(() => {
   if (!schedule.value) return null;
-  const weekdayHours = schedule.value.workdayTargets
-    .filter((t) => WEEKDAY_NAMES.includes(t.dayOfWeek))
-    .reduce((sum, t) => sum + t.hours, 0);
-  return weekdayHours > 0 ? weekdayHours : null;
+
+  const now = new Date();
+  const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - daysFromMonday);
+
+  let total = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const dateStr = localDateString(d);
+
+    const resolved = overtime.value?.perDay.find((p) => p.date === dateStr);
+    if (resolved) {
+      total += resolved.targetHours;
+      continue;
+    }
+
+    const holiday = holidays.value.find((h) => h.date === dateStr);
+    if (holiday && !holiday.isWorkingDay) continue;
+
+    const dayName = ALL_DAY_NAMES[d.getDay()];
+    const rawHours = schedule.value.workdayTargets.find((t) => t.dayOfWeek === dayName)?.hours ?? 0;
+    const leaveFraction = Math.min(
+      1,
+      weekVacations.value.filter((v) => v.date === dateStr).reduce((sum, v) => sum + v.amount, 0)
+    );
+    total += rawHours * (1 - leaveFraction);
+  }
+
+  return total > 0 ? total : null;
 });
 
 const weeklyProgress = computed(() =>
@@ -595,6 +627,25 @@ async function loadHolidays() {
   }
 }
 
+async function loadWeekVacations() {
+  try {
+    const now = new Date();
+    const daysFromMonday = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - daysFromMonday);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+
+    weekVacations.value = await vacationService.getVacationDays(
+      undefined,
+      localDateString(weekStart),
+      localDateString(weekEnd)
+    );
+  } catch {
+    // Non-critical
+  }
+}
+
 // ─── History actions ──────────────────────────────────────────────────────────
 
 function startEdit(summary: WorkDaySummaryDto) {
@@ -768,6 +819,7 @@ onMounted(async () => {
     })(),
     loadTodayVacation(),
     loadHolidays(),
+    loadWeekVacations(),
     loadPendingRequests(),
   ]);
 });
@@ -1193,7 +1245,7 @@ onUnmounted(() => {
                       {{ formatDate(row.data.date) }}
                       <span
                         v-if="row.data.date === localDateString(new Date())"
-                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-300"
+                        class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-primary/10 text-primary"
                       >Today</span>
                       <span
                         v-if="pendingRequestForDate(row.data.date)"
@@ -1206,7 +1258,7 @@ onUnmounted(() => {
                     <TableCell>
                       <span
                         v-if="row.data.totalWorkedHours > 0"
-                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-primary/10 text-primary"
                       >
                         {{ row.data.totalWorkedHours.toFixed(2) }}h
                       </span>
@@ -1256,7 +1308,7 @@ onUnmounted(() => {
                         <component
                           :is="(row.data.workDay?.workedFromHome ?? false) ? HomeIcon : BuildingIcon"
                           class="size-3.5"
-                          :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-indigo-500' : 'text-slate-400'"
+                          :class="(row.data.workDay?.workedFromHome ?? false) ? 'text-primary' : 'text-slate-400'"
                         />
                       </div>
                     </TableCell>

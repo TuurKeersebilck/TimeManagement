@@ -458,7 +458,7 @@ onMounted(async () => {
           :class="[
             'px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer',
             activePreset === chip.value
-              ? 'bg-indigo-600 text-white'
+              ? 'bg-primary text-primary-foreground'
               : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700',
           ]"
           @click="setFilter(chip.value as 'today' | 'this-week' | 'this-month' | 'last-month')"
@@ -531,7 +531,7 @@ onMounted(async () => {
                 </TableCell>
                 <TableCell>
                   <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
                   >
                     {{ row.data.totalHours?.toFixed(2) ?? "0.00" }}h
                   </span>
@@ -663,7 +663,7 @@ onMounted(async () => {
               </TableCell>
               <TableCell>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"
+                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
                 >
                   {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
                 </span>

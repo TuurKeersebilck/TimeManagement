@@ -1,5 +1,26 @@
 # Changelog
 
+## [v0.6.6] - 2026-07-29
+
+### Improvements
+
+- Payroll export is now a single flat table — one row per employee per day, with hours worked and a Vacation Type column that also flags public holidays and days with nothing logged ("Missing Log") — replacing the previous four-section report that broke work down per clock-in session. A compact Overtime Summary section still lists each employee's approved paid overtime hours, settlement outcome, and notes.
+
+### Bug Fixes
+
+- Icon badges, links, and calendar "today"/selected-day highlights that were hardcoded to indigo now follow the Warm/Slate palette switch in Account settings, instead of staying indigo regardless of the selected palette.
+- The Time Tracking page's "This week" target showed a flat weekly-hours goal regardless of vacation days or public holidays taken that week. It now correctly reduces the target for full- and half-day vacation and holidays, including days later in the week that are already booked.
+
+## [v0.6.5] - 2026-07-16
+
+### New Features
+
+- Admin time logs page now shows the employee's (or, with "All" selected, every employee's combined) live running flex balance in place of a plain "This month" hours total, surfacing an overtime endpoint that already existed but wasn't used anywhere. The dashboard's "not logged today" list no longer flags employees who are on a full-day vacation, since they aren't expected to log time.
+
+### Bug Fixes
+
+- Shifting the clock time before starting a break had no effect — break start was always stamped with the actual current server time, unlike clock-in, clock-out, and end-break, which all honored the shift. Break start now reconciles a shifted time the same way the other three actions do, and is rejected if it would land before clock-in or before the previous break ended.
+
 ## [v0.6.4] - 2026-07-09
 
 ### New Features

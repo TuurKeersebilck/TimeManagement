@@ -295,7 +295,7 @@ const formatDate = (iso: string) =>
 
         <div class="card p-5">
           <div class="flex items-start gap-3 mb-5">
-            <GlobeIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
+            <GlobeIcon class="size-5 text-primary mt-0.5 shrink-0" />
             <div>
               <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 Country configuration
@@ -479,7 +479,7 @@ const formatDate = (iso: string) =>
 
         <div class="card p-5">
           <div class="flex items-start gap-3 mb-4">
-            <ClockIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
+            <ClockIcon class="size-5 text-primary mt-0.5 shrink-0" />
             <div>
               <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 Default targets
@@ -557,7 +557,7 @@ const formatDate = (iso: string) =>
 
         <div class="card p-5 space-y-5">
           <div class="flex items-start gap-3">
-            <MailIcon class="size-5 text-indigo-500 mt-0.5 shrink-0" />
+            <MailIcon class="size-5 text-primary mt-0.5 shrink-0" />
             <div>
               <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
                 Adjustment request notification email

@@ -46,12 +46,13 @@ public class VacationsController(
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<VacationDayDto>>> GetVacationDays(CancellationToken ct)
+    public async Task<ActionResult<IEnumerable<VacationDayDto>>> GetVacationDays(
+        [FromQuery] DateOnly? dateFrom, [FromQuery] DateOnly? dateTo, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var days = await _service.GetMyVacationDaysAsync(user.Id, ct);
+        var days = await _service.GetMyVacationDaysAsync(user.Id, dateFrom, dateTo, ct);
         return Ok(days);
     }
 
@@ -129,7 +130,7 @@ public class VacationsController(
     [Authorize(Roles = "Admin")]
     public async Task<ActionResult<IEnumerable<VacationDayDto>>> GetEmployeeVacationDays(string userId, CancellationToken ct)
     {
-        var days = await _service.GetMyVacationDaysAsync(userId, ct);
+        var days = await _service.GetMyVacationDaysAsync(userId, ct: ct);
         return Ok(days);
     }
 
@@ -194,7 +195,7 @@ public class VacationsController(
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> DeleteEmployeeVacationDay(string userId, int id, CancellationToken ct)
     {
-        var existing = (await _service.GetMyVacationDaysAsync(userId, ct))
+        var existing = (await _service.GetMyVacationDaysAsync(userId, ct: ct))
             .FirstOrDefault(d => d.Id == id);
 
         await _service.DeleteVacationDayAsync(userId, id, ct);

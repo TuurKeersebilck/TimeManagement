@@ -586,7 +586,7 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
         <div class="card p-5 space-y-4">
           <!-- Current resolved targets -->
           <div class="flex items-center gap-3">
-            <ClockIcon class="size-4 text-indigo-500 shrink-0" />
+            <ClockIcon class="size-4 text-primary shrink-0" />
             <div class="text-sm text-slate-600 dark:text-slate-400">
               <span class="font-medium text-slate-900 dark:text-slate-100">
                 {{ weeklyResolvedHours }}h/week
@@ -597,7 +597,7 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
                   {{ target.resolvedMinimumBreakMinutes }}min break
                 </span>
               </span>
-              <span v-if="hasWorkdayOverride || target?.hasOverride" class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+              <span v-if="hasWorkdayOverride || target?.hasOverride" class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
                 Override
               </span>
               <span v-else class="ml-1.5 text-xs text-slate-400 dark:text-slate-500">(global default)</span>
@@ -739,7 +739,7 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
           </h2>
           <RouterLink
             :to="{ name: 'admin-settlements' }"
-            class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+            class="text-xs text-primary hover:underline"
           >
             View all settlements →
           </RouterLink>
