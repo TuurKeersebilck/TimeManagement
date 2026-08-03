@@ -227,12 +227,14 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var sessions = await db.WorkSessions
+            .AsNoTracking()
             .Include(s => s.Breaks)
             .Where(s => s.UserId == userId && s.Date == today)
             .OrderBy(s => s.ClockIn)
             .ToListAsync(ct);
 
         var workDay = await db.WorkDays
+            .AsNoTracking()
             .FirstOrDefaultAsync(d => d.UserId == userId && d.Date == today, ct);
 
         return new TodayStatusDto
@@ -247,6 +249,7 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
     public async Task<TodayLiveDto?> GetTodayLiveAsync(string userId, CancellationToken ct = default)
     {
         var session = await db.WorkSessions
+            .AsNoTracking()
             .Include(s => s.Breaks)
             .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == WorkSessionStatus.Open, ct);
 
@@ -279,6 +282,7 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
         string userId, DateOnly? dateFrom, DateOnly? dateTo, CancellationToken ct = default)
     {
         var query = db.WorkSessions
+            .AsNoTracking()
             .Include(s => s.Breaks)
             .Where(s => s.UserId == userId && s.Status != WorkSessionStatus.Invalidated)
             .AsQueryable();
@@ -292,11 +296,13 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
             .ToListAsync(ct);
 
         var vacations = await db.VacationDays
+            .AsNoTracking()
             .Include(v => v.VacationType)
             .Where(v => v.UserId == userId)
             .ToListAsync(ct);
 
         var workDays = await db.WorkDays
+            .AsNoTracking()
             .Where(d => d.UserId == userId)
             .ToListAsync(ct);
 
