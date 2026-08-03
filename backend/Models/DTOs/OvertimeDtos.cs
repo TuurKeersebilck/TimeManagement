@@ -7,7 +7,7 @@ public class PerDayOvertimeDto
     /// <summary>Hours worked across all Closed sessions for this day. Open/Invalidated sessions = 0.</summary>
     public decimal WorkedHours { get; set; }
 
-    /// <summary>Target hours from EffectiveTargetService (applies vacation fractions, holidays, weekends).</summary>
+    /// <summary>Effective target hours (applies vacation fractions, holidays, weekends).</summary>
     public decimal TargetHours { get; set; }
 
     /// <summary>WorkedHours − TargetHours. Positive = surplus, negative = deficit.</summary>

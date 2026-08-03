@@ -101,8 +101,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
     public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(UserRole? role = null, CancellationToken ct = default)
     {
-        var config = await _context.AppConfigurations.FirstOrDefaultAsync(ct);
-
         var (weekStart, weekEnd) = TimeCalculationHelper.GetCurrentWeekBounds();
 
         var usersQuery = _context.Users.AsNoTracking().AsQueryable();
