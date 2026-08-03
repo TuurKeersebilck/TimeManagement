@@ -20,6 +20,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
         // ── Load data for the month in bulk ──────────────────────────────────────
 
         var sessions = await db.WorkSessions
+            .AsNoTracking()
             .Include(s => s.Breaks)
             .Where(s => s.UserId == userId && s.Date >= monthStart && s.Date <= endDate)
             .ToListAsync(ct);
@@ -30,8 +31,9 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
                      && a.EffectiveDate <= endDate)
             .SumAsync(a => (decimal?)a.Hours, ct) ?? 0m;
 
-        var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
+        var config = await db.AppConfigurations.AsNoTracking().FirstOrDefaultAsync(ct);
         var employeeTarget = await db.EmployeeTargets
+            .AsNoTracking()
             .FirstOrDefaultAsync(t => t.UserId == userId, ct);
 
         var dailyAllowanceHours = employeeTarget?.DailyOvertimeAllowanceHours
@@ -53,6 +55,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             .ToDictionaryAsync(g => g.Date, g => g.Total, ct);
 
         var workdayTargets = await db.WorkdayTargets
+            .AsNoTracking()
             .Where(t => t.UserId == userId || t.UserId == null)
             .ToListAsync(ct);
 

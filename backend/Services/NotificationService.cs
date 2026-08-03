@@ -45,6 +45,7 @@ public class NotificationService(AppDbContext db) : INotificationService
     public async Task<IList<NotificationDto>> GetNotificationsAsync(string adminUserId, CancellationToken ct = default)
     {
         return await _db.Notifications
+            .AsNoTracking()
             .Where(n => n.RecipientUserId == adminUserId)
             .OrderByDescending(n => n.CreatedAt)
             .Select(n => new NotificationDto
