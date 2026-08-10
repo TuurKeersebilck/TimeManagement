@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Full-stack time management app with a **Vue 3 + Vite** SPA frontend and a **.NET 10 ASP.NET Core** backend API, using **PostgreSQL** (via Npgsql EF Core).
-- Deployment: VPS running Docker Compose, images built via GitHub Actions and pushed to GHCR. Staging runs on a local Raspberry Pi 5 via a self-hosted GitHub Actions runner.
+- Deployment: VPS running Docker Compose. Pushing to `main` triggers a GitHub Actions workflow that builds images and pushes them to GHCR. There is no CI/deploy on `staging`.
 
 ## Development Commands
 

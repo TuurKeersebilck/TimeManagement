@@ -361,8 +361,7 @@ function sessionTimeline(session: WorkSessionDto): string {
   const ci = formatUtc(session.clockIn);
   const co = session.clockOut ? formatUtc(session.clockOut) : "…";
   const breaks = session.breaks
-    .filter((b) => b.breakEnd)
-    .map((b) => ` ☕ ${formatUtc(b.breakStart)}–${formatUtc(b.breakEnd)}`)
+    .map((b) => ` ☕ ${formatUtc(b.breakStart)}–${b.breakEnd ? formatUtc(b.breakEnd) : "…"}`)
     .join("");
   return `${ci} → ${co}${breaks}`;
 }
