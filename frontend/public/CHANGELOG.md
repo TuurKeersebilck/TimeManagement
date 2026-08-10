@@ -1,5 +1,11 @@
 # Changelog
 
+## [v0.6.7] - 2026-08-10
+
+### Improvements
+
+- The Time Tracking page's session timeline showed nothing for a break until it ended, so starting a break gave no visible sign of it next to the clock-in time. It now shows the break's start time immediately, the same way an open session already shows "…" in place of a missing clock-out time.
+
 ## [v0.6.6] - 2026-07-29
 
 ### Improvements
