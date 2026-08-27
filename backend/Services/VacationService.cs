@@ -1,3 +1,5 @@
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
@@ -7,9 +9,10 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class VacationService(AppDbContext db) : IVacationService
+public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 {
     private readonly AppDbContext _db = db;
+    private readonly IMapper _mapper = mapper;
 
     public async Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, int? year = null, CancellationToken ct = default)
     {
@@ -61,16 +64,7 @@ public class VacationService(AppDbContext db) : IVacationService
 
         return await query
             .OrderByDescending(d => d.Date)
-            .Select(d => new VacationDayDto
-            {
-                Id = d.Id,
-                VacationTypeId = d.VacationTypeId,
-                VacationTypeName = d.VacationType.Name,
-                VacationTypeColor = d.VacationType.Color,
-                Date = d.Date,
-                Amount = d.Amount,
-                Note = d.Note,
-            })
+            .ProjectTo<VacationDayDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
@@ -82,16 +76,7 @@ public class VacationService(AppDbContext db) : IVacationService
         return await _db.VacationDays
             .AsNoTracking()
             .Where(v => v.UserId == userId && v.Date == date)
-            .Select(v => new VacationDayDto
-            {
-                Id = v.Id,
-                VacationTypeId = v.VacationTypeId,
-                VacationTypeName = v.VacationType.Name,
-                VacationTypeColor = v.VacationType.Color,
-                Date = v.Date,
-                Amount = v.Amount,
-                Note = v.Note,
-            })
+            .ProjectTo<VacationDayDto>(_mapper.ConfigurationProvider)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -133,7 +118,7 @@ public class VacationService(AppDbContext db) : IVacationService
         await tx.CommitAsync(ct);
 
         await _db.Entry(day).Reference(d => d.VacationType).LoadAsync(ct);
-        return ToDto(day);
+        return _mapper.Map<VacationDayDto>(day);
     }
 
     public async Task<VacationDayDto> UpdateVacationDayAsync(string userId, int id, CreateVacationDayDto dto, CancellationToken ct = default)
@@ -168,7 +153,7 @@ public class VacationService(AppDbContext db) : IVacationService
         if (typeChanged)
             await _db.Entry(day).Reference(d => d.VacationType).LoadAsync(ct);
 
-        return ToDto(day);
+        return _mapper.Map<VacationDayDto>(day);
     }
 
     public async Task DeleteVacationDayAsync(string userId, int id, CancellationToken ct = default)
@@ -260,18 +245,13 @@ public class VacationService(AppDbContext db) : IVacationService
         var type = await _db.VacationTypes.FindAsync([dto.VacationTypeId], ct)
             ?? throw new ResourceNotFoundException("Vacation type not found.");
 
+        // The bulk-inserted entities don't have VacationType loaded — attach the
+        // already-fetched type in-memory so the mapper can resolve it without a query per row.
+        foreach (var e in entities) e.VacationType = type;
+
         return new VacationRangeResultDto
         {
-            Created = entities.Select(e => new VacationDayDto
-            {
-                Id = e.Id,
-                VacationTypeId = e.VacationTypeId,
-                VacationTypeName = type.Name,
-                VacationTypeColor = type.Color,
-                Date = e.Date,
-                Amount = e.Amount,
-                Note = e.Note,
-            }).ToList(),
+            Created = _mapper.Map<List<VacationDayDto>>(entities),
             SkippedWeekends = skippedWeekends,
             SkippedHolidays = skippedHolidays,
             SkippedExisting = skippedExisting,
@@ -295,15 +275,4 @@ public class VacationService(AppDbContext db) : IVacationService
         if (amount != 0.5m && amount != 1.0m)
             throw new InvalidVacationAmountException("Amount must be 0.5 (half day) or 1.0 (full day).");
     }
-
-    private static VacationDayDto ToDto(VacationDay d) => new()
-    {
-        Id = d.Id,
-        VacationTypeId = d.VacationTypeId,
-        VacationTypeName = d.VacationType.Name,
-        VacationTypeColor = d.VacationType.Color,
-        Date = d.Date,
-        Amount = d.Amount,
-        Note = d.Note,
-    };
 }
