@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -36,12 +37,10 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.UserId == userId, ct);
 
-        var dailyAllowanceHours = employeeTarget?.DailyOvertimeAllowanceHours
-            ?? config?.DefaultDailyOvertimeAllowanceHours
-            ?? 0m;
-        var weeklyAllowanceHours = employeeTarget?.WeeklyOvertimeAllowanceHours
-            ?? config?.DefaultWeeklyOvertimeAllowanceHours
-            ?? 0m;
+        var (dailyAllowanceHoursOrNull, weeklyAllowanceHoursOrNull) =
+            TimeCalculationHelper.ResolveOvertimeAllowances(employeeTarget, config);
+        var dailyAllowanceHours = dailyAllowanceHoursOrNull ?? 0m;
+        var weeklyAllowanceHours = weeklyAllowanceHoursOrNull ?? 0m;
 
         var nonWorkingHolidayDates = await db.PublicHolidays
             .Where(h => h.Date >= monthStart && h.Date <= endDate && !h.IsWorkingDay)
@@ -61,25 +60,23 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
 
         decimal GetEffectiveTarget(DateOnly d)
         {
-            if (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return 0;
+            if (TimeCalculationHelper.IsWeekend(d)) return 0;
             if (nonWorkingHolidayDates.Contains(d)) return 0;
 
             var leaveTotal = vacationTotalByDate.TryGetValue(d, out var amt) ? amt : 0m;
             var leaveFraction = Math.Min(1.0m, leaveTotal);
             if (leaveFraction >= 1.0m) return 0;
 
-            var effective = workdayTargets.FirstOrDefault(t => t.UserId == userId && t.DayOfWeek == d.DayOfWeek)
-                         ?? workdayTargets.FirstOrDefault(t => t.UserId == null && t.DayOfWeek == d.DayOfWeek);
-
-            if (effective == null || effective.Hours == 0) return 0;
-            return effective.Hours * (1 - leaveFraction);
+            var targetHours = TimeCalculationHelper.ResolveWorkdayTarget(workdayTargets, userId, d.DayOfWeek);
+            if (targetHours == 0) return 0;
+            return targetHours * (1 - leaveFraction);
         }
 
         var sessionsByDate = sessions.GroupBy(s => s.Date).ToDictionary(g => g.Key, g => g.ToList());
 
         // ── Per-day calculation ───────────────────────────────────────────────────
 
-        var minimumBreakMinutes = employeeTarget?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes;
+        var minimumBreakMinutes = TimeCalculationHelper.ResolveMinimumBreakMinutes(employeeTarget, config);
 
         var perDay = new List<PerDayOvertimeDto>();
         long totalBalanceMinutes = 0;
@@ -163,7 +160,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
 
         // Weekly violations — group by ISO week start (Monday)
         var weekGroups = perDay
-            .GroupBy(d => GetIsoWeekStart(d.Date))
+            .GroupBy(d => TimeCalculationHelper.GetWeekStart(d.Date))
             .OrderBy(g => g.Key);
 
         foreach (var week in weekGroups)
@@ -199,12 +196,5 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             RunningBalanceHours = Math.Round(runningBalanceMinutes / 60m, 2),
             ComplianceFlags = complianceFlags,
         };
-    }
-
-    private static DateOnly GetIsoWeekStart(DateOnly date)
-    {
-        var dayOfWeek = (int)date.DayOfWeek;
-        var daysFromMonday = dayOfWeek == 0 ? 6 : dayOfWeek - 1;
-        return date.AddDays(-daysFromMonday);
     }
 }

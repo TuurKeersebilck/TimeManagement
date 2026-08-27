@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -206,13 +207,11 @@ public class VacationService(AppDbContext db) : IVacationService
             .ToHashSet();
 
         var workingDays = allDays
-            .Where(d => d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday
-                     && !holidayDates.Contains(d))
+            .Where(d => !TimeCalculationHelper.IsWeekend(d) && !holidayDates.Contains(d))
             .ToList();
 
-        int skippedWeekends = allDays.Count(d => d.DayOfWeek == DayOfWeek.Saturday || d.DayOfWeek == DayOfWeek.Sunday);
-        int skippedHolidays = allDays.Count(d => holidayDates.Contains(d)
-            && d.DayOfWeek != DayOfWeek.Saturday && d.DayOfWeek != DayOfWeek.Sunday);
+        int skippedWeekends = allDays.Count(TimeCalculationHelper.IsWeekend);
+        int skippedHolidays = allDays.Count(d => holidayDates.Contains(d) && !TimeCalculationHelper.IsWeekend(d));
 
         // Filter out dates that already have an entry for this type
         var existingDates = await _db.VacationDays

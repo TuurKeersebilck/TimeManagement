@@ -27,13 +27,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     private static readonly DayOfWeek[] s_weekdays =
         [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
 
-    private static decimal SumWeeklyTarget(List<WorkdayTarget> perEmployee, List<WorkdayTarget> globals)
-        => s_weekdays.Sum(day =>
-        {
-            var emp = perEmployee.FirstOrDefault(t => t.DayOfWeek == day);
-            if (emp != null) return emp.Hours;
-            return globals.FirstOrDefault(t => t.DayOfWeek == day)?.Hours ?? 0m;
-        });
+    private static decimal SumWeeklyTarget(IEnumerable<WorkdayTarget> targets, string userId)
+        => s_weekdays.Sum(day => TimeCalculationHelper.ResolveWorkdayTarget(targets, userId, day));
 
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
@@ -120,7 +115,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var allWorkdayTargets = await _context.WorkdayTargets
             .AsNoTracking()
             .ToListAsync(ct);
-        var globalWorkdayTargets = allWorkdayTargets.Where(t => t.UserId == null).ToList();
 
         var weeklyByUser = weekSessions
             .GroupBy(s => s.UserId)
@@ -129,8 +123,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return users.Select(u =>
         {
             var weeklyLogged = weeklyByUser.TryGetValue(u.Id, out var h) ? h : 0m;
-            var userWorkdays = allWorkdayTargets.Where(t => t.UserId == u.Id).ToList();
-            var resolvedWeekly = (decimal?)SumWeeklyTarget(userWorkdays, globalWorkdayTargets);
+            var resolvedWeekly = (decimal?)SumWeeklyTarget(allWorkdayTargets, u.Id);
 
             return new EmployeeDto
             {
@@ -344,7 +337,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         {
             HasOverride = target?.MinimumBreakMinutes.HasValue ?? false,
             MinimumBreakMinutes = target?.MinimumBreakMinutes,
-            ResolvedMinimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
+            ResolvedMinimumBreakMinutes = TimeCalculationHelper.ResolveMinimumBreakMinutes(target, config),
         };
     }
 
@@ -386,9 +379,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .AsNoTracking()
             .Where(t => t.UserId == userId || t.UserId == null)
             .ToListAsync(ct);
-        var perEmployee = workdayTargets.Where(t => t.UserId == userId).ToList();
-        var globals = workdayTargets.Where(t => t.UserId == null).ToList();
-        var weeklyTarget = (decimal?)SumWeeklyTarget(perEmployee, globals);
+        var weeklyTarget = (decimal?)SumWeeklyTarget(workdayTargets, userId);
 
         return weekRanges.Select(w =>
         {
@@ -431,20 +422,15 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .AsNoTracking()
             .Where(t => t.UserId == null || employeeIds.Contains(t.UserId))
             .ToListAsync(ct);
-        var globalWorkdayTargets = workdayTargets.Where(t => t.UserId == null).ToList();
 
-        decimal GetBaseWeekdayTarget(string empUserId, DayOfWeek dayOfWeek)
-        {
-            var target = workdayTargets.FirstOrDefault(t => t.UserId == empUserId && t.DayOfWeek == dayOfWeek)
-                       ?? globalWorkdayTargets.FirstOrDefault(t => t.DayOfWeek == dayOfWeek);
-            return target?.Hours ?? 0m;
-        }
+        decimal GetBaseWeekdayTarget(string empUserId, DayOfWeek dayOfWeek) =>
+            TimeCalculationHelper.ResolveWorkdayTarget(workdayTargets, empUserId, dayOfWeek);
 
         var holidaysQuery = _context.PublicHolidays
             .AsNoTracking()
             .Where(h => h.Date.Year == year && h.Date.Month == month && !h.IsWorkingDay);
         var holidayByDate = (await holidaysQuery.ToListAsync(ct))
-            .Where(h => h.Date.DayOfWeek != DayOfWeek.Saturday && h.Date.DayOfWeek != DayOfWeek.Sunday)
+            .Where(h => !TimeCalculationHelper.IsWeekend(h.Date))
             .ToDictionary(h => h.Date, h => h.Name);
 
         var vacationsQuery = _context.VacationDays
@@ -565,30 +551,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<IEnumerable<WorkdayTargetDto>> SetEmployeeWorkdayTargetsAsync(
         string userId, IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
     {
-        var targetList = targets.ToList();
-        var submittedDays = targetList.Select(t => t.DayOfWeek).ToHashSet();
-
-        var existing = await _context.WorkdayTargets
-            .Where(t => t.UserId == userId)
-            .ToListAsync(ct);
-
-        // The submitted set is authoritative — a day missing from it means "inherit
-        // the global default again", so any existing override for that day is cleared.
-        _context.WorkdayTargets.RemoveRange(existing.Where(t => !submittedDays.Contains(t.DayOfWeek)));
-
-        foreach (var dto in targetList)
-        {
-            var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
-            if (row == null)
-            {
-                row = new WorkdayTarget { UserId = userId, DayOfWeek = dto.DayOfWeek };
-                _context.WorkdayTargets.Add(row);
-            }
-            row.Hours = dto.Hours;
-        }
-
-        await _context.SaveChangesAsync(ct);
-        return await GetEmployeeWorkdayTargetsAsync(userId, ct);
+        var rows = await WorkdayTargetHelper.UpsertWorkdayTargetsAsync(_context, userId, targets, ct);
+        return rows.Select(t => new WorkdayTargetDto { DayOfWeek = t.DayOfWeek, Hours = t.Hours });
     }
 
     // ─── Vacation overview ────────────────────────────────────────────────────
@@ -677,8 +641,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(
         string userId, CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new ResourceNotFoundException("Employee not found.");
+        if (!await _context.Users.AnyAsync(u => u.Id == userId, ct))
+            throw new ResourceNotFoundException("Employee not found.");
 
         if (await SettlementLockHelper.IsMonthSettledAsync(_context, userId, dto.EffectiveDate, ct))
             throw new ValidationException(
@@ -697,6 +661,11 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         _context.TimeBankAdjustments.Add(adjustment);
         await _context.SaveChangesAsync(ct);
 
+        var adminName = await _context.Users
+            .Where(u => u.Id == adminUserId)
+            .Select(u => u.FullName)
+            .FirstOrDefaultAsync(ct);
+
         return new TimeBankAdjustmentDto
         {
             Id = adjustment.Id,
@@ -705,7 +674,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             Hours = adjustment.Hours,
             Reason = adjustment.Reason,
             CreatedByUserId = adjustment.CreatedByUserId,
-            CreatedByName = (await _userManager.FindByIdAsync(adminUserId))?.FullName,
+            CreatedByName = adminName,
             CreatedAt = adjustment.CreatedAt,
         };
     }
