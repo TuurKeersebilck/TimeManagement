@@ -1,3 +1,5 @@
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -9,10 +11,11 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class AdminService(AppDbContext context, UserManager<User> userManager) : IAdminService
+public class AdminService(AppDbContext context, UserManager<User> userManager, IMapper mapper) : IAdminService
 {
     private readonly AppDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
+    private readonly IMapper _mapper = mapper;
 
     private static double CalcSessionHours(WorkSession s)
     {
@@ -187,14 +190,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return await _context.VacationTypes
             .AsNoTracking()
             .OrderBy(v => v.Name)
-            .Select(v => new VacationTypeDto
-            {
-                Id = v.Id,
-                Name = v.Name,
-                Description = v.Description,
-                Color = v.Color,
-                AssignedEmployeeCount = v.EmployeeBalances.Count(),
-            })
+            .ProjectTo<VacationTypeDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
@@ -210,14 +206,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         _context.VacationTypes.Add(entity);
         await _context.SaveChangesAsync(ct);
 
-        return new VacationTypeDto
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            Description = entity.Description,
-            Color = entity.Color,
-            AssignedEmployeeCount = 0,
-        };
+        return _mapper.Map<VacationTypeDto>(entity);
     }
 
     public async Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeFormDto dto, CancellationToken ct = default)
@@ -232,16 +221,11 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         await _context.SaveChangesAsync(ct);
 
-        var assignedCount = await _context.EmployeeVacationBalances.CountAsync(b => b.VacationTypeId == id, ct);
-
-        return new VacationTypeDto
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            Description = entity.Description,
-            Color = entity.Color,
-            AssignedEmployeeCount = assignedCount,
-        };
+        // entity.EmployeeBalances isn't loaded here, so the mapper's own count resolver
+        // would read an empty in-memory collection — fetch the real count separately.
+        var result = _mapper.Map<VacationTypeDto>(entity);
+        result.AssignedEmployeeCount = await _context.EmployeeVacationBalances.CountAsync(b => b.VacationTypeId == id, ct);
+        return result;
     }
 
     public async Task DeleteVacationTypeAsync(int id, CancellationToken ct = default)
@@ -603,7 +587,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         string userId, int? year, int? month, CancellationToken ct = default)
     {
         var query = _context.TimeBankAdjustments
-            .Include(a => a.CreatedByUser)
             .Where(a => a.UserId == userId)
             .AsQueryable();
 
@@ -623,18 +606,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return await query
             .OrderByDescending(a => a.EffectiveDate)
             .ThenByDescending(a => a.CreatedAt)
-            .Select(a => new TimeBankAdjustmentDto
-            {
-                Id = a.Id,
-                UserId = a.UserId,
-                EffectiveDate = a.EffectiveDate,
-                Hours = a.Hours,
-                Reason = a.Reason,
-                SourceSettlementId = a.SourceSettlementId,
-                CreatedByUserId = a.CreatedByUserId,
-                CreatedByName = a.CreatedByUser != null ? a.CreatedByUser.FullName : null,
-                CreatedAt = a.CreatedAt,
-            })
+            .ProjectTo<TimeBankAdjustmentDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
@@ -666,17 +638,11 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .Select(u => u.FullName)
             .FirstOrDefaultAsync(ct);
 
-        return new TimeBankAdjustmentDto
-        {
-            Id = adjustment.Id,
-            UserId = adjustment.UserId,
-            EffectiveDate = adjustment.EffectiveDate,
-            Hours = adjustment.Hours,
-            Reason = adjustment.Reason,
-            CreatedByUserId = adjustment.CreatedByUserId,
-            CreatedByName = adminName,
-            CreatedAt = adjustment.CreatedAt,
-        };
+        // adjustment.CreatedByUser isn't loaded here, so the mapper's own resolver would
+        // read a null navigation — set the already-fetched admin name directly instead.
+        var result = _mapper.Map<TimeBankAdjustmentDto>(adjustment);
+        result.CreatedByName = adminName;
+        return result;
     }
 
     public async Task DeleteTimeBankAdjustmentAsync(int id, CancellationToken ct = default)

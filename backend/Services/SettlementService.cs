@@ -1,3 +1,5 @@
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
@@ -10,6 +12,7 @@ public class SettlementService(
     AppDbContext db,
     IOvertimeCalculationService overtimeService,
     INotificationService notificationService,
+    IMapper mapper,
     ILogger<SettlementService> logger) : ISettlementService
 {
     public async Task GenerateForAllEmployeesAsync(int year, int month, CancellationToken ct = default)
@@ -85,24 +88,20 @@ public class SettlementService(
     {
         return await db.MonthlySettlements
             .AsNoTracking()
-            .Include(s => s.User)
-            .Include(s => s.ReviewedByUser)
             .Where(s => s.Year == year && s.Month == month)
             .OrderBy(s => s.User.FullName)
-            .Select(s => MapToDto(s))
+            .ProjectTo<MonthlySettlementDto>(mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
     public async Task<MonthlySettlementDto> GetSettlementDetailAsync(int id, CancellationToken ct = default)
     {
-        var settlement = await db.MonthlySettlements
+        return await db.MonthlySettlements
             .AsNoTracking()
-            .Include(s => s.User)
-            .Include(s => s.ReviewedByUser)
-            .FirstOrDefaultAsync(s => s.Id == id, ct)
+            .Where(s => s.Id == id)
+            .ProjectTo<MonthlySettlementDto>(mapper.ConfigurationProvider)
+            .FirstOrDefaultAsync(ct)
             ?? throw new ResourceNotFoundException("Settlement not found.");
-
-        return MapToDto(settlement);
     }
 
     public async Task ConfirmAsync(int id, ConfirmSettlementDto dto, string adminUserId, CancellationToken ct = default)
@@ -195,12 +194,10 @@ public class SettlementService(
     {
         return await db.MonthlySettlements
             .AsNoTracking()
-            .Include(s => s.User)
-            .Include(s => s.ReviewedByUser)
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.Year)
             .ThenByDescending(s => s.Month)
-            .Select(s => MapToDto(s))
+            .ProjectTo<MonthlySettlementDto>(mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
@@ -234,27 +231,6 @@ public class SettlementService(
 
         return prefix + (parts.Count > 0 ? string.Join(", ", parts) : "settled as unpaid") + ".";
     }
-
-    private static MonthlySettlementDto MapToDto(MonthlySettlement s) => new()
-    {
-        Id = s.Id,
-        UserId = s.UserId,
-        EmployeeName = s.User?.FullName ?? "",
-        Year = s.Year,
-        Month = s.Month,
-        NetBalanceHours = s.NetBalanceHours,
-        OvertimeHours = s.OvertimeHours,
-        DeficitHours = s.DeficitHours,
-        PaidOutHours = s.PaidOutHours,
-        CarriedForwardHours = s.CarriedForwardHours,
-        Outcome = s.Outcome,
-        Status = s.Status,
-        ReviewedByUserId = s.ReviewedByUserId,
-        ReviewedByName = s.ReviewedByUser?.FullName,
-        ReviewedAt = s.ReviewedAt,
-        Notes = s.Notes,
-        GeneratedAt = s.GeneratedAt,
-    };
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex)
         => ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) is true
