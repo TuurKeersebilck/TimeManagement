@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -33,30 +34,8 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogge
     public async Task<IEnumerable<WorkdayTargetDto>> SetGlobalWorkdayTargetsAsync(
         IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
     {
-        var targetList = targets.ToList();
-        var submittedDays = targetList.Select(t => t.DayOfWeek).ToHashSet();
-
-        var existing = await db.WorkdayTargets
-            .Where(t => t.UserId == null)
-            .ToListAsync(ct);
-
-        // Submitted set is authoritative, same as the per-employee variant — keeps
-        // this idempotent/self-healing even though the frontend always sends all 7.
-        db.WorkdayTargets.RemoveRange(existing.Where(t => !submittedDays.Contains(t.DayOfWeek)));
-
-        foreach (var dto in targetList)
-        {
-            var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
-            if (row == null)
-            {
-                row = new WorkdayTarget { DayOfWeek = dto.DayOfWeek };
-                db.WorkdayTargets.Add(row);
-            }
-            row.Hours = dto.Hours;
-        }
-
-        await db.SaveChangesAsync(ct);
-        return await GetGlobalWorkdayTargetsAsync(ct);
+        var rows = await WorkdayTargetHelper.UpsertWorkdayTargetsAsync(db, null, targets, ct);
+        return rows.Select(t => new WorkdayTargetDto { DayOfWeek = t.DayOfWeek, Hours = t.Hours });
     }
 
     public async Task<AppConfigurationDto> SetNotificationEmailAsync(string? email, CancellationToken ct = default)

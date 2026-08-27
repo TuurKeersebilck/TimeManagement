@@ -125,7 +125,7 @@ public class MissedClockInReminderService(
             }
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            if (today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            if (TimeCalculationHelper.IsWeekend(today))
             {
                 logger.LogInformation("MissedClockInReminder: skipped — today is a weekend.");
                 return;
@@ -269,7 +269,7 @@ public class MissedClockInReminderService(
 
         for (var i = 0; i < 10; i++)
         {
-            if (candidate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            if (TimeCalculationHelper.IsWeekend(candidate))
             {
                 candidate = candidate.AddDays(-1);
                 continue;
