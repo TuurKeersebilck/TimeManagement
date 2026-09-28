@@ -1,23 +1,32 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
 import {
   adminService,
   type AdminTimeLog,
   type AdminSession,
   type Employee,
-  type AdminVacationDay,
 } from "../../services/adminService";
+import type { OvertimeResultDto } from "../../services/workSessionService";
 import { useAppToast } from "@/composables/useAppToast";
-import { ClockIcon, CheckCircleIcon, CalendarIcon } from "lucide-vue-next";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { UsersIcon } from "lucide-vue-next";
 
 const toast = useAppToast();
 const router = useRouter();
 
-const allLogs = ref<AdminTimeLog[]>([]);
+const todayLogs = ref<AdminTimeLog[]>([]);
 const employees = ref<Employee[]>([]);
-const upcomingVacations = ref<AdminVacationDay[]>([]);
+const overtimeByUserId = ref(new Map<string, OvertimeResultDto>());
+const onLeaveToday = ref(new Set<string>());
 const loading = ref(false);
 
 // ─── Today helpers ────────────────────────────────────────────────────────────
@@ -36,48 +45,6 @@ const todayLabel = new Date().toLocaleDateString(undefined, {
   month: "long",
   day: "numeric",
 });
-
-// ─── Derived data ─────────────────────────────────────────────────────────────
-
-const todayLogs = computed(() => allLogs.value.filter((l) => l.date.split("T")[0] === todayStr));
-
-const employeesLoggedToday = computed(() => {
-  const ids = new Set(todayLogs.value.map((l) => l.userId));
-  return employees.value.filter((e) => ids.has(e.id));
-});
-
-const employeesOnVacationToday = computed(() => {
-  const vacationAmountByUserId = new Map<string, number>();
-  for (const vacationDay of upcomingVacations.value) {
-    if (vacationDay.date !== todayStr) continue;
-    const currentAmount = vacationAmountByUserId.get(vacationDay.userId) ?? 0;
-    vacationAmountByUserId.set(vacationDay.userId, currentAmount + vacationDay.amount);
-  }
-
-  const fullDayEntries = [...vacationAmountByUserId].filter(([, amount]) => amount >= 1);
-  return new Set(fullDayEntries.map(([userId]) => userId));
-});
-
-const employeesNotLoggedToday = computed(() => {
-  const ids = new Set(todayLogs.value.map((l) => l.userId));
-  return employees.value.filter((e) => !ids.has(e.id) && !employeesOnVacationToday.value.has(e.id));
-});
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const formatTime = (t?: string) => {
-  if (!t) return "—";
-  const d = new Date(t);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
-const firstBreak = (log: AdminTimeLog) =>
-  log.sessions.flatMap((s) => s.breaks).find((b) => b.breakStart) ?? null;
-
-const formatBreak = (log: AdminTimeLog) => {
-  const b = firstBreak(log);
-  return b ? `${formatTime(b.breakStart)} – ${formatTime(b.breakEnd)}` : "—";
-};
 
 // ─── Live hours ───────────────────────────────────────────────────────────────
 
@@ -99,33 +66,74 @@ const liveHours = (log: AdminTimeLog) =>
   (log.totalHours ?? 0) +
   log.sessions.filter((s) => s.status === "Open").reduce((sum, s) => sum + openSessionHours(s), 0);
 
-const isOnBreak = (log: AdminTimeLog) =>
-  log.sessions.some((s) => s.status === "Open" && s.breaks.some((b) => !b.breakEnd));
+// ─── Rows ─────────────────────────────────────────────────────────────────────
 
-// ─── Upcoming vacations (next 7 days) ─────────────────────────────────────────
+type RowStatus = "working" | "break" | "done" | "invalidated" | "missing" | "leave" | "off";
 
-const upcomingDates = computed(() => {
-  const today = new Date();
-  const in7 = new Date(today);
-  in7.setDate(today.getDate() + 7);
-  const todayIso = todayStr;
-  const in7Iso = (() => {
-    const y = in7.getFullYear();
-    const m = String(in7.getMonth() + 1).padStart(2, "0");
-    const d = String(in7.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  })();
-  return upcomingVacations.value
-    .filter((v) => v.date >= todayIso && v.date <= in7Iso)
-    .sort((a, b) => a.date.localeCompare(b.date));
+const STATUS: Record<RowStatus, { label: string; dot: string }> = {
+  working: { label: "Working", dot: "bg-emerald-500 animate-pulse" },
+  break: { label: "On break", dot: "bg-amber-500" },
+  done: { label: "Clocked out", dot: "bg-emerald-500" },
+  invalidated: { label: "Session auto-closed", dot: "bg-amber-500" },
+  missing: { label: "Not clocked in", dot: "bg-red-500" },
+  leave: { label: "On leave", dot: "bg-slate-300 dark:bg-slate-600" },
+  off: { label: "Day off", dot: "bg-slate-300 dark:bg-slate-600" },
+};
+
+const statusFor = (emp: Employee, log: AdminTimeLog | undefined): RowStatus => {
+  if (log) {
+    const open = log.sessions.find((s) => s.status === "Open");
+    if (open) return open.breaks.some((b) => !b.breakEnd) ? "break" : "working";
+    if (log.sessions.some((s) => s.status === "Closed")) return "done";
+    if (log.hasInvalidatedSession) return "invalidated";
+  }
+  if (onLeaveToday.value.has(emp.id)) return "leave";
+  const today = overtimeByUserId.value.get(emp.id)?.perDay.find((d) => d.date.startsWith(todayStr));
+  if (today && today.targetHours === 0) return "off";
+  return "missing";
+};
+
+const rows = computed(() => {
+  const logByUserId = new Map(todayLogs.value.map((l) => [l.userId, l]));
+  return employees.value.map((emp) => {
+    const log = logByUserId.get(emp.id);
+    const sessions = log?.sessions ?? [];
+    const breaks = sessions.flatMap((s) => s.breaks);
+    const hasOpen = sessions.some((s) => s.status === "Open");
+    return {
+      employee: emp,
+      log,
+      status: statusFor(emp, log),
+      start: sessions[0]?.clockIn,
+      breakStart: breaks[0]?.breakStart,
+      breakEnd: breaks[0]?.breakEnd,
+      extraBreaks: Math.max(0, breaks.length - 1),
+      end: hasOpen ? undefined : sessions[sessions.length - 1]?.clockOut,
+      balance: overtimeByUserId.value.get(emp.id)?.runningBalanceHours,
+    };
+  });
 });
 
-const formatUpcomingDate = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+// ─── Formatting ───────────────────────────────────────────────────────────────
+
+const formatTime = (t?: string) => {
+  if (!t) return "—";
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+function formatFlexHours(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
+const balanceClass = (h?: number) => {
+  if (h === undefined || Math.abs(h) < 0.01) return "text-slate-500 dark:text-slate-400";
+  return h > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
+};
 
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
@@ -139,15 +147,35 @@ onMounted(async () => {
   }, 30_000);
   loading.value = true;
   try {
+    const today = new Date();
     const [logs, emps, vacations] = await Promise.all([
       adminService.getAllTimeLogs({ dateFrom: todayStr, dateTo: todayStr }),
-      // Admins don't track time, so they shouldn't count toward "logged" / "not logged" stats.
+      // Admins don't track time, so they don't belong in the overview.
       adminService.getEmployees("Employee"),
-      adminService.getAllVacationDays(),
+      adminService.getAllVacationDays({ year: today.getFullYear(), month: today.getMonth() + 1 }),
     ]);
-    allLogs.value = logs;
-    employees.value = emps;
-    upcomingVacations.value = vacations;
+    todayLogs.value = logs.filter((l) => l.date.split("T")[0] === todayStr);
+    employees.value = emps
+      .filter((e) => !e.isDisabled)
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+    const leaveTotals = new Map<string, number>();
+    for (const v of vacations) {
+      if (v.date !== todayStr) continue;
+      leaveTotals.set(v.userId, (leaveTotals.get(v.userId) ?? 0) + v.amount);
+    }
+    onLeaveToday.value = new Set([...leaveTotals].filter(([, a]) => a >= 1).map(([id]) => id));
+
+    // One failing balance shouldn't blank the whole table — show "—" for that row instead.
+    const results = await Promise.allSettled(
+      employees.value.map((e) => adminService.getEmployeeOvertime(e.id))
+    );
+    const byUser = new Map<string, OvertimeResultDto>();
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled") byUser.set(employees.value[i].id, r.value);
+    });
+    overtimeByUserId.value = byUser;
+    if (results.some((r) => r.status === "rejected")) toast.error("Failed to load some balances");
   } catch {
     toast.error("Failed to load dashboard data");
   } finally {
@@ -160,269 +188,90 @@ onMounted(async () => {
   <div class="p-6 lg:p-8">
     <div class="max-w-6xl mx-auto">
       <!-- Header -->
-      <div class="mb-8">
+      <div class="mb-6">
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Dashboard</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
           {{ todayLabel }}
         </p>
       </div>
 
-      <!-- Stats -->
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Total employees
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600"
-              >--</span
-            >
-            <span v-else>{{ employees.length }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Logged today
-          </p>
-          <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600"
-              >--</span
-            >
-            <span v-else>{{ employeesLoggedToday.length }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Not logged today
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600"
-              >--</span
-            >
-            <span
-              v-else
-              :class="
-                employeesNotLoggedToday.length > 0 ? 'text-amber-500 dark:text-amber-400' : ''
-              "
-            >
-              {{ employeesNotLoggedToday.length }}
-            </span>
-          </p>
-        </div>
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        <!-- Today's time log entries -->
-        <div class="lg:col-span-2">
-          <div class="flex items-center justify-between mb-3">
-            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
-              Today's entries
-            </h2>
-            <button
-              @click="router.push({ name: 'admin-time-logs' })"
-              class="text-xs text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
-            >
-              View all logs →
-            </button>
+      <div class="card overflow-hidden">
+        <!-- Loading skeleton -->
+        <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
+          <div v-for="i in 6" :key="i" class="flex items-center gap-4 px-4 py-3">
+            <div class="size-2 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse" />
+            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-32 animate-pulse" />
+            <div class="ml-auto h-3 bg-slate-200 dark:bg-slate-700 rounded w-64 animate-pulse" />
           </div>
+        </div>
 
-          <div class="card overflow-hidden">
-            <!-- Loading skeleton -->
-            <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
-              <div v-for="i in 4" :key="i" class="flex items-center gap-4 px-4 py-3">
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-28 animate-pulse" />
-                <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse" />
-                <div
-                  class="ml-auto h-5 bg-slate-200 dark:bg-slate-700 rounded w-12 animate-pulse"
-                />
-              </div>
-            </div>
-
-            <!-- Empty state -->
-            <div v-else-if="todayLogs.length === 0" class="text-center py-12">
-              <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
-              <p class="text-sm text-slate-500 dark:text-slate-400">
-                No entries logged yet today.
-              </p>
-            </div>
-
-            <!-- Entries list -->
-            <ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-              <li
-                v-for="log in todayLogs"
-                :key="`${log.userId}-${log.date}`"
-                class="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
-                @click="
-                  router.push({
-                    name: 'admin-time-logs',
-                    query: { employeeId: log.userId },
-                  })
-                "
-              >
-                <div class="flex-1 min-w-0">
-                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                    {{ log.employeeName }}
-                  </p>
-                  <p
-                    v-if="log.description"
-                    class="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5"
-                  >
-                    {{ log.description }}
-                  </p>
-                </div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 shrink-0">
-                  {{ formatTime(log.sessions[0]?.clockIn) }} –
-                  {{ formatTime(log.sessions[log.sessions.length - 1]?.clockOut) }}
-                  <span v-if="log.sessions.some((s) => s.breaks.length)" class="ml-1 text-slate-400 dark:text-slate-500"
-                    >(brk {{ formatBreak(log) }})</span
-                  >
-                  <span v-if="isOnBreak(log)" class="ml-1 text-amber-600 dark:text-amber-400"
-                    >· on break</span
-                  >
-                </div>
-                <span
-                  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary shrink-0"
-                  :title="log.hasOpenSession ? 'Still clocked in — running total' : undefined"
-                >
+        <Table v-else>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Start</TableHead>
+              <TableHead>Break start</TableHead>
+              <TableHead>Break end</TableHead>
+              <TableHead>End</TableHead>
+              <TableHead class="text-right">Worked</TableHead>
+              <TableHead class="text-right" title="Flex balance for the current month">
+                Overtime (month)
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableEmpty v-if="rows.length === 0" :colspan="7">
+              <UsersIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
+              <p class="text-slate-500 dark:text-slate-400">No active employees.</p>
+            </TableEmpty>
+            <TableRow
+              v-for="row in rows"
+              :key="row.employee.id"
+              class="cursor-pointer"
+              @click="router.push({ name: 'admin-time-logs', query: { employeeId: row.employee.id } })"
+            >
+              <TableCell>
+                <div class="flex items-center gap-2.5">
                   <span
-                    v-if="log.hasOpenSession"
-                    class="size-1.5 rounded-full"
-                    :class="isOnBreak(log) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
+                    class="size-2.5 rounded-full shrink-0"
+                    :class="STATUS[row.status].dot"
+                    :title="STATUS[row.status].label"
                   />
-                  {{ liveHours(log).toFixed(2) }}h
-                </span>
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- Right column -->
-        <div class="flex flex-col gap-6">
-          <!-- Who hasn't logged -->
-          <div>
-            <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-              Not logged today
-            </h2>
-            <div class="card overflow-hidden">
-              <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
-                <div v-for="i in 3" :key="i" class="flex items-center gap-3 px-4 py-3">
-                  <div
-                    class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 animate-pulse shrink-0"
-                  />
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-24 animate-pulse" />
-                </div>
-              </div>
-              <div v-else-if="employeesNotLoggedToday.length === 0" class="text-center py-8">
-                <CheckCircleIcon class="size-6 text-emerald-400 mb-1 mx-auto" />
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  Everyone has logged today.
-                </p>
-              </div>
-              <ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-                <li
-                  v-for="emp in employeesNotLoggedToday"
-                  :key="emp.id"
-                  class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
-                  @click="
-                    router.push({
-                      name: 'admin-time-logs',
-                      query: { employeeId: emp.id },
-                    })
-                  "
-                >
-                  <div
-                    class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0"
-                  >
-                    <span class="text-xs font-bold text-slate-500 dark:text-slate-400">
-                      {{
-                        emp.fullName
-                          .split(" ")
-                          .map((n: string) => n[0])
-                          .join("")
-                          .substring(0, 2)
-                          .toUpperCase()
-                      }}
-                    </span>
+                  <div class="min-w-0">
+                    <p class="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {{ row.employee.fullName }}
+                    </p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500">
+                      {{ STATUS[row.status].label }}
+                    </p>
                   </div>
-                  <span class="text-sm text-slate-700 dark:text-slate-300 truncate">{{
-                    emp.fullName
-                  }}</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <!-- Upcoming vacations (next 7 days) -->
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                Upcoming vacations
-              </h2>
-              <button
-                @click="router.push({ name: 'team-calendar' })"
-                class="text-xs text-primary hover:underline cursor-pointer focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 rounded"
+                </div>
+              </TableCell>
+              <TableCell class="font-mono text-sm tabular-nums">{{ formatTime(row.start) }}</TableCell>
+              <TableCell class="font-mono text-sm tabular-nums">{{ formatTime(row.breakStart) }}</TableCell>
+              <TableCell class="font-mono text-sm tabular-nums">
+                {{ formatTime(row.breakEnd) }}
+                <span
+                  v-if="row.extraBreaks"
+                  class="ml-1 text-xs text-slate-400 dark:text-slate-500"
+                  :title="`${row.extraBreaks} more break(s) today`"
+                  >+{{ row.extraBreaks }}</span
+                >
+              </TableCell>
+              <TableCell class="font-mono text-sm tabular-nums">{{ formatTime(row.end) }}</TableCell>
+              <TableCell class="text-right font-mono text-sm tabular-nums">
+                {{ row.log ? `${liveHours(row.log).toFixed(2)}h` : "—" }}
+              </TableCell>
+              <TableCell
+                class="text-right font-mono text-sm font-semibold tabular-nums"
+                :class="balanceClass(row.balance)"
               >
-                Calendar →
-              </button>
-            </div>
-            <div class="card overflow-hidden">
-              <div v-if="loading" class="divide-y divide-slate-100 dark:divide-slate-800">
-                <div v-for="i in 3" :key="i" class="flex items-center gap-3 px-4 py-3">
-                  <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16 animate-pulse" />
-                  <div
-                    class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20 animate-pulse flex-1"
-                  />
-                </div>
-              </div>
-              <div v-else-if="upcomingDates.length === 0" class="text-center py-8">
-                <CalendarIcon class="size-6 text-slate-300 dark:text-slate-600 mb-1 mx-auto" />
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                  No vacations in the next 7 days.
-                </p>
-              </div>
-              <ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
-                <li
-                  v-for="v in upcomingDates"
-                  :key="v.id"
-                  class="flex items-center gap-3 px-4 py-2.5"
-                >
-                  <div
-                    class="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10"
-                    :style="{
-                      backgroundColor: v.vacationTypeColor ?? '#6366f1',
-                    }"
-                  />
-                  <div class="flex-1 min-w-0">
-                    <p class="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
-                      {{ v.employeeName }}
-                    </p>
-                    <p class="text-xs text-slate-400 dark:text-slate-500">
-                      {{ v.vacationTypeName }}
-                    </p>
-                  </div>
-                  <div class="text-right shrink-0">
-                    <p class="text-xs text-slate-600 dark:text-slate-400">
-                      {{ formatUpcomingDate(v.date) }}
-                    </p>
-                    <p class="text-xs text-slate-400 dark:text-slate-500">
-                      {{ v.amount === 0.5 ? "Half day" : "Full day" }}
-                    </p>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
+                {{ row.balance === undefined ? "—" : formatFlexHours(row.balance) }}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
       </div>
-
-      <!-- Personal vacation calendar -->
-      <UpcomingVacationsWidget />
     </div>
   </div>
 </template>
