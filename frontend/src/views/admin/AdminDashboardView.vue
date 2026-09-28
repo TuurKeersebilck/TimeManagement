@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import UpcomingVacationsWidget from "@/components/UpcomingVacationsWidget.vue";
 import {
   adminService,
   type AdminTimeLog,
+  type AdminSession,
   type Employee,
   type AdminVacationDay,
 } from "../../services/adminService";
@@ -78,6 +79,29 @@ const formatBreak = (log: AdminTimeLog) => {
   return b ? `${formatTime(b.breakStart)} – ${formatTime(b.breakEnd)}` : "—";
 };
 
+// ─── Live hours ───────────────────────────────────────────────────────────────
+
+// The backend only counts closed sessions in totalHours, so an employee who is still
+// clocked in would show 0h. Add the running time of open sessions client-side.
+const now = ref(Date.now());
+let nowInterval: ReturnType<typeof setInterval> | null = null;
+
+const openSessionHours = (session: AdminSession) => {
+  const breakMs = session.breaks.reduce((sum, b) => {
+    const end = b.breakEnd ? new Date(b.breakEnd).getTime() : now.value;
+    return sum + Math.max(0, end - new Date(b.breakStart).getTime());
+  }, 0);
+  const elapsedMs = now.value - new Date(session.clockIn).getTime();
+  return Math.max(0, elapsedMs - breakMs) / 3_600_000;
+};
+
+const liveHours = (log: AdminTimeLog) =>
+  (log.totalHours ?? 0) +
+  log.sessions.filter((s) => s.status === "Open").reduce((sum, s) => sum + openSessionHours(s), 0);
+
+const isOnBreak = (log: AdminTimeLog) =>
+  log.sessions.some((s) => s.status === "Open" && s.breaks.some((b) => !b.breakEnd));
+
 // ─── Upcoming vacations (next 7 days) ─────────────────────────────────────────
 
 const upcomingDates = computed(() => {
@@ -105,7 +129,14 @@ const formatUpcomingDate = (iso: string) =>
 
 // ─── Mount ────────────────────────────────────────────────────────────────────
 
+onUnmounted(() => {
+  if (nowInterval) clearInterval(nowInterval);
+});
+
 onMounted(async () => {
+  nowInterval = setInterval(() => {
+    now.value = Date.now();
+  }, 30_000);
   loading.value = true;
   try {
     const [logs, emps, vacations] = await Promise.all([
@@ -251,11 +282,20 @@ onMounted(async () => {
                   <span v-if="log.sessions.some((s) => s.breaks.length)" class="ml-1 text-slate-400 dark:text-slate-500"
                     >(brk {{ formatBreak(log) }})</span
                   >
+                  <span v-if="isOnBreak(log)" class="ml-1 text-amber-600 dark:text-amber-400"
+                    >· on break</span
+                  >
                 </div>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary shrink-0"
+                  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary shrink-0"
+                  :title="log.hasOpenSession ? 'Still clocked in — running total' : undefined"
                 >
-                  {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+                  <span
+                    v-if="log.hasOpenSession"
+                    class="size-1.5 rounded-full"
+                    :class="isOnBreak(log) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
+                  />
+                  {{ liveHours(log).toFixed(2) }}h
                 </span>
               </li>
             </ul>
