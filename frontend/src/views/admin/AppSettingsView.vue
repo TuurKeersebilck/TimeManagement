@@ -77,6 +77,7 @@ const savingEmail = ref(false);
 
 const enableAdjustmentRequestEmails = ref(true);
 const enableMissedClockInEmails = ref(true);
+const enableSettlementEmails = ref(true);
 const savingToggles = ref(false);
 
 const loadingCountries = ref(false);
@@ -110,6 +111,7 @@ onMounted(async () => {
     if (config.notificationEmail) notificationEmail.value = config.notificationEmail;
     enableAdjustmentRequestEmails.value = config.enableAdjustmentRequestEmails;
     enableMissedClockInEmails.value = config.enableMissedClockInEmails;
+    enableSettlementEmails.value = config.enableSettlementEmails;
     for (const t of workdayTargets) globalTargets.value[t.dayOfWeek] = String(t.hours);
   } catch {
     toast.error("Failed to load settings");
@@ -245,6 +247,7 @@ const saveNotificationToggles = async () => {
     await holidayService.setNotificationToggles(
       enableAdjustmentRequestEmails.value,
       enableMissedClockInEmails.value,
+      enableSettlementEmails.value,
     );
     toast.success("Notification preferences saved");
   } catch {
@@ -560,11 +563,11 @@ const formatDate = (iso: string) =>
             <MailIcon class="size-5 text-primary mt-0.5 shrink-0" />
             <div>
               <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-                Adjustment request notification email
+                Admin notification email
               </p>
               <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                When an employee submits a time adjustment request, the approval email is sent to
-                this address. Leave blank to disable email notifications.
+                Adjustment request approvals and settlement reminders are sent to this address.
+                Leave blank to disable admin email notifications.
               </p>
             </div>
           </div>
@@ -605,6 +608,17 @@ const formatDate = (iso: string) =>
                 </p>
               </div>
               <Switch v-model="enableMissedClockInEmails" />
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Settlement reminders</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Email when the monthly settlements are ready for review, and a reminder every
+                  Monday while any are still unconfirmed.
+                </p>
+              </div>
+              <Switch v-model="enableSettlementEmails" />
             </div>
 
             <div class="flex justify-end">

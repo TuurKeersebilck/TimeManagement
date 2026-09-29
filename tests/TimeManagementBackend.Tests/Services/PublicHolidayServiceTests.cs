@@ -92,6 +92,30 @@ public class PublicHolidayServiceTests(PostgresFixture fixture) : DatabaseTestBa
     }
 
     [Fact]
+    public async Task SettlementEmails_DefaultOnAndCanBeSwitchedOff()
+    {
+        Assert.True((await NewService(StubHttpMessageHandler.Failing()).GetConfigurationAsync()).EnableSettlementEmails);
+
+        var config = await NewService(StubHttpMessageHandler.Failing())
+            .SetNotificationTogglesAsync(true, true, enableSettlementEmails: false);
+
+        Assert.False(config.EnableSettlementEmails);
+    }
+
+    [Fact]
+    public async Task SettlementEmails_AreLeftAloneByAClientThatDoesNotSendTheToggle()
+    {
+        // An older frontend only knows the first two toggles; saving them must not flip this one.
+        await NewService(StubHttpMessageHandler.Failing())
+            .SetNotificationTogglesAsync(true, true, enableSettlementEmails: false);
+
+        var config = await NewService(StubHttpMessageHandler.Failing())
+            .SetNotificationTogglesAsync(enableAdjustmentRequestEmails: false, enableMissedClockInEmails: true);
+
+        Assert.False(config.EnableSettlementEmails);
+    }
+
+    [Fact]
     public async Task MinimumBreakMinutes_CanBeSetAndCleared()
     {
         Assert.Equal(30, (await NewService(StubHttpMessageHandler.Failing())

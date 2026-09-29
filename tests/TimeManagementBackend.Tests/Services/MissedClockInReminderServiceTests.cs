@@ -1,5 +1,6 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
@@ -37,6 +38,9 @@ public class MissedClockInReminderServiceTests(PostgresFixture fixture) : Databa
         services.AddScoped(_ => _notifications);
         services.AddScoped(_ => _email);
         services.AddScoped(_ => _settlements);
+        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["AppUrl"] = "https://app.test" })
+            .Build());
         return services.BuildServiceProvider();
     }
 
@@ -400,5 +404,28 @@ public class MissedClockInReminderServiceTests(PostgresFixture fixture) : Databa
         var (service, provider) = NewService();
         await using (provider)
             await InvokeAsync(service, "GenerateMonthlySettlementsAsync", CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SettlementEmail_LinksToTheAppAndPassesTheReminderFlag(bool isReminder)
+    {
+        var (service, provider) = NewService();
+        await using (provider)
+            await InvokeAsync(service, "SendSettlementReviewEmailAsync", isReminder, CancellationToken.None);
+
+        await _settlements.Received(1).SendReviewEmailAsync("https://app.test", isReminder, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task SettlementEmail_SwallowsAFailureSoTheLoopKeepsRunning()
+    {
+        _settlements.SendReviewEmailAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .Throws(new InvalidOperationException("database unreachable"));
+
+        var (service, provider) = NewService();
+        await using (provider)
+            await InvokeAsync(service, "SendSettlementReviewEmailAsync", true, CancellationToken.None);
     }
 }

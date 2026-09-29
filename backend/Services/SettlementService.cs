@@ -12,6 +12,7 @@ public class SettlementService(
     AppDbContext db,
     IOvertimeCalculationService overtimeService,
     INotificationService notificationService,
+    IEmailService emailService,
     IMapper mapper,
     ILogger<SettlementService> logger) : ISettlementService
 {
@@ -81,6 +82,46 @@ public class SettlementService(
             logger.LogDebug(
                 "Unique constraint on MonthlySettlement for {UserId} {Year}-{Month:00} — concurrent creation, ignored.",
                 userId, year, month);
+        }
+    }
+
+    public async Task SendReviewEmailAsync(string appUrl, bool isReminder, CancellationToken ct = default)
+    {
+        var config = await db.AppConfigurations.AsNoTracking().FirstOrDefaultAsync(ct);
+        var toEmail = config?.NotificationEmail;
+        if (string.IsNullOrEmpty(toEmail) || !(config?.EnableSettlementEmails ?? true))
+        {
+            logger.LogInformation("Settlement review email skipped — no notification email or disabled in app settings.");
+            return;
+        }
+
+        var pending = await db.MonthlySettlements
+            .AsNoTracking()
+            .Where(s => s.Status == SettlementStatus.PendingReview)
+            .GroupBy(s => new { s.Year, s.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToListAsync(ct);
+
+        // Nothing waiting — the Monday reminder stops on its own once everything is confirmed.
+        if (pending.Count == 0)
+            return;
+
+        var pendingByMonth = pending
+            .Select(p => (Month: new DateOnly(p.Year, p.Month, 1), PendingCount: p.Count))
+            .OrderBy(p => p.Month)
+            .ToList();
+
+        try
+        {
+            await emailService.SendSettlementReviewEmailAsync(
+                toEmail, pendingByMonth, $"{appUrl.TrimEnd('/')}/admin/settlements", isReminder);
+            logger.LogInformation(
+                "Sent settlement review email ({Kind}) to {Email} for {Count} pending settlement(s).",
+                isReminder ? "reminder" : "ready", toEmail, pendingByMonth.Sum(p => p.PendingCount));
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send settlement review email to {Email}.", toEmail);
         }
     }
 

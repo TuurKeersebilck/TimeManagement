@@ -18,6 +18,9 @@ public class AppConfiguration
     /// <summary>When false, the daily missed clock-in reminder emails are not sent to employees.</summary>
     public bool EnableMissedClockInEmails { get; set; } = true;
 
+    /// <summary>When false, no email is sent to NotificationEmail when monthly settlements are ready or still awaiting review.</summary>
+    public bool EnableSettlementEmails { get; set; } = true;
+
     /// <summary>Global minimum break duration in minutes. Null = no minimum enforced.</summary>
     public int? MinimumBreakMinutes { get; set; }
 
