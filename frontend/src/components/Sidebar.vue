@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 
 declare const __APP_VERSION__: string;
 const appVersion = __APP_VERSION__;
 import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useChangelogStore } from "../composables/useChangelogStore";
+import { usePendingAdjustments } from "../composables/usePendingAdjustments";
+import { useAutoRefresh } from "../composables/useAutoRefresh";
 import NotificationBell from "./NotificationBell.vue";
 import ChangelogModal from "./ChangelogModal.vue";
 import { LogOutIcon, ChevronDownIcon, GithubIcon, ScrollTextIcon } from "lucide-vue-next";
@@ -52,17 +54,45 @@ const adminPersonalNav: NavItem[] = [
 
 const adminSectionNav: NavItem[] = [
   { name: "All Time Logs", to: "/admin/time-logs" },
-  { name: "Adjustment Requests", to: "/admin/adjustment-requests" },
   { name: "Settlements", to: "/admin/settlements" },
-  { name: "Vacation Types", to: "/admin/vacation-types" },
-  { name: "Employees", to: "/admin/employees" },
   { name: "Payroll Export", to: "/admin/export" },
+];
+
+// Less frequently used admin pages, tucked into a collapsed submenu.
+const ADJUSTMENT_REQUESTS_PATH = "/admin/adjustment-requests";
+const adminSettingsNav: NavItem[] = [
+  { name: "Adjustment Requests", to: ADJUSTMENT_REQUESTS_PATH },
+  { name: "Employees", to: "/admin/employees" },
+  { name: "Vacation Types", to: "/admin/vacation-types" },
   { name: "App Settings", to: "/admin/settings" },
 ];
 
 const navigationItems = computed(() => (isAdmin.value ? adminPersonalNav : employeeNav));
 
 const adminSectionOpen = ref(true);
+
+// Opens by itself when you land on one of its pages, so the active item is never hidden.
+const settingsOpen = ref(false);
+watch(
+  () => route.path,
+  () => {
+    if (adminSettingsNav.some((item) => isActive(item.to))) settingsOpen.value = true;
+  },
+  { immediate: true }
+);
+
+// Pending adjustment requests stay visible even with the submenu collapsed.
+const { pendingCount, refreshPendingCount } = usePendingAdjustments();
+watch(
+  isAdmin,
+  (admin) => {
+    if (admin) refreshPendingCount();
+  },
+  { immediate: true }
+);
+useAutoRefresh(async () => {
+  if (isAdmin.value) await refreshPendingCount();
+}, 120_000);
 
 const handleNavClick = () => {
   if (window.innerWidth < 1024) emit("toggle");
@@ -145,17 +175,63 @@ onMounted(() => {
           </button>
         </div>
 
-        <ul v-show="adminSectionOpen" class="space-y-1">
-          <li v-for="item in adminSectionNav" :key="item.name">
-            <router-link
-              :to="item.to"
-              @click="handleNavClick"
-              :class="['sidebar-nav-link', isActive(item.to) && 'sidebar-nav-link-active']"
-            >
-              {{ item.name }}
-            </router-link>
-          </li>
-        </ul>
+        <div v-show="adminSectionOpen">
+          <ul class="space-y-1">
+            <li v-for="item in adminSectionNav" :key="item.name">
+              <router-link
+                :to="item.to"
+                @click="handleNavClick"
+                :class="['sidebar-nav-link', isActive(item.to) && 'sidebar-nav-link-active']"
+              >
+                {{ item.name }}
+              </router-link>
+            </li>
+          </ul>
+
+          <!-- Settings submenu -->
+          <button
+            class="sidebar-nav-link sidebar-nav-toggle mt-1"
+            :aria-expanded="settingsOpen"
+            @click="settingsOpen = !settingsOpen"
+          >
+            <span class="flex items-center justify-between gap-2">
+              <span class="flex items-center gap-2">
+                Settings
+                <span
+                  v-if="!settingsOpen && pendingCount > 0"
+                  class="sidebar-badge"
+                  :title="`${pendingCount} adjustment request(s) waiting for review`"
+                  >{{ pendingCount }}</span
+                >
+              </span>
+              <ChevronDownIcon
+                :class="['size-3.5 transition-transform duration-200', settingsOpen && 'rotate-180']"
+              />
+            </span>
+          </button>
+          <ul v-show="settingsOpen" class="mt-1 ml-1 pl-3 border-l border-border space-y-0.5">
+            <li v-for="item in adminSettingsNav" :key="item.name">
+              <router-link
+                :to="item.to"
+                @click="handleNavClick"
+                :class="[
+                  'sidebar-nav-link sidebar-nav-sublink',
+                  isActive(item.to) && 'sidebar-nav-link-active',
+                ]"
+              >
+                <span class="flex items-center justify-between gap-2">
+                  <span class="truncate">{{ item.name }}</span>
+                  <span
+                    v-if="item.to === ADJUSTMENT_REQUESTS_PATH && pendingCount > 0"
+                    class="sidebar-badge"
+                    :title="`${pendingCount} waiting for review`"
+                    >{{ pendingCount }}</span
+                  >
+                </span>
+              </router-link>
+            </li>
+          </ul>
+        </div>
       </template>
     </nav>
 
@@ -252,5 +328,33 @@ onMounted(() => {
   color: var(--primary);
   border-left-color: var(--primary);
   font-weight: 600;
+}
+
+.sidebar-nav-sublink {
+  font-size: 0.9375rem;
+}
+
+/* A <button> doesn't stretch like the block links do; match their width (incl. the
+   negative left margin) and reset native button styling. */
+.sidebar-nav-toggle {
+  width: calc(100% + 0.75rem);
+  text-align: left;
+  background: none;
+}
+
+.sidebar-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.125rem;
+  height: 1.125rem;
+  padding: 0 0.3rem;
+  border-radius: 9999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
 }
 </style>

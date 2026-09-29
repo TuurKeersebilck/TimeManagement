@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import {
   adjustmentRequestService,
   type AdjustmentRequest,
@@ -26,6 +26,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
+import { usePendingAdjustments } from "@/composables/usePendingAdjustments";
 import {
   ClipboardListIcon,
   Loader2Icon,
@@ -41,6 +42,16 @@ const loading = ref(false);
 const search = ref("");
 const approvingId = ref<number | null>(null);
 const rejectingId = ref<number | null>(null);
+
+// Keep the sidebar's pending badge in step with approvals/rejections made here.
+const { pendingCount } = usePendingAdjustments();
+watch(
+  requests,
+  (list) => {
+    pendingCount.value = list.filter((r) => r.status === "Pending").length;
+  },
+  { deep: true }
+);
 
 const reasonDialog = ref<{ open: boolean; text: string; employee: string; date: string }>({
   open: false,
