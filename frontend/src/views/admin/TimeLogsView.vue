@@ -4,6 +4,8 @@ import { useRoute } from "vue-router";
 import { adminService, type AdminTimeLog, type AdminVacationDay, type Employee } from "../../services/adminService";
 import { holidayService, type PublicHoliday } from "../../services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
+import { useLiveHours } from "@/composables/useLiveHours";
+import { useAutoRefresh } from "@/composables/useAutoRefresh";
 import {
   Select,
   SelectContent,
@@ -64,6 +66,7 @@ function checkDescOverflow(el: Element | null, key: string) {
 
 const toast = useAppToast();
 const route = useRoute();
+const { liveHours, isOnBreak } = useLiveHours();
 
 const allLogs = ref<AdminTimeLog[]>([]);
 const allVacations = ref<AdminVacationDay[]>([]);
@@ -162,7 +165,7 @@ const mergedRows = computed<MergedRow[] | null>(() => {
     currentWeek = week;
     if (entry.kind === "log") {
       result.push({ kind: "log", data: entry.data });
-      weekHours += entry.data.totalHours ?? 0;
+      weekHours += liveHours(entry.data);
     } else if (entry.kind === "vacation") {
       result.push({ kind: "vacation", data: entry.data });
     } else {
@@ -220,9 +223,13 @@ const activePreset = computed(() => {
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-const fetchLogs = async () => {
-  loading.value = true;
-  currentPage.value = 1;
+// `silent` is used by the background refresh: keep the current page and skip the
+// skeleton/toast, so the table doesn't jump around while the admin is reading it.
+const fetchLogs = async ({ silent = false } = {}) => {
+  if (!silent) {
+    loading.value = true;
+    currentPage.value = 1;
+  }
   try {
     const userId = selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value;
 
@@ -247,14 +254,21 @@ const fetchLogs = async () => {
     allLogs.value = logs;
     allVacations.value = vacations;
     allHolidays.value = holidayArrays.flat();
+    currentPage.value = Math.min(currentPage.value, totalPages.value);
   } catch {
-    toast.error("Failed to load time logs");
+    if (!silent) toast.error("Failed to load time logs");
   } finally {
     loading.value = false;
   }
 };
 
-watch([selectedEmployeeId, dateFrom, dateTo], fetchLogs);
+watch([selectedEmployeeId, dateFrom, dateTo], () => fetchLogs());
+
+// Only periods that include today can change while the page is open.
+useAutoRefresh(async () => {
+  if (dateTo.value && dateTo.value < toLocalDateStr(new Date())) return;
+  await fetchLogs({ silent: true });
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -429,9 +443,15 @@ onMounted(async () => {
                 </TableCell>
                 <TableCell>
                   <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                    :title="row.data.hasOpenSession ? 'Still clocked in — running total' : undefined"
                   >
-                    {{ row.data.totalHours?.toFixed(2) ?? "0.00" }}h
+                    <span
+                      v-if="row.data.hasOpenSession"
+                      class="size-1.5 rounded-full"
+                      :class="isOnBreak(row.data) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
+                    />
+                    {{ liveHours(row.data).toFixed(2) }}h
                   </span>
                 </TableCell>
                 <TableCell>
@@ -561,9 +581,15 @@ onMounted(async () => {
               </TableCell>
               <TableCell>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                  :title="log.hasOpenSession ? 'Still clocked in — running total' : undefined"
                 >
-                  {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+                  <span
+                    v-if="log.hasOpenSession"
+                    class="size-1.5 rounded-full"
+                    :class="isOnBreak(log) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
+                  />
+                  {{ liveHours(log).toFixed(2) }}h
                 </span>
               </TableCell>
               <TableCell>

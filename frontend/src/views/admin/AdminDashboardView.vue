@@ -1,14 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import {
-  adminService,
-  type AdminTimeLog,
-  type AdminSession,
-  type Employee,
-} from "../../services/adminService";
+import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
 import type { OvertimeResultDto } from "../../services/workSessionService";
 import { useAppToast } from "@/composables/useAppToast";
+import { useLiveHours } from "@/composables/useLiveHours";
+import { useAutoRefresh } from "@/composables/useAutoRefresh";
 import {
   Table,
   TableBody,
@@ -31,40 +28,22 @@ const loading = ref(false);
 
 // ─── Today helpers ────────────────────────────────────────────────────────────
 
-const todayStr = (() => {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-})();
+const localDateStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-const todayLabel = new Date().toLocaleDateString(undefined, {
-  weekday: "long",
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
+// Re-evaluated on every load so a dashboard left open past midnight moves on to the new day.
+const todayStr = ref(localDateStr(new Date()));
 
-// ─── Live hours ───────────────────────────────────────────────────────────────
+const todayLabel = computed(() =>
+  new Date(`${todayStr.value}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+);
 
-// The backend only counts closed sessions in totalHours, so an employee who is still
-// clocked in would show 0h. Add the running time of open sessions client-side.
-const now = ref(Date.now());
-let nowInterval: ReturnType<typeof setInterval> | null = null;
-
-const openSessionHours = (session: AdminSession) => {
-  const breakMs = session.breaks.reduce((sum, b) => {
-    const end = b.breakEnd ? new Date(b.breakEnd).getTime() : now.value;
-    return sum + Math.max(0, end - new Date(b.breakStart).getTime());
-  }, 0);
-  const elapsedMs = now.value - new Date(session.clockIn).getTime();
-  return Math.max(0, elapsedMs - breakMs) / 3_600_000;
-};
-
-const liveHours = (log: AdminTimeLog) =>
-  (log.totalHours ?? 0) +
-  log.sessions.filter((s) => s.status === "Open").reduce((sum, s) => sum + openSessionHours(s), 0);
+const { liveHours } = useLiveHours();
 
 // ─── Rows ─────────────────────────────────────────────────────────────────────
 
@@ -88,7 +67,7 @@ const statusFor = (emp: Employee, log: AdminTimeLog | undefined): RowStatus => {
     if (log.hasInvalidatedSession) return "invalidated";
   }
   if (onLeaveToday.value.has(emp.id)) return "leave";
-  const today = overtimeByUserId.value.get(emp.id)?.perDay.find((d) => d.date.startsWith(todayStr));
+  const today = overtimeByUserId.value.get(emp.id)?.perDay.find((d) => d.date.startsWith(todayStr.value));
   if (today && today.targetHours === 0) return "off";
   return "missing";
 };
@@ -135,53 +114,56 @@ const balanceClass = (h?: number) => {
   return h > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400";
 };
 
-// ─── Mount ────────────────────────────────────────────────────────────────────
+// ─── Load ─────────────────────────────────────────────────────────────────────
 
-onUnmounted(() => {
-  if (nowInterval) clearInterval(nowInterval);
-});
-
-onMounted(async () => {
-  nowInterval = setInterval(() => {
-    now.value = Date.now();
-  }, 30_000);
-  loading.value = true;
+// `silent` is used by the background refresh: no skeleton, and no toast every minute
+// if the API is briefly unreachable — the last good data simply stays on screen.
+const load = async ({ silent = false } = {}) => {
+  if (!silent) loading.value = true;
   try {
     const today = new Date();
+    const day = localDateStr(today);
     const [logs, emps, vacations] = await Promise.all([
-      adminService.getAllTimeLogs({ dateFrom: todayStr, dateTo: todayStr }),
+      adminService.getAllTimeLogs({ dateFrom: day, dateTo: day }),
       // Admins don't track time, so they don't belong in the overview.
       adminService.getEmployees("Employee"),
       adminService.getAllVacationDays({ year: today.getFullYear(), month: today.getMonth() + 1 }),
     ]);
-    todayLogs.value = logs.filter((l) => l.date.split("T")[0] === todayStr);
-    employees.value = emps
+    const activeEmployees = emps
       .filter((e) => !e.isDisabled)
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
 
     const leaveTotals = new Map<string, number>();
     for (const v of vacations) {
-      if (v.date !== todayStr) continue;
+      if (v.date !== day) continue;
       leaveTotals.set(v.userId, (leaveTotals.get(v.userId) ?? 0) + v.amount);
     }
-    onLeaveToday.value = new Set([...leaveTotals].filter(([, a]) => a >= 1).map(([id]) => id));
 
     // One failing balance shouldn't blank the whole table — show "—" for that row instead.
     const results = await Promise.allSettled(
-      employees.value.map((e) => adminService.getEmployeeOvertime(e.id))
+      activeEmployees.map((e) => adminService.getEmployeeOvertime(e.id))
     );
     const byUser = new Map<string, OvertimeResultDto>();
     results.forEach((r, i) => {
-      if (r.status === "fulfilled") byUser.set(employees.value[i].id, r.value);
+      if (r.status === "fulfilled") byUser.set(activeEmployees[i].id, r.value);
     });
+
+    // Swap everything in at once so the table never shows a mix of old and new data.
+    todayStr.value = day;
+    todayLogs.value = logs.filter((l) => l.date.split("T")[0] === day);
+    employees.value = activeEmployees;
+    onLeaveToday.value = new Set([...leaveTotals].filter(([, a]) => a >= 1).map(([id]) => id));
     overtimeByUserId.value = byUser;
-    if (results.some((r) => r.status === "rejected")) toast.error("Failed to load some balances");
+    if (!silent && results.some((r) => r.status === "rejected")) toast.error("Failed to load some balances");
   } catch {
-    toast.error("Failed to load dashboard data");
+    if (!silent) toast.error("Failed to load dashboard data");
   } finally {
     loading.value = false;
   }
-});
+};
+
+onMounted(() => load());
+useAutoRefresh(() => load({ silent: true }));
 </script>
 
 <template>
