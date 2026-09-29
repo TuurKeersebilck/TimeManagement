@@ -31,8 +31,6 @@ import {
   MessageSquareTextIcon,
   CalendarIcon,
   StarIcon,
-  TrendingUpIcon,
-  TrendingDownIcon,
 } from "lucide-vue-next";
 import {
   Dialog,
@@ -178,49 +176,6 @@ const mergedRows = computed<MergedRow[] | null>(() => {
   return result;
 });
 
-// ─── Stats ────────────────────────────────────────────────────────────────────
-
-const hoursThisWeek = computed(() => {
-  const thisWeek = getWeekKey(toLocalDateStr(new Date()));
-  return allLogs.value
-    .filter((l) => getWeekKey(l.date) === thisWeek)
-    .reduce((sum, l) => sum + (l.totalHours ?? 0), 0)
-    .toFixed(2);
-});
-
-const flexBalance = ref<number | null>(null);
-const flexBalanceLoading = ref(false);
-
-function formatFlexHours(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
-
-const fetchFlexBalance = async () => {
-  flexBalanceLoading.value = true;
-  try {
-    if (selectedEmployeeId.value === "all") {
-      const results = await Promise.all(
-        employees.value.map((emp) => adminService.getEmployeeOvertime(emp.id))
-      );
-      flexBalance.value = results.reduce((sum, r) => sum + r.runningBalanceHours, 0);
-    } else {
-      const result = await adminService.getEmployeeOvertime(selectedEmployeeId.value);
-      flexBalance.value = result.runningBalanceHours;
-    }
-  } catch {
-    flexBalance.value = null;
-    toast.error("Failed to load flex balance");
-  } finally {
-    flexBalanceLoading.value = false;
-  }
-};
-
-watch(selectedEmployeeId, fetchFlexBalance);
-
 // ─── Predefined filters ───────────────────────────────────────────────────────
 
 function setFilter(preset: "today" | "this-week" | "this-month" | "last-month") {
@@ -333,7 +288,7 @@ onMounted(async () => {
   try {
     [allLogs.value, employees.value] = await Promise.all([
       adminService.getAllTimeLogs(),
-      adminService.getEmployees(),
+      adminService.getEmployees("Employee"),
     ]);
     const preselect = route.query.employeeId as string | undefined;
     if (preselect) {
@@ -344,7 +299,6 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-  fetchFlexBalance();
 });
 </script>
 
@@ -359,63 +313,6 @@ onMounted(async () => {
         </p>
       </div>
 
-      <!-- Stats -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Employees
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ employees.length }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Entries shown
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ allLogs.length }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            This week
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ hoursThisWeek }}h</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            {{ selectedEmployeeId === "all" ? "Total flex balance" : "Flex balance" }}
-          </p>
-          <p class="text-3xl font-bold flex items-center gap-1.5">
-            <span v-if="flexBalanceLoading || flexBalance === null" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <template v-else>
-              <component
-                :is="flexBalance >= 0 ? TrendingUpIcon : TrendingDownIcon"
-                class="size-5 shrink-0"
-                :class="flexBalance >= 0 ? 'text-emerald-500' : 'text-rose-500'"
-              />
-              <span :class="flexBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
-                {{ formatFlexHours(flexBalance) }}
-              </span>
-            </template>
-          </p>
-        </div>
-      </div>
-
       <!-- Filters -->
       <div class="card p-4 mb-3 flex flex-wrap items-end gap-3">
         <div class="flex-1 min-w-[180px] space-y-1.5">
@@ -428,6 +325,7 @@ onMounted(async () => {
               <SelectItem value="all">All employees</SelectItem>
               <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
                 {{ emp.fullName }}
+                <span v-if="emp.isDisabled" class="text-slate-400 dark:text-slate-500">(disabled)</span>
               </SelectItem>
             </SelectContent>
           </Select>
