@@ -11,11 +11,16 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class AdminService(AppDbContext context, UserManager<User> userManager, IMapper mapper) : IAdminService
+public class AdminService(
+    AppDbContext context,
+    UserManager<User> userManager,
+    IMapper mapper,
+    IOvertimeCalculationService overtimeService) : IAdminService
 {
     private readonly AppDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
     private readonly IMapper _mapper = mapper;
+    private readonly IOvertimeCalculationService _overtimeService = overtimeService;
 
     private static double CalcSessionHours(WorkSession s)
     {
@@ -386,7 +391,18 @@ public class AdminService(AppDbContext context, UserManager<User> userManager, I
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 
-    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    /// <summary>Everything both payroll exports read for one month, loaded once.</summary>
+    private sealed record PayrollData(
+        DateOnly MonthStart,
+        DateOnly LastDate,
+        List<User> Employees,
+        Dictionary<(string UserId, DateOnly Date), AdminDaySummaryDto> DaySummaries,
+        Func<string, DayOfWeek, decimal> BaseWeekdayTarget,
+        Dictionary<DateOnly, string> HolidayByDate,
+        Dictionary<(string UserId, DateOnly Date), AdminVacationDayDto> VacationsByUserDate,
+        Dictionary<string, MonthlySettlement> SettlementByUser);
+
+    private async Task<PayrollData> LoadPayrollDataAsync(int year, int month, string? userId, CancellationToken ct)
     {
         var monthStart = new DateOnly(year, month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -406,9 +422,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager, I
             .AsNoTracking()
             .Where(t => t.UserId == null || employeeIds.Contains(t.UserId))
             .ToListAsync(ct);
-
-        decimal GetBaseWeekdayTarget(string empUserId, DayOfWeek dayOfWeek) =>
-            TimeCalculationHelper.ResolveWorkdayTarget(workdayTargets, empUserId, dayOfWeek);
 
         var holidaysQuery = _context.PublicHolidays
             .AsNoTracking()
@@ -447,17 +460,36 @@ public class AdminService(AppDbContext context, UserManager<User> userManager, I
         var settlementByUser = await settlementsQuery
             .ToDictionaryAsync(s => s.UserId, s => s, ct);
 
+        return new PayrollData(
+            monthStart,
+            lastDate,
+            employees,
+            hoursByUserDate,
+            (empUserId, dayOfWeek) => TimeCalculationHelper.ResolveWorkdayTarget(workdayTargets, empUserId, dayOfWeek),
+            holidayByDate,
+            vacationsByUserDate,
+            settlementByUser);
+    }
+
+    /// <summary>
+    /// Original export: settlement summary block on top, then comma-separated daily rows with
+    /// worked hours to two decimals. Kept unchanged for admins who still rely on this layout.
+    /// </summary>
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    {
+        var data = await LoadPayrollDataAsync(year, month, userId, ct);
+
         var rows = new List<(DateOnly Date, string EmployeeName, double Hours, string VacationType, string Description)>();
 
-        foreach (var emp in employees)
+        foreach (var emp in data.Employees)
         {
-            for (var date = monthStart; date <= lastDate; date = date.AddDays(1))
+            for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
             {
-                var baseTarget = GetBaseWeekdayTarget(emp.Id, date.DayOfWeek);
-                holidayByDate.TryGetValue(date, out var holidayName);
+                var baseTarget = data.BaseWeekdayTarget(emp.Id, date.DayOfWeek);
+                data.HolidayByDate.TryGetValue(date, out var holidayName);
                 var isHoliday = baseTarget > 0 && holidayName != null;
-                var hasVacation = vacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
-                hoursByUserDate.TryGetValue((emp.Id, date), out var daySummary);
+                var hasVacation = data.VacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
+                data.DaySummaries.TryGetValue((emp.Id, date), out var daySummary);
                 var workedHours = daySummary?.TotalHours ?? 0.0;
 
                 if (baseTarget == 0 && workedHours == 0 && !hasVacation && !isHoliday)
@@ -485,9 +517,9 @@ public class AdminService(AppDbContext context, UserManager<User> userManager, I
 
         sb.AppendLine("OVERTIME SUMMARY");
         sb.AppendLine("Employee,Approved Overtime Hours,Outcome,Notes");
-        foreach (var emp in employees)
+        foreach (var emp in data.Employees)
         {
-            settlementByUser.TryGetValue(emp.Id, out var settlement);
+            data.SettlementByUser.TryGetValue(emp.Id, out var settlement);
             var approvedOvertime = settlement?.PaidOutHours?.ToString("F2", CultureInfo.InvariantCulture) ?? "";
             var outcome = settlement?.Outcome?.ToString() ?? "";
             var notes = settlement?.Notes ?? "";
@@ -512,11 +544,139 @@ public class AdminService(AppDbContext context, UserManager<User> userManager, I
         return sb.ToString();
     }
 
+    /// <summary>
+    /// New export for entering hours into payroll: one ';'-separated row per employee per day with
+    /// worked hours and overtime as quarter-hour decimals (30 min = 0.5), leave type and days, and
+    /// WFH, followed by month totals and the settlement's approved overtime.
+    /// </summary>
+    public async Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    {
+        var data = await LoadPayrollDataAsync(year, month, userId, ct);
+
+        var rows = new List<PayrollRow>();
+        var totalsByUser = new Dictionary<string, (decimal Worked, decimal Overtime)>();
+
+        foreach (var emp in data.Employees)
+        {
+            // Same per-day numbers as the monthly settlement (auto-deducted minimum break,
+            // leave-adjusted targets), so the export always reconciles with the balance.
+            var perDayByDate = (await _overtimeService.CalculateAsync(emp.Id, year, month, ct))
+                .PerDay.ToDictionary(d => d.Date);
+
+            decimal totalWorked = 0, totalOvertime = 0;
+
+            for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
+            {
+                var baseTarget = data.BaseWeekdayTarget(emp.Id, date.DayOfWeek);
+                data.HolidayByDate.TryGetValue(date, out var holidayName);
+                var isHoliday = baseTarget > 0 && holidayName != null;
+                var hasVacation = data.VacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
+                data.DaySummaries.TryGetValue((emp.Id, date), out var daySummary);
+                perDayByDate.TryGetValue(date, out var perDay);
+
+                var workedHours = RoundToQuarter(perDay?.WorkedHours ?? 0m);
+                var overtimeHours = Math.Max(0m, RoundToQuarter(workedHours - (perDay?.TargetHours ?? 0m)));
+                var hasWorked = workedHours > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
+
+                if (baseTarget == 0 && !hasWorked && !hasVacation && !isHoliday)
+                    continue;
+
+                string leaveTypeCell;
+                if (isHoliday)
+                    leaveTypeCell = $"Holiday: {holidayName}";
+                else if (hasVacation)
+                    leaveTypeCell = vacation!.VacationTypeName;
+                else if (baseTarget > 0 && !hasWorked && daySummary?.HasOpenSession != true)
+                    leaveTypeCell = "Missing Log";
+                else
+                    leaveTypeCell = "";
+
+                var description = hasVacation && !string.IsNullOrEmpty(vacation!.Note)
+                    ? vacation.Note
+                    : daySummary?.Description ?? "";
+
+                rows.Add(new PayrollRow(
+                    date,
+                    emp.FullName,
+                    workedHours,
+                    overtimeHours,
+                    leaveTypeCell,
+                    hasVacation ? vacation!.Amount : null,
+                    hasWorked ? (daySummary?.WorkedFromHome == true ? "Yes" : "No") : "",
+                    description ?? ""));
+
+                totalWorked += workedHours;
+                totalOvertime += overtimeHours;
+            }
+
+            totalsByUser[emp.Id] = (totalWorked, totalOvertime);
+        }
+
+        var sb = new System.Text.StringBuilder();
+
+        // The daily table comes first so it can be read or copied as-is from row 1.
+        sb.AppendLine(CsvRow("Date", "Day", "Employee", "Hours Worked", "Overtime", "Leave Type", "Leave Days", "WFH", "Description"));
+        foreach (var row in rows.OrderBy(r => r.Date).ThenBy(r => r.EmployeeName))
+        {
+            sb.AppendLine(CsvRow(
+                row.Date.ToString("yyyy-MM-dd"),
+                row.Date.DayOfWeek.ToString(),
+                CsvEscape(row.EmployeeName),
+                FormatHours(row.WorkedHours),
+                FormatHours(row.OvertimeHours),
+                CsvEscape(row.LeaveType),
+                row.LeaveDays is { } days ? FormatHours(days) : "",
+                row.Wfh,
+                CsvEscape(row.Description)));
+        }
+
+        // Month totals, plus what was actually decided at settlement (blank until confirmed).
+        sb.AppendLine();
+        sb.AppendLine(CsvRow("Employee", "Total Hours Worked", "Total Overtime", "Approved Overtime (settlement)", "Outcome", "Notes"));
+        foreach (var emp in data.Employees)
+        {
+            data.SettlementByUser.TryGetValue(emp.Id, out var settlement);
+            var totals = totalsByUser[emp.Id];
+            sb.AppendLine(CsvRow(
+                CsvEscape(emp.FullName),
+                FormatHours(totals.Worked),
+                FormatHours(totals.Overtime),
+                settlement?.PaidOutHours is { } paid ? FormatHours(paid) : "",
+                CsvEscape(settlement?.Outcome?.ToString() ?? ""),
+                CsvEscape(settlement?.Notes ?? "")));
+        }
+
+        return sb.ToString();
+    }
+
+    private sealed record PayrollRow(
+        DateOnly Date,
+        string EmployeeName,
+        decimal WorkedHours,
+        decimal OvertimeHours,
+        string LeaveType,
+        decimal? LeaveDays,
+        string Wfh,
+        string Description);
+
+    // Semicolon-separated: Excel with Belgian/Dutch regional settings splits on ';', not ','.
+    private const string CsvSeparator = ";";
+
+    private static string CsvRow(params string[] cells) => string.Join(CsvSeparator, cells);
+
+    /// <summary>Rounds to the nearest quarter hour (15 min), the unit payroll works in.</summary>
+    private static decimal RoundToQuarter(decimal hours) =>
+        Math.Round(hours * 4, MidpointRounding.AwayFromZero) / 4;
+
+    /// <summary>Decimal hours with a dot and no trailing zeros: 8, 7.75, 0.5.</summary>
+    private static string FormatHours(decimal hours) =>
+        hours.ToString("0.##", CultureInfo.InvariantCulture);
+
     private static string CsvEscape(string value)
     {
         if (value.Length > 0 && (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@'))
             value = "'" + value;
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+        if (value.Contains(';') || value.Contains(',') || value.Contains('"') || value.Contains('\n'))
             return $"\"{value.Replace("\"", "\"\"")}\"";
         return value;
     }

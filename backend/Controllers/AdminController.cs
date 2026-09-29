@@ -223,6 +223,23 @@ public class AdminController(
         return File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", filename);
     }
 
+    [HttpGet("export/daily")]
+    public async Task<IActionResult> ExportDailyPayroll(
+        [FromQuery] int year,
+        [FromQuery] int month,
+        [FromQuery] string? userId,
+        CancellationToken ct = default)
+    {
+        if (year < 2000 || year > 2100 || month < 1 || month > 12)
+            return BadRequest("Invalid year or month.");
+
+        var csv = await _adminService.GenerateDailyPayrollCsvAsync(year, month, userId, ct);
+        var filename = $"hours_{year}_{month:D2}.csv";
+        // BOM so Excel detects UTF-8 and doesn't mangle accented names and notes.
+        var bytes = System.Text.Encoding.UTF8.GetPreamble().Concat(System.Text.Encoding.UTF8.GetBytes(csv)).ToArray();
+        return File(bytes, "text/csv; charset=utf-8", filename);
+    }
+
     // ─── Vacation overview ────────────────────────────────────────────────────
 
     [HttpGet("vacations")]

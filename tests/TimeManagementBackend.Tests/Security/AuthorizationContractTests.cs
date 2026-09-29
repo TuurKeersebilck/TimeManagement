@@ -33,6 +33,7 @@ public class AuthorizationContractTests
             "AdminController.DeleteVacationType",
             "AdminController.DisableEmployee",
             "AdminController.EnableEmployee",
+            "AdminController.ExportDailyPayroll",
             "AdminController.ExportPayroll",
             "AdminController.GetAllTimeLogs",
             "AdminController.GetAllVacationDays",

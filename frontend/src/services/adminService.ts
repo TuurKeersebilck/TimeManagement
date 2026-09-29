@@ -86,6 +86,15 @@ export interface CreateTimeBankAdjustmentInput {
   reason: string;
 }
 
+function saveCsv(data: BlobPart, filename: string) {
+  const url = URL.createObjectURL(new Blob([data], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export const adminService = {
   async getAllTimeLogs(params?: {
     userId?: string;
@@ -147,17 +156,34 @@ export const adminService = {
     return res.data;
   },
 
+  /** Original export (settlement summary on top, comma-separated, two-decimal hours). */
   async downloadPayrollExport(year: number, month: number, userId?: string): Promise<void> {
     const response = await apiClient.get("/admin/export", {
       params: { year, month, userId: userId || undefined },
       responseType: "blob",
     });
-    const url = URL.createObjectURL(new Blob([response.data], { type: "text/csv" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `payroll_${year}_${String(month).padStart(2, "0")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    saveCsv(response.data, `payroll_${year}_${String(month).padStart(2, "0")}.csv`);
+  },
+
+  /** New per-day export for payroll entry: quarter-hour decimals, overtime, leave and WFH. */
+  async downloadDailyPayrollExport(
+    year: number,
+    month: number,
+    userId?: string,
+    employeeName?: string
+  ): Promise<void> {
+    const response = await apiClient.get("/admin/export/daily", {
+      params: { year, month, userId: userId || undefined },
+      responseType: "blob",
+    });
+    // Per-employee exports get the name in the filename so separate downloads don't collide.
+    const slug = employeeName
+      ?.normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+    saveCsv(response.data, `hours_${year}_${String(month).padStart(2, "0")}${slug ? `_${slug}` : ""}.csv`);
   },
 
   async getAllVacationDays(filters?: {

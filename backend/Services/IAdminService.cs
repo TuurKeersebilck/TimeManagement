@@ -28,6 +28,7 @@ public interface IAdminService
 
     // Payroll export
     Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default);
+    Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default);
 
     // Working hours targets
     Task<EmployeeTargetDto> GetEmployeeTargetAsync(string userId, CancellationToken ct = default);
