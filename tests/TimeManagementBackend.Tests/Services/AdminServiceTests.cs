@@ -625,9 +625,9 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
 
     // ── Daily payroll export (new) ────────────────────────────────────────────────────────
     // The admin keys these numbers into the payroll provider by hand, so the format is part of
-    // the contract: ';'-separated, decimal hours with a dot (30 min = 0.5), quarter-hour rounding.
+    // the contract: ';'-separated, exact decimal hours with a dot and two decimals (30 min = 0.5).
 
-    private const string DailyHeader = "Date;Day;Employee;Hours Worked;Overtime;Leave Type;Leave Days;WFH;Description";
+    private const string DailyHeader = "Date;Day;Employee;Hours Worked;Overtime;Leave Type;Leave Days;WFH";
     private const string TotalsHeader = "Employee;Total Hours Worked;Total Overtime;Approved Overtime (settlement);Outcome;Notes";
 
     private async Task<string> MondayRowAsync() =>
@@ -653,7 +653,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), new TimeSpan(17, 30, 0));
         await Db.SaveChangesAsync();
 
-        Assert.Equal("2026-03-02;Monday;Emma Employee;8.5;0.5;;;No;", await MondayRowAsync());
+        Assert.Equal("2026-03-02;Monday;Emma Employee;8.5;0.5;;;No", await MondayRowAsync());
     }
 
     [Theory]
@@ -667,23 +667,39 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), new TimeSpan(outHour, outMinute, 0));
         await Db.SaveChangesAsync();
 
-        Assert.Equal($"2026-03-02;Monday;Emma Employee;{worked};{overtime};;;No;", await MondayRowAsync());
+        Assert.Equal($"2026-03-02;Monday;Emma Employee;{worked};{overtime};;;No", await MondayRowAsync());
     }
 
     [Fact]
-    public async Task DailyPayroll_RoundsToTheNearestQuarterHour()
+    public async Task DailyPayroll_ReportsExactHoursWithoutRounding()
     {
         var user = await ArrangeMondayOnlyEmployeeAsync();
-        // 7h40 → 7.75 (7.667 is closer to 7.75 than to 7.5)
+        // 7h40 → 7.67, not rounded to a quarter hour
         Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), new TimeSpan(16, 40, 0));
-        // 8h05 → 8, so five extra minutes don't become overtime
+        // 8h05 → 8.08, so even five extra minutes show up as overtime
         Db.AddClosedSession(user.Id, new DateOnly(2026, 3, 9), TimeSpan.FromHours(9), new TimeSpan(17, 5, 0));
         await Db.SaveChangesAsync();
 
         var lines = Lines(await NewService().GenerateDailyPayrollCsvAsync(2026, 3));
 
-        Assert.Equal("2026-03-02;Monday;Emma Employee;7.75;0;;;No;", lines.Single(l => l.StartsWith("2026-03-02;")));
-        Assert.Equal("2026-03-09;Monday;Emma Employee;8;0;;;No;", lines.Single(l => l.StartsWith("2026-03-09;")));
+        Assert.Equal("2026-03-02;Monday;Emma Employee;7.67;0;;;No", lines.Single(l => l.StartsWith("2026-03-02;")));
+        Assert.Equal("2026-03-09;Monday;Emma Employee;8.08;0.08;;;No", lines.Single(l => l.StartsWith("2026-03-09;")));
+    }
+
+    [Fact]
+    public async Task DailyPayroll_TotalsAddUpExactMinutesNotRoundedRows()
+    {
+        // Three days of 8h20 (8.33 each when written). Summing the written values would give
+        // 24.99; the total must be the exact 25h.
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        foreach (var day in new[] { 2, 9, 16 })
+            Db.AddClosedSession(user.Id, new DateOnly(2026, 3, day), TimeSpan.FromHours(9), new TimeSpan(17, 20, 0));
+        await Db.SaveChangesAsync();
+
+        var lines = Lines(await NewService().GenerateDailyPayrollCsvAsync(2026, 3, user.Id));
+
+        Assert.Equal("2026-03-02;Monday;Emma Employee;8.33;0.33;;;No", lines.Single(l => l.StartsWith("2026-03-02;")));
+        Assert.StartsWith("Emma Employee;25;1;", lines[lines.IndexOf(TotalsHeader) + 1]);
     }
 
     [Fact]
@@ -693,7 +709,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(15));
         await Db.SaveChangesAsync();
 
-        Assert.Equal("2026-03-02;Monday;Emma Employee;6;0;;;No;", await MondayRowAsync());
+        Assert.Equal("2026-03-02;Monday;Emma Employee;6;0;;;No", await MondayRowAsync());
     }
 
     [Fact]
@@ -704,7 +720,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17)); // no break logged
         await Db.SaveChangesAsync();
 
-        Assert.Equal("2026-03-02;Monday;Emma Employee;7.5;0;;;No;", await MondayRowAsync());
+        Assert.Equal("2026-03-02;Monday;Emma Employee;7.5;0;;;No", await MondayRowAsync());
     }
 
     [Fact]
@@ -715,7 +731,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Db.WorkDays.Add(new WorkDay { UserId = user.Id, Date = Monday, WorkedFromHome = true });
         await Db.SaveChangesAsync();
 
-        Assert.Equal("2026-03-02;Monday;Emma Employee;8;0;;;Yes;", await MondayRowAsync());
+        Assert.Equal("2026-03-02;Monday;Emma Employee;8;0;;;Yes", await MondayRowAsync());
     }
 
     [Fact]
@@ -729,7 +745,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         await Db.SaveChangesAsync();
 
         // Target is 4h on a half leave day, so 4.5h worked is 0.5h overtime.
-        Assert.Equal("2026-03-02;Monday;Emma Employee;4.5;0.5;Annual Leave;0.5;No;Dentist", await MondayRowAsync());
+        Assert.Equal("2026-03-02;Monday;Emma Employee;4.5;0.5;Annual Leave;0.5;No", await MondayRowAsync());
     }
 
     [Fact]
@@ -773,7 +789,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         var lines = Lines(await NewService().GenerateDailyPayrollCsvAsync(2026, 3));
 
         Assert.DoesNotContain(lines, l => l.StartsWith("2026-03-02;") || l.StartsWith("2026-03-09;"));
-        Assert.Equal("2026-03-16;Monday;Emma Employee;8;0;;;No;", lines.Single(l => l.StartsWith("2026-03-16;")));
+        Assert.Equal("2026-03-16;Monday;Emma Employee;8;0;;;No", lines.Single(l => l.StartsWith("2026-03-16;")));
         Assert.Contains("Missing Log", lines.Single(l => l.StartsWith("2026-03-23;"))); // after the start it still counts
     }
 
@@ -800,7 +816,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
 
         Assert.Contains("Holiday: Easter Monday", lines.Single(l => l.StartsWith("2026-03-02;")));
         var leaveRow = lines.Single(l => l.StartsWith("2026-03-09;"));
-        Assert.Equal("2026-03-09;Monday;Emma Employee;0;0;Annual Leave;1;;Family trip", leaveRow);
+        Assert.Equal("2026-03-09;Monday;Emma Employee;0;0;Annual Leave;1;", leaveRow);
     }
 
     [Fact]
@@ -826,7 +842,7 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         var row = Lines(await NewService().GenerateDailyPayrollCsvAsync(2026, 3))
             .Single(l => l.StartsWith("2026-03-07;"));
 
-        Assert.Equal("2026-03-07;Saturday;Emma Employee;4;4;;;No;", row);
+        Assert.Equal("2026-03-07;Saturday;Emma Employee;4;4;;;No", row);
     }
 
     [Fact]
@@ -860,12 +876,12 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
     [Fact]
     public async Task DailyPayroll_NeutralisesSpreadsheetFormulaInjection()
     {
-        // A note starting with = + - or @ is executed as a formula by Excel and Sheets, so the
-        // export prefixes an apostrophe to keep an employee's free text from becoming code.
+        // Text starting with = + - or @ is executed as a formula by Excel and Sheets, so the export
+        // prefixes an apostrophe. Leave notes aren't exported; the leave type name still is.
         var user = await ArrangeMondayOnlyEmployeeAsync();
-        var type = Db.AddVacationType("Annual Leave");
+        var type = Db.AddVacationType("=HYPERLINK(\"http://evil.test\")");
         await Db.SaveChangesAsync();
-        Db.AddVacationDay(user.Id, type, Monday, 1.0m, "=HYPERLINK(\"http://evil.test\")");
+        Db.AddVacationDay(user.Id, type, Monday, 1.0m);
         await Db.SaveChangesAsync();
 
         var row = await MondayRowAsync();
@@ -878,15 +894,32 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
     [InlineData("+1234")]
     [InlineData("-cmd")]
     [InlineData("@SUM(A1)")]
-    public async Task DailyPayroll_NeutralisesEveryFormulaPrefix(string note)
+    public async Task DailyPayroll_NeutralisesEveryFormulaPrefix(string typeName)
+    {
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        var type = Db.AddVacationType(typeName);
+        await Db.SaveChangesAsync();
+        Db.AddVacationDay(user.Id, type, Monday, 1.0m);
+        await Db.SaveChangesAsync();
+
+        Assert.Contains($"'{typeName}", await MondayRowAsync());
+    }
+
+    [Fact]
+    public async Task DailyPayroll_LeavesOutFreeTextDescriptions()
     {
         var user = await ArrangeMondayOnlyEmployeeAsync();
         var type = Db.AddVacationType("Annual Leave");
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        Db.WorkDays.Add(new WorkDay { UserId = user.Id, Date = Monday, Description = "Client workshop" });
         await Db.SaveChangesAsync();
-        Db.AddVacationDay(user.Id, type, Monday, 1.0m, note);
+        Db.AddVacationDay(user.Id, type, new DateOnly(2026, 3, 9), 1.0m, "Family trip");
         await Db.SaveChangesAsync();
 
-        Assert.Contains($"'{note}", await MondayRowAsync());
+        var csv = await NewService().GenerateDailyPayrollCsvAsync(2026, 3);
+
+        Assert.DoesNotContain("Client workshop", csv);
+        Assert.DoesNotContain("Family trip", csv);
     }
 
     // ── Time-logs summary cards ───────────────────────────────────────────────
