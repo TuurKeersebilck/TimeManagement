@@ -113,45 +113,46 @@ public class AdminService(
         var employeesQuery = _context.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee);
         if (!string.IsNullOrEmpty(userId))
             employeesQuery = employeesQuery.Where(u => u.Id == userId);
-        var employees = await employeesQuery.Select(u => new { u.Id, u.IsDisabled }).ToListAsync(ct);
-        var employeeIds = employees.Select(e => e.Id).ToList();
+        var employeeIds = await employeesQuery.Select(u => u.Id).ToListAsync(ct);
 
-        // There is no hire or leave date, so each employee's first and last logged session stand in
-        // for it — otherwise the days before someone joined would all count as a deficit.
-        var activity = await _context.WorkSessions
+        // Which days count for an employee (from their start, until they leave) is decided by the
+        // shared balance calculation; the first logged day here only limits how many months we
+        // need to calculate. Someone who hasn't clocked in yet only has today.
+        var firstDayByUser = await _context.WorkSessions
             .AsNoTracking()
             .Where(s => employeeIds.Contains(s.UserId))
             .GroupBy(s => s.UserId)
-            .Select(g => new { UserId = g.Key, First = g.Min(s => s.Date), Last = g.Max(s => s.Date) })
-            .ToDictionaryAsync(a => a.UserId, ct);
+            .Select(g => new { UserId = g.Key, First = g.Min(s => s.Date) })
+            .ToDictionaryAsync(a => a.UserId, a => a.First, ct);
 
-        decimal worked = 0, flex = 0;
-        foreach (var emp in employees)
+        // Summed in whole minutes: per-day hours are rounded to 0.01h (< 30 s), so rounding them
+        // back to minutes recovers the exact values the monthly balance is built from, instead of
+        // letting the rounding drift add up over a long period.
+        long workedMinutes = 0, flexMinutes = 0;
+        decimal adjustmentHours = 0;
+        foreach (var employeeId in employeeIds)
         {
-            if (!activity.TryGetValue(emp.Id, out var act))
-                continue;
-
-            var start = dateFrom is { } from && from > act.First ? from : act.First;
-            var end = emp.IsDisabled && act.Last < to ? act.Last : to;
-            if (start > end)
+            var firstDay = firstDayByUser.TryGetValue(employeeId, out var first) ? first : today;
+            var start = dateFrom is { } from && from > firstDay ? from : firstDay;
+            if (start > to)
                 continue;
 
             // Same per-day numbers as the monthly settlement, summed over just the requested days.
-            for (var month = new DateOnly(start.Year, start.Month, 1); month <= end; month = month.AddMonths(1))
+            for (var month = new DateOnly(start.Year, start.Month, 1); month <= to; month = month.AddMonths(1))
             {
-                var result = await _overtimeService.CalculateAsync(emp.Id, month.Year, month.Month, ct);
-                foreach (var day in result.PerDay.Where(d => d.Date >= start && d.Date <= end))
+                var result = await _overtimeService.CalculateAsync(employeeId, month.Year, month.Month, ct);
+                foreach (var day in result.PerDay.Where(d => d.Date >= start && d.Date <= to))
                 {
-                    worked += day.WorkedHours;
-                    flex += day.FlexDelta;
+                    workedMinutes += (long)Math.Round(day.WorkedHours * 60);
+                    flexMinutes += (long)Math.Round(day.FlexDelta * 60);
                 }
             }
 
-            flex += await _context.TimeBankAdjustments
-                .Where(a => a.UserId == emp.Id
+            adjustmentHours += await _context.TimeBankAdjustments
+                .Where(a => a.UserId == employeeId
                          && a.SourceSettlementId == null
                          && a.EffectiveDate >= start
-                         && a.EffectiveDate <= end)
+                         && a.EffectiveDate <= to)
                 .SumAsync(a => (decimal?)a.Hours, ct) ?? 0m;
         }
 
@@ -165,8 +166,8 @@ public class AdminService(
 
         return new TimeLogSummaryDto
         {
-            WorkedHours = Math.Round(worked, 2),
-            FlexHours = Math.Round(flex, 2),
+            WorkedHours = Math.Round(workedMinutes / 60m, 2),
+            FlexHours = Math.Round((flexMinutes + (long)Math.Round(adjustmentHours * 60)) / 60m, 2),
             WfhDays = await wfhQuery.CountAsync(ct),
         };
     }
@@ -648,6 +649,13 @@ public class AdminService(
                 var hasWorked = workedHours > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
 
                 if (baseTarget == 0 && !hasWorked && !hasVacation && !isHoliday)
+                    continue;
+
+                // A scheduled working day that the balance gives no target, without leave or a
+                // holiday explaining it, lies before the employee's start or after they left —
+                // not a "Missing Log", so leave it out like any other day they weren't employed.
+                var outsideEmployment = baseTarget > 0 && !isHoliday && !hasVacation && perDay?.TargetHours == 0;
+                if (outsideEmployment && !hasWorked)
                     continue;
 
                 string leaveTypeCell;
