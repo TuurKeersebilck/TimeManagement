@@ -18,8 +18,7 @@ const toast = useAppToast();
 const employees = ref<Employee[]>([]);
 const selectedEmployeeId = ref<string>("all");
 const loading = ref(false);
-// Which export is running, so only that button shows the spinner text.
-const exporting = ref<"classic" | "daily" | null>(null);
+const exporting = ref(false);
 
 const now = new Date();
 const selectedYear = ref<string>(String(now.getFullYear()));
@@ -50,27 +49,21 @@ const selectedEmployeeName = computed(() => {
   return employees.value.find((e) => e.id === selectedEmployeeId.value)?.fullName ?? "";
 });
 
-const handleExport = async (kind: "classic" | "daily") => {
-  exporting.value = kind;
+const handleExport = async () => {
+  exporting.value = true;
   const userId = selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value;
-  const year = Number(selectedYear.value);
-  const month = Number(selectedMonth.value);
   try {
-    if (kind === "daily") {
-      await adminService.downloadDailyPayrollExport(
-        year,
-        month,
-        userId,
-        userId ? selectedEmployeeName.value : undefined
-      );
-    } else {
-      await adminService.downloadPayrollExport(year, month, userId);
-    }
+    await adminService.downloadDailyPayrollExport(
+      Number(selectedYear.value),
+      Number(selectedMonth.value),
+      userId,
+      userId ? selectedEmployeeName.value : undefined
+    );
     toast.success(`Payroll exported for ${selectedMonthLabel.value} ${selectedYear.value}`);
   } catch {
     toast.error("Failed to generate export");
   } finally {
-    exporting.value = null;
+    exporting.value = false;
   }
 };
 
@@ -148,43 +141,25 @@ onMounted(async () => {
         </div>
 
         <!-- What's included -->
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div class="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm text-slate-600 dark:text-slate-400">
-            <p class="font-medium text-slate-800 dark:text-slate-200 mb-2">Export (new)</p>
-            <ul class="space-y-1 list-disc list-inside">
-              <li>One row per employee per day: hours worked and overtime that day</li>
-              <li>Exact decimal hours with two decimals (30 min = 0.5, 40 min = 0.67), ready to enter in payroll</li>
-              <li>Leave type and days (1 or 0.5), holiday or "Missing Log"</li>
-              <li>Worked from home (WFH)</li>
-              <li>Month totals with the approved overtime from the settlement</li>
-            </ul>
-          </div>
-          <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4 text-sm text-slate-600 dark:text-slate-400">
-            <p class="font-medium text-slate-800 dark:text-slate-200 mb-2">Export (original)</p>
-            <ul class="space-y-1 list-disc list-inside">
-              <li>Overtime summary on top: approved paid overtime, outcome and notes (blank until confirmed)</li>
-              <li>One row per employee per working day with hours worked (two decimals)</li>
-              <li>Vacation type, public holiday or "Missing Log"</li>
-              <li>Description: the vacation note, or the employee's work note</li>
-            </ul>
-          </div>
+        <div class="rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 p-4 text-sm text-slate-600 dark:text-slate-400 space-y-1">
+          <p class="font-medium text-slate-700 dark:text-slate-300 mb-2">The CSV includes:</p>
+          <ul class="space-y-1 list-disc list-inside">
+            <li>One row per employee per day: hours worked and overtime that day (negative on a day under target)</li>
+            <li>Exact decimal hours with two decimals (30 min = 0.5, 40 min = 0.67), ready to enter in payroll</li>
+            <li>Leave type and days (1 or 0.5), holiday or "Missing Log"</li>
+            <li>Worked from home (WFH)</li>
+            <li>Month totals: overtime, carry-overs and adjustments, the flex balance (as on the dashboard) and the approved overtime from the settlement — the hours to pay out</li>
+          </ul>
         </div>
 
-        <p class="text-xs text-muted-foreground">
-          {{ selectedMonthLabel }} {{ selectedYear }} — {{ selectedEmployeeName }}
-        </p>
-
-        <!-- Export buttons -->
-        <div class="grid gap-3 sm:grid-cols-2">
-          <Button :disabled="exporting !== null" @click="handleExport('daily')">
-            <DownloadIcon class="size-4 mr-2" />
-            {{ exporting === "daily" ? "Generating…" : "Export (new)" }}
-          </Button>
-          <Button variant="outline" :disabled="exporting !== null" @click="handleExport('classic')">
-            <DownloadIcon class="size-4 mr-2" />
-            {{ exporting === "classic" ? "Generating…" : "Export" }}
-          </Button>
-        </div>
+        <!-- Export button -->
+        <Button class="w-full" :disabled="exporting" @click="handleExport">
+          <DownloadIcon class="size-4 mr-2" />
+          <span v-if="exporting">Generating…</span>
+          <span v-else>
+            Export {{ selectedMonthLabel }} {{ selectedYear }} — {{ selectedEmployeeName }}
+          </span>
+        </Button>
       </div>
     </div>
   </div>
