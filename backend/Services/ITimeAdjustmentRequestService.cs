@@ -10,4 +10,5 @@ public interface ITimeAdjustmentRequestService
     Task<string> ApproveAsync(string rawToken, CancellationToken ct = default);
     Task ApproveByIdAsync(int requestId, string adminUserId, CancellationToken ct = default);
     Task RejectAsync(int requestId, string adminUserId, CancellationToken ct = default);
+    Task EditDayAsAdminAsync(AdminEditDayDto dto, string adminUserId, CancellationToken ct = default);
 }

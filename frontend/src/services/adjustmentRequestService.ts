@@ -12,6 +12,8 @@ export interface AdjustmentRequest {
   status: AdjustmentRequestStatus;
   requestedAt: string;
   reviewedAt: string | null;
+  /** True when an admin edited the day directly; kept as an approved request for the history. */
+  isAdminEdit: boolean;
 }
 
 export interface SnapshotBreak {
@@ -29,6 +31,14 @@ export interface SnapshotSession {
 
 export interface DesiredDaySnapshot {
   sessions: SnapshotSession[];
+}
+
+export interface AdminEditDayPayload {
+  userId: string;
+  date: string;
+  /** The day's full intended state; an empty session list removes the day's hours. */
+  desiredDaySnapshot: DesiredDaySnapshot;
+  reason?: string;
 }
 
 export interface CreateAdjustmentRequestPayload {
@@ -56,5 +66,10 @@ export const adjustmentRequestService = {
 
   reject(id: number): Promise<void> {
     return api.post(`/timeadjustmentrequests/${id}/reject`).then(() => undefined);
+  },
+
+  /** Admin: replace an employee's sessions for one day directly, without a request. */
+  adminEditDay(payload: AdminEditDayPayload): Promise<void> {
+    return api.post("/timeadjustmentrequests/admin-edit", payload).then(() => undefined);
   },
 };

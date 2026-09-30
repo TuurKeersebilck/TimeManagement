@@ -611,4 +611,167 @@ public class TimeAdjustmentRequestServiceTests(PostgresFixture fixture) : Databa
         Assert.True(all[0].RequestedAt >= all[1].RequestedAt);
         Assert.All(all, r => Assert.NotEmpty(r.EmployeeName));
     }
+
+    // ── Admin direct edit ─────────────────────────────────────────────────────
+    // Admins can rewrite a day themselves instead of waiting for an employee's request. It must
+    // reuse the same snapshot rules, keep a history, and stay out of the employee's way.
+
+    private static AdminEditDayDto AdminEdit(string userId, DesiredDaySnapshotDto snapshot, string? reason = null)
+        => new() { UserId = userId, Date = Date, DesiredDaySnapshot = snapshot, Reason = reason };
+
+    private async Task<(User Employee, User Admin)> ArrangeEmployeeAndAdminAsync()
+    {
+        var employee = await ArrangeUserAsync();
+        var admin = Db.AddUser("Ada Admin", UserRole.Admin);
+        await Db.SaveChangesAsync();
+        return (employee, admin);
+    }
+
+    private async Task<List<WorkSession>> SessionsOnDateAsync(string userId) =>
+        await NewContext().WorkSessions.Include(s => s.Breaks)
+            .Where(s => s.UserId == userId && s.Date == Date).OrderBy(s => s.ClockIn).ToListAsync();
+
+    [Fact]
+    public async Task AdminEdit_UpdatesExistingSessionsAndBreaksInPlace()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var existing = Db.AddClosedSession(employee.Id, Date, TimeSpan.FromHours(9), TimeSpan.FromHours(17),
+            aBreak: (TimeSpan.FromHours(12), new TimeSpan(12, 30, 0)));
+        await Db.SaveChangesAsync();
+        var breakId = existing.Breaks.Single().Id;
+
+        await NewService().EditDayAsAdminAsync(AdminEdit(employee.Id,
+            Snapshot(Session(At(8, 30), At(17, 15), existing.Id, Break(At(12), At(12, 45), breakId)))), admin.Id);
+
+        var session = Assert.Single(await SessionsOnDateAsync(employee.Id));
+        Assert.Equal(existing.Id, session.Id);
+        Assert.Equal(At(8, 30), session.ClockIn);
+        Assert.Equal(At(17, 15), session.ClockOut);
+        Assert.Equal(At(12, 45), Assert.Single(session.Breaks).BreakEnd);
+    }
+
+    [Fact]
+    public async Task AdminEdit_CanAddHoursForADayWithoutSessions()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+
+        await NewService().EditDayAsAdminAsync(AdminEdit(employee.Id, Snapshot(Session(At(9), At(17)))), admin.Id);
+
+        var session = Assert.Single(await SessionsOnDateAsync(employee.Id));
+        Assert.Equal(WorkSessionStatus.Closed, session.Status);
+        Assert.Equal(Date, session.Date);
+    }
+
+    [Fact]
+    public async Task AdminEdit_WithNoSessionsRemovesTheDay()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        Db.AddClosedSession(employee.Id, Date, TimeSpan.FromHours(9), TimeSpan.FromHours(17),
+            aBreak: (TimeSpan.FromHours(12), new TimeSpan(12, 30, 0)));
+        await Db.SaveChangesAsync();
+
+        await NewService().EditDayAsAdminAsync(AdminEdit(employee.Id, Snapshot()), admin.Id);
+
+        Assert.Empty(await SessionsOnDateAsync(employee.Id));
+        Assert.Empty(await NewContext().BreakRecords.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdminEdit_ResolvesAnAutoClosedSession()
+    {
+        // The common case: the employee forgot to clock out and the session was invalidated.
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var invalidated = Db.AddOpenSession(employee.Id, Date, TimeSpan.FromHours(9));
+        invalidated.Status = WorkSessionStatus.Invalidated;
+        await Db.SaveChangesAsync();
+
+        await NewService().EditDayAsAdminAsync(
+            AdminEdit(employee.Id, Snapshot(Session(At(9), At(17, 30), invalidated.Id)), "Forgot to clock out"), admin.Id);
+
+        var session = Assert.Single(await SessionsOnDateAsync(employee.Id));
+        Assert.Equal(WorkSessionStatus.Closed, session.Status);
+        Assert.Equal(At(17, 30), session.ClockOut);
+    }
+
+    [Fact]
+    public async Task AdminEdit_RefusesADayTheEmployeeIsClockedInOn()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var open = Db.AddOpenSession(employee.Id, Date, TimeSpan.FromHours(9));
+        await Db.SaveChangesAsync();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => NewService().EditDayAsAdminAsync(
+            AdminEdit(employee.Id, Snapshot(Session(At(9), At(17), open.Id))), admin.Id));
+
+        Assert.Contains("still clocked in", ex.Message);
+        Assert.Equal(WorkSessionStatus.Open, Assert.Single(await SessionsOnDateAsync(employee.Id)).Status);
+    }
+
+    [Fact]
+    public async Task AdminEdit_IsAllowedInASettledMonth()
+    {
+        // Admins have the final say; the UI warns that the settlement itself won't change.
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        Db.AddSettlement(employee.Id, Date.Year, Date.Month, SettlementStatus.Settled);
+        await Db.SaveChangesAsync();
+
+        await NewService().EditDayAsAdminAsync(AdminEdit(employee.Id, Snapshot(Session(At(9), At(17)))), admin.Id);
+
+        Assert.Single(await SessionsOnDateAsync(employee.Id));
+    }
+
+    [Fact]
+    public async Task AdminEdit_IsKeptInTheHistoryButHiddenFromTheEmployee()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+
+        await NewService().EditDayAsAdminAsync(
+            AdminEdit(employee.Id, Snapshot(Session(At(9), At(17))), "  Forgot to clock in  "), admin.Id);
+
+        var record = Assert.Single(await NewContext().TimeAdjustmentRequests.ToListAsync());
+        Assert.True(record.IsAdminEdit);
+        Assert.Equal(AdjustmentRequestStatus.Approved, record.Status);
+        Assert.Equal(admin.Id, record.ReviewedByUserId);
+        Assert.Equal("Forgot to clock in", record.Reason);
+
+        Assert.True(Assert.Single(await NewService().GetAllRequestsAsync()).IsAdminEdit);
+        Assert.Empty(await NewService().GetUserRequestsAsync(employee.Id));
+
+        // Silent by design: no notification, no email.
+        await _notifications.DidNotReceiveWithAnyArgs().NotifyUserAsync(default!, default!, default, default);
+        await _email.DidNotReceiveWithAnyArgs().SendAdjustmentOutcomeEmailAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task AdminEdit_RejectsIdsFromAnotherDayAsAStaleEdit()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var otherDay = Db.AddClosedSession(employee.Id, Date.AddDays(1), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => NewService().EditDayAsAdminAsync(
+            AdminEdit(employee.Id, Snapshot(Session(At(9), At(17), otherDay.Id))), admin.Id));
+
+        Assert.Contains("changed in the meantime", ex.Message);
+    }
+
+    [Fact]
+    public async Task AdminEdit_StillRejectsNonsense()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => NewService().EditDayAsAdminAsync(
+            AdminEdit(employee.Id, Snapshot(Session(At(9), At(13)), Session(At(12), At(17)))), admin.Id));
+
+        Assert.Contains("overlap", ex.Message);
+    }
+
+    [Fact]
+    public async Task AdminEdit_OnlyAppliesToEmployees()
+    {
+        var (_, admin) = await ArrangeEmployeeAndAdminAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => NewService().EditDayAsAdminAsync(
+            AdminEdit(admin.Id, Snapshot(Session(At(9), At(17)))), admin.Id));
+    }
 }

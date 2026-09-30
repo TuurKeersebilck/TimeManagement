@@ -52,6 +52,24 @@ public class CreateAdjustmentRequestDto
     public string Reason { get; set; } = string.Empty;
 }
 
+/// <summary>An admin replacing an employee's sessions for one day directly (no request/approval step).</summary>
+public class AdminEditDayDto
+{
+    [Required]
+    public string UserId { get; set; } = string.Empty;
+
+    [Required]
+    public DateOnly Date { get; set; }
+
+    /// <summary>The day's full intended state. An empty session list removes the day's sessions.</summary>
+    [Required]
+    public DesiredDaySnapshotDto DesiredDaySnapshot { get; set; } = null!;
+
+    /// <summary>Optional note kept in the history of changes.</summary>
+    [MaxLength(2000)]
+    public string? Reason { get; set; }
+}
+
 // ── Response DTOs ──────────────────────────────────────────────────────────────
 
 public class AdjustmentRequestDto
@@ -68,6 +86,7 @@ public class AdjustmentRequestDto
     public AdjustmentRequestStatus Status { get; set; }
     public DateTimeOffset RequestedAt { get; set; }
     public DateTimeOffset? ReviewedAt { get; set; }
+    public bool IsAdminEdit { get; set; }
 }
 
 // ── TimeBankAdjustment DTOs ────────────────────────────────────────────────────

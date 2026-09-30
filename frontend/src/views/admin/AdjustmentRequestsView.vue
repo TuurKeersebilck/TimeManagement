@@ -245,7 +245,7 @@ onMounted(load);
               </TableCell>
               <TableCell class="text-slate-600 dark:text-slate-400 text-sm max-w-[220px]">
                 <div class="flex items-center gap-1.5 min-w-0">
-                  <span class="truncate">{{ r.reason }}</span>
+                  <span class="truncate">{{ r.reason || "—" }}</span>
                   <button
                     class="shrink-0 cursor-pointer text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
                     title="View full reason"
@@ -264,6 +264,13 @@ onMounted(load);
                   :class="STATUS_CLASSES[r.status]"
                 >
                   {{ STATUS_LABELS[r.status] }}
+                </span>
+                <span
+                  v-if="r.isAdminEdit"
+                  class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                  title="Changed directly by an admin, not requested by the employee"
+                >
+                  Admin edit
                 </span>
               </TableCell>
               <TableCell class="text-right">

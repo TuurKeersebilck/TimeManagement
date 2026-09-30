@@ -3,11 +3,13 @@ import type { WorkdayTargetDto } from "./holidayService";
 import type { OvertimeResultDto } from "./workSessionService";
 
 export interface AdminBreak {
+  id: number;
   breakStart: string;
   breakEnd?: string;
 }
 
 export interface AdminSession {
+  id: number;
   clockIn: string;
   clockOut?: string;
   status: "Open" | "Closed" | "Invalidated";
