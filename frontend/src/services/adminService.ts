@@ -177,13 +177,13 @@ export const adminService = {
   },
 
   /** Per-day payroll export: exact decimal hours, overtime against the flex balance, leave and WFH. */
-  async downloadDailyPayrollExport(
+  async downloadPayrollExport(
     year: number,
     month: number,
     userId?: string,
     employeeName?: string
   ): Promise<void> {
-    const response = await apiClient.get("/admin/export/daily", {
+    const response = await apiClient.get("/admin/export", {
       params: { year, month, userId: userId || undefined },
       responseType: "blob",
     });
@@ -194,7 +194,7 @@ export const adminService = {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "");
-    saveCsv(response.data, `hours_${year}_${String(month).padStart(2, "0")}${slug ? `_${slug}` : ""}.csv`);
+    saveCsv(response.data, `payroll_${year}_${String(month).padStart(2, "0")}${slug ? `_${slug}` : ""}.csv`);
   },
 
   async getAllVacationDays(filters?: {
