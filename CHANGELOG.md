@@ -1,5 +1,25 @@
 # Changelog
 
+## [v0.7.0] - 2026-09-30
+
+### New Features
+
+- The admin dashboard is now a live overview of today: one row per employee with start, break start and end, end, hours worked (with progress toward today's target) and this month's flex balance. A status marker shows who is working, on a break, clocked out, not clocked in, on leave or off. Hours for anyone still clocked in count up live instead of showing 0, and the page refreshes itself every minute.
+- New "Export (new)" payroll export, made for entering hours into payroll: one row per employee per day with hours worked and that day's overtime as decimal hours rounded to the quarter hour (30 min = 0.5, 1h30 = 1.5), leave type and days, and whether the day was worked from home, followed by month totals and the approved overtime from the settlement. The original export is still available next to it.
+- Settlement reminder emails — when the monthly settlements are generated on the 1st, the admin notification address gets an email that they're ready for review, followed by a reminder every Monday while any are still unconfirmed. Can be turned off under App Settings → Email types.
+- All Time Logs has summary cards for flex balance, hours worked and work-from-home days that follow the selected employee and date range. The flex balance shows what was built up in that period (hours worked minus target, plus manual adjustments), without carry-overs from earlier settlements.
+
+### Improvements
+
+- All Time Logs opens on the current month, shows running hours for anyone still clocked in (including in the week subtotals), and refreshes every minute while the selected period includes today.
+- Adjustment Requests, Employees, Vacation Types and App Settings moved into a collapsible Settings submenu under Admin. A badge shows how many adjustment requests are waiting for review, so they stay visible while the submenu is closed.
+- The notification email setting is now called "Admin notification email", since it's used for both adjustment requests and settlement reminders.
+
+### Bug Fixes
+
+- The All Time Logs header counted admins and disabled accounts as employees, and its total flex balance added up every account's monthly balance into a meaningless figure. It has been replaced by the new summary cards.
+- Admin accounts appeared in the employee filters and could appear in time log overviews and exports. Admins don't log hours, so they're now left out everywhere; disabled employees stay selectable, marked "(disabled)", for looking up past months.
+
 ## [v0.6.7] - 2026-08-10
 
 ### Improvements
