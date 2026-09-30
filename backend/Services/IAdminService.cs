@@ -6,6 +6,7 @@ namespace TimeManagementBackend.Services;
 public interface IAdminService
 {
     Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default);
+    Task<TimeLogSummaryDto> GetTimeLogSummaryAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default);
     Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(UserRole? role = null, CancellationToken ct = default);
     Task DisableEmployeeAsync(string userId, CancellationToken ct = default);
     Task EnableEmployeeAsync(string userId, CancellationToken ct = default);

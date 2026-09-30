@@ -40,11 +40,13 @@ public class AdminService(
 
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
+        // Admins don't log hours, so any session of theirs (e.g. from before a role change)
+        // stays out of the time logs, the dashboard and the exports.
         var sessionQuery = _context.WorkSessions
             .AsNoTracking()
             .Include(s => s.User)
             .Include(s => s.Breaks)
-            .AsQueryable();
+            .Where(s => s.User.Role == UserRole.Employee);
 
         if (!string.IsNullOrEmpty(userId))
             sessionQuery = sessionQuery.Where(s => s.UserId == userId);
@@ -100,6 +102,73 @@ public class AdminService(
             })
             .OrderByDescending(s => s.Date)
             .ToList();
+    }
+
+    public async Task<TimeLogSummaryDto> GetTimeLogSummaryAsync(
+        string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = dateTo is { } requestedTo && requestedTo < today ? requestedTo : today;
+
+        var employeesQuery = _context.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee);
+        if (!string.IsNullOrEmpty(userId))
+            employeesQuery = employeesQuery.Where(u => u.Id == userId);
+        var employees = await employeesQuery.Select(u => new { u.Id, u.IsDisabled }).ToListAsync(ct);
+        var employeeIds = employees.Select(e => e.Id).ToList();
+
+        // There is no hire or leave date, so each employee's first and last logged session stand in
+        // for it — otherwise the days before someone joined would all count as a deficit.
+        var activity = await _context.WorkSessions
+            .AsNoTracking()
+            .Where(s => employeeIds.Contains(s.UserId))
+            .GroupBy(s => s.UserId)
+            .Select(g => new { UserId = g.Key, First = g.Min(s => s.Date), Last = g.Max(s => s.Date) })
+            .ToDictionaryAsync(a => a.UserId, ct);
+
+        decimal worked = 0, flex = 0;
+        foreach (var emp in employees)
+        {
+            if (!activity.TryGetValue(emp.Id, out var act))
+                continue;
+
+            var start = dateFrom is { } from && from > act.First ? from : act.First;
+            var end = emp.IsDisabled && act.Last < to ? act.Last : to;
+            if (start > end)
+                continue;
+
+            // Same per-day numbers as the monthly settlement, summed over just the requested days.
+            for (var month = new DateOnly(start.Year, start.Month, 1); month <= end; month = month.AddMonths(1))
+            {
+                var result = await _overtimeService.CalculateAsync(emp.Id, month.Year, month.Month, ct);
+                foreach (var day in result.PerDay.Where(d => d.Date >= start && d.Date <= end))
+                {
+                    worked += day.WorkedHours;
+                    flex += day.FlexDelta;
+                }
+            }
+
+            flex += await _context.TimeBankAdjustments
+                .Where(a => a.UserId == emp.Id
+                         && a.SourceSettlementId == null
+                         && a.EffectiveDate >= start
+                         && a.EffectiveDate <= end)
+                .SumAsync(a => (decimal?)a.Hours, ct) ?? 0m;
+        }
+
+        var wfhQuery = _context.WorkDays
+            .AsNoTracking()
+            .Where(d => employeeIds.Contains(d.UserId) && d.WorkedFromHome && d.Date <= to
+                     && _context.WorkSessions.Any(s => s.UserId == d.UserId && s.Date == d.Date
+                                                    && s.Status != WorkSessionStatus.Invalidated));
+        if (dateFrom.HasValue)
+            wfhQuery = wfhQuery.Where(d => d.Date >= dateFrom.Value);
+
+        return new TimeLogSummaryDto
+        {
+            WorkedHours = Math.Round(worked, 2),
+            FlexHours = Math.Round(flex, 2),
+            WfhDays = await wfhQuery.CountAsync(ct),
+        };
     }
 
     public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(UserRole? role = null, CancellationToken ct = default)

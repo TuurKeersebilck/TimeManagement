@@ -36,6 +36,7 @@ public class AuthorizationContractTests
             "AdminController.ExportDailyPayroll",
             "AdminController.ExportPayroll",
             "AdminController.GetAllTimeLogs",
+            "AdminController.GetTimeLogSummary",
             "AdminController.GetAllVacationDays",
             "AdminController.GetEmployeeBalances",
             "AdminController.GetEmployeeOvertime",

@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
-import { adminService, type AdminTimeLog, type AdminVacationDay, type Employee } from "../../services/adminService";
+import {
+  adminService,
+  type AdminTimeLog,
+  type AdminVacationDay,
+  type Employee,
+  type TimeLogSummary,
+} from "../../services/adminService";
 import { holidayService, type PublicHoliday } from "../../services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
 import { useLiveHours } from "@/composables/useLiveHours";
@@ -33,6 +39,8 @@ import {
   MessageSquareTextIcon,
   CalendarIcon,
   StarIcon,
+  TrendingUpIcon,
+  TrendingDownIcon,
 } from "lucide-vue-next";
 import {
   Dialog,
@@ -72,11 +80,20 @@ const allLogs = ref<AdminTimeLog[]>([]);
 const allVacations = ref<AdminVacationDay[]>([]);
 const allHolidays = ref<PublicHoliday[]>([]);
 const employees = ref<Employee[]>([]);
-const loading = ref(false);
+const loading = ref(true); // true until the first load, so the table doesn't flash its empty state
+
+/** The default view: this month so far (1st → today), the same range as the "This month" chip. */
+function thisMonthRange() {
+  const now = new Date();
+  return {
+    from: toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: toLocalDateStr(now),
+  };
+}
 
 const selectedEmployeeId = ref<string>("all");
-const dateFrom = ref<string>("");
-const dateTo = ref<string>("");
+const dateFrom = ref<string>(thisMonthRange().from);
+const dateTo = ref<string>(thisMonthRange().to);
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
@@ -262,12 +279,67 @@ const fetchLogs = async ({ silent = false } = {}) => {
   }
 };
 
-watch([selectedEmployeeId, dateFrom, dateTo], () => fetchLogs());
+function formatFlexHours(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
+// ─── Summary cards ───────────────────────────────────────────────────────────
+
+const summary = ref<TimeLogSummary | null>(null);
+const summaryLoading = ref(false);
+let summaryRequest = 0;
+
+const fetchSummary = async ({ silent = false } = {}) => {
+  const request = ++summaryRequest;
+  if (!silent) summaryLoading.value = true;
+  try {
+    const result = await adminService.getTimeLogSummary({
+      userId: selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value,
+      dateFrom: dateFrom.value || undefined,
+      dateTo: dateTo.value || undefined,
+    });
+    // Filters can change faster than the (heavier) summary returns — drop stale answers.
+    if (request === summaryRequest) summary.value = result;
+  } catch {
+    if (!silent && request === summaryRequest) summary.value = null;
+  } finally {
+    if (request === summaryRequest) summaryLoading.value = false;
+  }
+};
+
+// The summary only counts finished days; add the running time of anyone still clocked in,
+// like the table's Total column does.
+const workedHoursWithRunning = computed(() => {
+  if (!summary.value) return null;
+  const running = allLogs.value
+    .filter((l) => l.hasOpenSession)
+    .reduce((sum, l) => sum + liveHours(l) - (l.totalHours ?? 0), 0);
+  return summary.value.workedHours + running;
+});
+
+const summaryScope = computed(() => {
+  const who =
+    selectedEmployeeId.value === "all"
+      ? "All employees"
+      : (employees.value.find((e) => e.id === selectedEmployeeId.value)?.fullName ?? "");
+  const to = dateTo.value ? formatDate(dateTo.value) : "today";
+  const period = dateFrom.value ? `${formatDate(dateFrom.value)} – ${to}` : dateTo.value ? `until ${to}` : "all time";
+  return `${who} · ${period}`;
+});
+
+watch([selectedEmployeeId, dateFrom, dateTo], () => {
+  fetchLogs();
+  fetchSummary();
+});
 
 // Only periods that include today can change while the page is open.
 useAutoRefresh(async () => {
   if (dateTo.value && dateTo.value < toLocalDateStr(new Date())) return;
-  await fetchLogs({ silent: true });
+  await Promise.all([fetchLogs({ silent: true }), fetchSummary({ silent: true })]);
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -285,33 +357,35 @@ const formatTime = (t?: string) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+// "Clear" goes back to the default view (all employees, this month) rather than all time.
 const clearFilters = () => {
+  const range = thisMonthRange();
   selectedEmployeeId.value = "all";
-  dateFrom.value = "";
-  dateTo.value = "";
+  dateFrom.value = range.from;
+  dateTo.value = range.to;
 };
 
-const hasFilters = computed(
-  () => selectedEmployeeId.value !== "all" || dateFrom.value || dateTo.value
-);
+const hasFilters = computed(() => {
+  const range = thisMonthRange();
+  return (
+    selectedEmployeeId.value !== "all" || dateFrom.value !== range.from || dateTo.value !== range.to
+  );
+});
 
 // ─── Mount ───────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
-  loading.value = true;
   try {
-    [allLogs.value, employees.value] = await Promise.all([
-      adminService.getAllTimeLogs(),
-      adminService.getEmployees("Employee"),
-    ]);
-    const preselect = route.query.employeeId as string | undefined;
-    if (preselect) {
-      selectedEmployeeId.value = preselect;
-    }
+    employees.value = await adminService.getEmployees("Employee");
   } catch {
-    toast.error("Failed to load data");
-  } finally {
-    loading.value = false;
+    toast.error("Failed to load employees");
+  }
+  const preselect = route.query.employeeId as string | undefined;
+  if (preselect) {
+    selectedEmployeeId.value = preselect; // the filter watcher loads logs and summary
+  } else {
+    fetchLogs();
+    fetchSummary();
   }
 });
 </script>
@@ -326,6 +400,53 @@ onMounted(async () => {
           Overview of all employee time logs
         </p>
       </div>
+
+      <!-- Summary cards (follow the employee and date filters below) -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
+        <div class="stat-card" title="Worked minus target in this period, plus manual adjustments. Carry-overs from settlements are not included.">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            Flex balance
+          </p>
+          <p class="text-3xl font-bold flex items-center gap-1.5">
+            <span v-if="summaryLoading || !summary" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <template v-else>
+              <component
+                :is="summary.flexHours >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                class="size-5 shrink-0"
+                :class="summary.flexHours >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+              />
+              <span
+                :class="
+                  summary.flexHours >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-rose-600 dark:text-rose-400'
+                "
+              >
+                {{ formatFlexHours(summary.flexHours) }}
+              </span>
+            </template>
+          </p>
+        </div>
+        <div class="stat-card">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            Hours worked
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="summaryLoading || workedHoursWithRunning === null" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ workedHoursWithRunning.toFixed(2) }}h</span>
+          </p>
+        </div>
+        <div class="stat-card">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            WFH days
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="summaryLoading || !summary" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ summary.wfhDays }}</span>
+          </p>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground mb-6">{{ summaryScope }}</p>
 
       <!-- Filters -->
       <div class="card p-4 mb-3 flex flex-wrap items-end gap-3">

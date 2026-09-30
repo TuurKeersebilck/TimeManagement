@@ -53,6 +53,23 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
     }
 
     [Fact]
+    public async Task DaySummaries_LeaveOutAdmins()
+    {
+        // Admins don't log hours; a stray session (e.g. from before a role change) must not
+        // show up under "All employees" or in the exports built on these summaries.
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        var admin = Db.AddUser("Ada Admin", UserRole.Admin);
+        await Db.SaveChangesAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        Db.AddClosedSession(admin.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var summary = Assert.Single(await NewService().GetAllDaySummariesAsync());
+
+        Assert.Equal(user.Id, summary.UserId);
+    }
+
+    [Fact]
     public async Task DaySummaries_FlagUnresolvedSessions()
     {
         var user = await ArrangeMondayOnlyEmployeeAsync();
@@ -631,6 +648,20 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Assert.Equal("2026-03-02;Monday;Emma Employee;8.5;0.5;;;No;", await MondayRowAsync());
     }
 
+    [Theory]
+    [InlineData(18, 30, "9.5", "1.5")]   // 1h30 overtime → 1.5
+    [InlineData(18, 15, "9.25", "1.25")] // 1h15 → 1.25
+    [InlineData(19, 45, "10.75", "2.75")] // 2h45 → 2.75
+    [InlineData(18, 0, "9", "1")]        // whole hours without trailing zeros
+    public async Task DailyPayroll_WritesOvertimeAsDecimalHours(int outHour, int outMinute, string worked, string overtime)
+    {
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), new TimeSpan(outHour, outMinute, 0));
+        await Db.SaveChangesAsync();
+
+        Assert.Equal($"2026-03-02;Monday;Emma Employee;{worked};{overtime};;;No;", await MondayRowAsync());
+    }
+
     [Fact]
     public async Task DailyPayroll_RoundsToTheNearestQuarterHour()
     {
@@ -831,5 +862,92 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         await Db.SaveChangesAsync();
 
         Assert.Contains($"'{note}", await MondayRowAsync());
+    }
+
+    // ── Time-logs summary cards ───────────────────────────────────────────────
+    // The cards sit above a filtered table, so they must follow the same employee/date filters
+    // and agree with the settlement's per-day numbers.
+
+    private static readonly DateOnly MarchStart = new(2026, 3, 1);
+    private static readonly DateOnly MarchEnd = new(2026, 3, 31);
+
+    [Fact]
+    public async Task Summary_AddsUpWorkedHoursFlexAndWfhDaysInThePeriod()
+    {
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), new TimeSpan(17, 30, 0)); // 8.5h
+        Db.AddClosedSession(user.Id, new DateOnly(2026, 3, 9), TimeSpan.FromHours(9), TimeSpan.FromHours(16)); // 7h
+        Db.WorkDays.Add(new WorkDay { UserId = user.Id, Date = Monday, WorkedFromHome = true });
+        await Db.SaveChangesAsync();
+
+        var summary = await NewService().GetTimeLogSummaryAsync(user.Id, Monday, new DateOnly(2026, 3, 9));
+
+        Assert.Equal(15.5m, summary.WorkedHours);
+        Assert.Equal(-0.5m, summary.FlexHours); // +0.5 on the 2nd, -1 on the 9th
+        Assert.Equal(1, summary.WfhDays);
+    }
+
+    [Fact]
+    public async Task Summary_IgnoresDaysBeforeTheEmployeesFirstLoggedDay()
+    {
+        // Someone who started mid-month must not start with a deficit for the days before.
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        Db.AddClosedSession(user.Id, new DateOnly(2026, 3, 16), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var summary = await NewService().GetTimeLogSummaryAsync(user.Id, MarchStart, MarchEnd);
+
+        // The 2nd and 9th are skipped; the 23rd and 30th were missed (-8h each).
+        Assert.Equal(8m, summary.WorkedHours);
+        Assert.Equal(-16m, summary.FlexHours);
+    }
+
+    [Fact]
+    public async Task Summary_StopsADisabledEmployeeAtTheirLastLoggedDay()
+    {
+        var user = Db.AddUser("Lea Leaver", isDisabled: true);
+        await Db.SaveChangesAsync();
+        await Db.SetGlobalScheduleAsync((DayOfWeek.Monday, 8m));
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var summary = await NewService().GetTimeLogSummaryAsync(user.Id, MarchStart, MarchEnd);
+
+        Assert.Equal(0m, summary.FlexHours); // the Mondays after they left don't count as missed
+    }
+
+    [Fact]
+    public async Task Summary_CountsManualAdjustmentsButNotSettlementCarryOvers()
+    {
+        // A carry-over only moves earlier flex into this month; counting it would double it.
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        var february = Db.AddSettlement(user.Id, 2026, 2, SettlementStatus.Settled, netBalanceHours: 5m);
+        Db.AddAdjustment(user.Id, Monday, 2m, "Training evening");
+        await Db.SaveChangesAsync();
+        Db.AddAdjustment(user.Id, MarchStart, 5m, "Carry-over from 2026-02 settlement").SourceSettlementId = february.Id;
+        await Db.SaveChangesAsync();
+
+        var summary = await NewService().GetTimeLogSummaryAsync(user.Id, MarchStart, Monday);
+
+        Assert.Equal(2m, summary.FlexHours);
+    }
+
+    [Fact]
+    public async Task Summary_ForAllEmployeesSumsEmployeesAndSkipsAdmins()
+    {
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        var colleague = Db.AddUser("Colin Colleague");
+        var admin = Db.AddUser("Ada Admin", UserRole.Admin);
+        await Db.SaveChangesAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), new TimeSpan(17, 30, 0));
+        Db.AddClosedSession(colleague.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(18));
+        Db.AddClosedSession(admin.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(20));
+        await Db.SaveChangesAsync();
+
+        var summary = await NewService().GetTimeLogSummaryAsync(null, Monday, Monday);
+
+        Assert.Equal(17.5m, summary.WorkedHours); // 8.5 + 9, not the admin's 11
+        Assert.Equal(1.5m, summary.FlexHours);
     }
 }

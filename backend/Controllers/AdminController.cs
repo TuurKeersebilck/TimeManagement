@@ -29,6 +29,14 @@ public class AdminController(
         return Ok(summaries);
     }
 
+    [HttpGet("timelogs/summary")]
+    public async Task<ActionResult<TimeLogSummaryDto>> GetTimeLogSummary(
+        [FromQuery] string? userId,
+        [FromQuery] DateOnly? dateFrom,
+        [FromQuery] DateOnly? dateTo,
+        CancellationToken ct)
+        => Ok(await _adminService.GetTimeLogSummaryAsync(userId, dateFrom, dateTo, ct));
+
     [HttpGet("employees")]
     public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetEmployees([FromQuery] UserRole? role, CancellationToken ct)
     {

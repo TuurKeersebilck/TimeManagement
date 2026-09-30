@@ -28,6 +28,15 @@ export interface AdminTimeLog {
   sessions: AdminSession[];
 }
 
+/** Totals for the time-logs cards; follows the same employee/date filters as the table. */
+export interface TimeLogSummary {
+  /** Hours worked, computed like the settlement (minimum break auto-deducted). */
+  workedHours: number;
+  /** Flex built up in the period (worked − target + manual adjustments; no carry-overs). */
+  flexHours: number;
+  wfhDays: number;
+}
+
 export interface Employee {
   id: string;
   fullName: string;
@@ -102,6 +111,15 @@ export const adminService = {
     dateTo?: string;
   }): Promise<AdminTimeLog[]> {
     const response = await apiClient.get<AdminTimeLog[]>("/admin/timelogs", { params });
+    return response.data;
+  },
+
+  async getTimeLogSummary(params?: {
+    userId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<TimeLogSummary> {
+    const response = await apiClient.get<TimeLogSummary>("/admin/timelogs/summary", { params });
     return response.data;
   },
 
