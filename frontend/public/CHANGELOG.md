@@ -1,5 +1,21 @@
 # Changelog
 
+## [v0.7.1] - 2026-09-30
+
+### New Features
+
+- Admins can now edit, add and delete an employee's hours themselves on All Time Logs, instead of waiting for an adjustment request. The pencil at the end of a row opens that day's sessions and breaks; "Add hours" (with an employee selected) enters a day that has none, such as a forgotten clock-in; "Delete day" removes all of a day's hours after a confirmation. Sessions that were closed automatically after a forgotten clock-out can be fixed in place. Changes apply immediately and are kept in the adjustment request history marked "Admin edit", with an optional reason; the employee isn't notified. A day the employee is still clocked in on can be edited once they clock out, and editing a month that's already settled shows a warning.
+
+### Improvements
+
+- The Help page has a new "For admins" part, visible to admins only, explaining the dashboard, correcting time logs, how the flex balance and monthly settlements work, both payroll exports, managing employees, leave and holidays, and the settings and emails. It replaces an older admin section that no longer matched how settlements and the export work.
+
+### Bug Fixes
+
+- An employee who started partway through a month was counted as missing every working day before their first day, so the dashboard and that month's settlement showed a large deficit (for example −33h instead of −1h) while the All Time Logs cards didn't. The balance now counts from an employee's first logged day — and for a disabled employee until their last — everywhere: dashboard, settlements, the employee's own overview, the new payroll export and the time logs cards.
+- The new payroll export listed those days before an employee's start as "Missing Log"; they're now left out.
+- The flex balance on the All Time Logs cards could differ by a few hundredths of an hour from the monthly balance because per-day values were rounded before being added up. It now adds up exact minutes.
+
 ## [v0.7.0] - 2026-09-30
 
 ### New Features
