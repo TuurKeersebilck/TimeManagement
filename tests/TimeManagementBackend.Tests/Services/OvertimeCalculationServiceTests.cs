@@ -235,6 +235,8 @@ public class OvertimeCalculationServiceTests(PostgresFixture fixture) : Database
     {
         var user = await ArrangeMondayOnlyScheduleAsync();
         Db.AddHoliday(Monday, "Company works this one", isWorkingDay: true);
+        // Employed since February — without any session the day would fall before their start.
+        Db.AddClosedSession(user.Id, new DateOnly(2026, 2, 2), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
         await Db.SaveChangesAsync();
 
         var day = Day(await NewService().CalculateAsync(user.Id, 2026, 3), Monday);
@@ -305,6 +307,64 @@ public class OvertimeCalculationServiceTests(PostgresFixture fixture) : Database
 
         Assert.Equal(4m, day.TargetHours);
         Assert.Equal(0m, day.FlexDelta);
+    }
+
+    // ── Employment span (no start/leave date yet: first/last logged session) ──
+
+    [Fact]
+    public async Task AMidMonthStarter_HasNoTargetBeforeTheirFirstLoggedDay()
+    {
+        // Someone who joins on the 16th must not start with a deficit for the 2nd and 9th.
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, new DateOnly(2026, 3, 16), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var result = await NewService().CalculateAsync(user.Id, 2026, 3);
+
+        Assert.Equal(0m, Day(result, Monday).TargetHours);
+        Assert.Equal(0m, Day(result, NextMonday).TargetHours);
+        Assert.Equal(8m, Day(result, new DateOnly(2026, 3, 16)).TargetHours);
+        // Worked the 16th; the 23rd and 30th were missed.
+        Assert.Equal(-16m, result.RunningBalanceHours);
+    }
+
+    [Fact]
+    public async Task SomeoneWhoNeverClockedIn_HasNoTargetInPastMonths()
+    {
+        var user = await ArrangeMondayOnlyScheduleAsync();
+
+        var result = await NewService().CalculateAsync(user.Id, 2026, 3);
+
+        Assert.All(result.PerDay, d => Assert.Equal(0m, d.TargetHours));
+        Assert.Equal(0m, result.RunningBalanceHours);
+    }
+
+    [Fact]
+    public async Task ADisabledEmployee_HasNoTargetAfterTheirLastLoggedDay()
+    {
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        user.IsDisabled = true;
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var result = await NewService().CalculateAsync(user.Id, 2026, 3);
+
+        Assert.Equal(0m, Day(result, NextMonday).TargetHours);
+        // The 2nd nets out; the four Mondays after they left are not missed days (-32h otherwise).
+        Assert.Equal(0m, result.RunningBalanceHours);
+    }
+
+    [Fact]
+    public async Task AnActiveEmployee_KeepsTheirTargetAfterTheirLastLoggedDay()
+    {
+        // Days without a log after someone's last session are missed days, not a departure.
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var result = await NewService().CalculateAsync(user.Id, 2026, 3);
+
+        Assert.Equal(8m, Day(result, new DateOnly(2026, 3, 30)).TargetHours);
     }
 
     // ── Time bank adjustments ─────────────────────────────────────────────────

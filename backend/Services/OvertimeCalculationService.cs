@@ -58,8 +58,26 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             .Where(t => t.UserId == userId || t.UserId == null)
             .ToListAsync(ct);
 
+        // There is no start or leave date per employee yet, so the first logged session stands in
+        // for the start date and, for a disabled employee, the last one for the leave date. Days
+        // outside that span get no target — otherwise someone who starts mid-month would carry a
+        // deficit for every working day before they joined. Before the very first clock-in the
+        // span starts today, so a new hire still shows as "not clocked in" on their first day.
+        var activity = await db.WorkSessions
+            .Where(s => s.UserId == userId)
+            .GroupBy(s => s.UserId)
+            .Select(g => new { First = g.Min(s => s.Date), Last = g.Max(s => s.Date) })
+            .FirstOrDefaultAsync(ct);
+        var isDisabled = await db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.IsDisabled)
+            .FirstOrDefaultAsync(ct);
+        var employmentStart = activity?.First ?? today;
+        DateOnly? employmentEnd = isDisabled && activity != null ? activity.Last : null;
+
         decimal GetEffectiveTarget(DateOnly d)
         {
+            if (d < employmentStart || d > employmentEnd) return 0;
             if (TimeCalculationHelper.IsWeekend(d)) return 0;
             if (nonWorkingHolidayDates.Contains(d)) return 0;
 
