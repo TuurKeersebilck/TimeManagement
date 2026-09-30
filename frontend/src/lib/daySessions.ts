@@ -59,20 +59,33 @@ export function validateDaySessions(
 ): string | null {
   if (sessions.length === 0) return allowEmpty ? null : "Add at least one session";
 
-  for (const s of sessions) {
-    if (!s.clockIn || !s.clockOut) return "All sessions must have clock-in and clock-out times";
-    if (s.clockIn >= s.clockOut) return "Clock-out must be after clock-in for all sessions";
-    for (const b of s.breaks) {
-      if (!b.breakStart || !b.breakEnd) return "All breaks must have start and end times";
-      if (b.breakStart >= b.breakEnd) return "Break end must be after break start";
-      if (b.breakStart < s.clockIn || b.breakEnd > s.clockOut)
-        return "Breaks must fall within the session's clock-in and clock-out times";
+  // Messages name the session and break by the number shown in the form, with the times
+  // involved, so it's clear what to change.
+  for (const [si, s] of sessions.entries()) {
+    const session = `Session ${si + 1}`;
+    if (!s.clockIn || !s.clockOut) return `${session}: fill in both clock-in and clock-out`;
+    if (s.clockIn >= s.clockOut)
+      return `${session}: clock-out (${s.clockOut}) must be after clock-in (${s.clockIn})`;
+
+    for (const [bi, b] of s.breaks.entries()) {
+      const where = `${session}, break ${bi + 1}`;
+      if (!b.breakStart || !b.breakEnd) return `${where}: fill in both break start and break end`;
+      if (b.breakStart >= b.breakEnd)
+        return `${where}: break end (${b.breakEnd}) must be after break start (${b.breakStart})`;
+      if (b.breakStart < s.clockIn)
+        return `${where}: the break (${b.breakStart}–${b.breakEnd}) starts before clock-in (${s.clockIn})`;
+      if (b.breakEnd > s.clockOut)
+        return `${where}: the break (${b.breakStart}–${b.breakEnd}) ends after clock-out (${s.clockOut})`;
     }
   }
 
-  const sorted = [...sessions].sort((a, b) => a.clockIn.localeCompare(b.clockIn));
-  for (let i = 0; i < sorted.length - 1; i++) {
-    if (sorted[i].clockOut > sorted[i + 1].clockIn) return "Sessions must not overlap";
+  const ordered = sessions
+    .map((s, i) => ({ ...s, number: i + 1 }))
+    .sort((a, b) => a.clockIn.localeCompare(b.clockIn));
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const [a, b] = [ordered[i], ordered[i + 1]];
+    if (a.clockOut > b.clockIn)
+      return `Session ${a.number} (${a.clockIn}–${a.clockOut}) overlaps session ${b.number} (${b.clockIn}–${b.clockOut})`;
   }
 
   return null;

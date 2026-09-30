@@ -185,7 +185,7 @@ export const adminService = {
     saveCsv(response.data, `payroll_${year}_${String(month).padStart(2, "0")}.csv`);
   },
 
-  /** New per-day export for payroll entry: quarter-hour decimals, overtime, leave and WFH. */
+  /** New per-day export for payroll entry: exact decimal hours, overtime, leave and WFH. */
   async downloadDailyPayrollExport(
     year: number,
     month: number,
