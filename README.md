@@ -162,7 +162,7 @@ All routes under `/api/`. JWT required on all routes except auth.
 | GET | `/employees/{userId}/target` | Get employee hour target |
 | PUT | `/employees/{userId}/target` | Update employee hour target |
 | GET | `/employees/{userId}/weekly-summary` | Get employee weekly summary |
-| GET | `/export/daily` | Payroll CSV: one row per employee per day with exact hours, overtime against the flex balance, leave and WFH, plus month totals |
+| GET | `/export` | Payroll CSV: one row per employee per day with exact hours, overtime against the flex balance, leave and WFH, plus month totals |
 
 **Admin Settings — `/api/admin/settings`** _(admin role required)_
 

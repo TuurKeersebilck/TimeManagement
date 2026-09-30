@@ -224,7 +224,7 @@ async function confirmSettlement() {
 
 async function exportCsv() {
   try {
-    await adminService.downloadDailyPayrollExport(selectedYear.value, selectedMonth.value);
+    await adminService.downloadPayrollExport(selectedYear.value, selectedMonth.value);
   } catch {
     toast.error("Failed to export payroll CSV");
   }

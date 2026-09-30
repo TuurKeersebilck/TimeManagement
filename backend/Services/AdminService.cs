@@ -549,7 +549,7 @@ public class AdminService(
     /// Month totals follow: the overtime adds up to the flex balance (plus any carry-over or manual
     /// adjustment, shown separately), next to the settlement's approved overtime.
     /// </summary>
-    public async Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
     {
         var data = await LoadPayrollDataAsync(year, month, userId, ct);
 
