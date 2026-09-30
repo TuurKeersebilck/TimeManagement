@@ -19,6 +19,7 @@ namespace TimeManagementBackend.Tests.Services;
 public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixture)
 {
     private readonly INotificationService _notifications = Substitute.For<INotificationService>();
+    private readonly IEmailService _email = Substitute.For<IEmailService>();
 
     private SettlementService NewService()
     {
@@ -27,6 +28,7 @@ public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(
             context,
             new OvertimeCalculationService(context),
             _notifications,
+            _email,
             Mapper,
             NullLogger<SettlementService>.Instance);
     }
@@ -122,7 +124,7 @@ public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(
             .Returns(new OvertimeResultDto { Year = 2026, Month = 3, RunningBalanceHours = 4m });
 
         var service = new SettlementService(
-            context, overtime, _notifications, Mapper, NullLogger<SettlementService>.Instance);
+            context, overtime, _notifications, _email, Mapper, NullLogger<SettlementService>.Instance);
 
         await service.GenerateForAllEmployeesAsync(2026, 3);
 
@@ -481,4 +483,104 @@ public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(
     [Fact]
     public async Task GetSettlementDetail_RejectsAnUnknownId()
         => await Assert.ThrowsAsync<ResourceNotFoundException>(() => NewService().GetSettlementDetailAsync(999));
+
+    // ── Review emails ─────────────────────────────────────────────────────────
+    // The admin asked to be chased by email until settlements are confirmed; these pin down
+    // who gets it, what it lists, and when it stays quiet.
+
+    private async Task<(User A, User B)> ArrangeTwoEmployeesWithNotificationEmailAsync()
+    {
+        var a = Db.AddUser("Emma Employee");
+        var b = Db.AddUser("Oscar Other");
+        Db.AddConfiguration(notificationEmail: "admin@company.test");
+        await Db.SaveChangesAsync();
+        return (a, b);
+    }
+
+    [Fact]
+    public async Task ReviewEmail_ListsPendingSettlementsPerMonthOldestFirst()
+    {
+        var (a, b) = await ArrangeTwoEmployeesWithNotificationEmailAsync();
+        Db.AddSettlement(a.Id, 2026, 8, SettlementStatus.PendingReview);
+        Db.AddSettlement(b.Id, 2026, 8, SettlementStatus.PendingReview);
+        Db.AddSettlement(a.Id, 2026, 7, SettlementStatus.PendingReview);
+        Db.AddSettlement(b.Id, 2026, 7, SettlementStatus.Settled); // confirmed — not listed
+        await Db.SaveChangesAsync();
+
+        IReadOnlyList<(DateOnly Month, int PendingCount)>? listed = null;
+        await _email.SendSettlementReviewEmailAsync(
+            Arg.Any<string>(), Arg.Do<IReadOnlyList<(DateOnly, int)>>(l => listed = l), Arg.Any<string>(), Arg.Any<bool>());
+
+        await NewService().SendReviewEmailAsync("https://app.test/", isReminder: false);
+
+        await _email.Received(1).SendSettlementReviewEmailAsync(
+            "admin@company.test", Arg.Any<IReadOnlyList<(DateOnly, int)>>(), "https://app.test/admin/settlements", false);
+        Assert.Equal([(new DateOnly(2026, 7, 1), 1), (new DateOnly(2026, 8, 1), 2)], listed);
+    }
+
+    [Fact]
+    public async Task ReviewEmail_PassesTheReminderFlagThrough()
+    {
+        var (a, _) = await ArrangeTwoEmployeesWithNotificationEmailAsync();
+        Db.AddSettlement(a.Id, 2026, 8, SettlementStatus.PendingReview);
+        await Db.SaveChangesAsync();
+
+        await NewService().SendReviewEmailAsync("https://app.test", isReminder: true);
+
+        await _email.Received(1).SendSettlementReviewEmailAsync(
+            Arg.Any<string>(), Arg.Any<IReadOnlyList<(DateOnly, int)>>(), Arg.Any<string>(), true);
+    }
+
+    [Fact]
+    public async Task ReviewEmail_StaysQuietOnceEverythingIsConfirmed()
+    {
+        // This is what ends the weekly reminder.
+        var (a, _) = await ArrangeTwoEmployeesWithNotificationEmailAsync();
+        Db.AddSettlement(a.Id, 2026, 8, SettlementStatus.Settled);
+        await Db.SaveChangesAsync();
+
+        await NewService().SendReviewEmailAsync("https://app.test", isReminder: true);
+
+        await _email.DidNotReceiveWithAnyArgs().SendSettlementReviewEmailAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task ReviewEmail_RespectsTheAppSettingsToggle()
+    {
+        var (a, _) = await ArrangeTwoEmployeesWithNotificationEmailAsync();
+        Db.AddSettlement(a.Id, 2026, 8, SettlementStatus.PendingReview);
+        (await Db.AppConfigurations.SingleAsync()).EnableSettlementEmails = false;
+        await Db.SaveChangesAsync();
+
+        await NewService().SendReviewEmailAsync("https://app.test", isReminder: false);
+
+        await _email.DidNotReceiveWithAnyArgs().SendSettlementReviewEmailAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task ReviewEmail_NeedsANotificationAddress()
+    {
+        var a = Db.AddUser("Emma Employee");
+        Db.AddConfiguration(notificationEmail: null);
+        await Db.SaveChangesAsync();
+        Db.AddSettlement(a.Id, 2026, 8, SettlementStatus.PendingReview);
+        await Db.SaveChangesAsync();
+
+        await NewService().SendReviewEmailAsync("https://app.test", isReminder: false);
+
+        await _email.DidNotReceiveWithAnyArgs().SendSettlementReviewEmailAsync(default!, default!, default!, default);
+    }
+
+    [Fact]
+    public async Task ReviewEmail_SwallowsSmtpFailures()
+    {
+        // A mail outage must not take the nightly job down with it.
+        var (a, _) = await ArrangeTwoEmployeesWithNotificationEmailAsync();
+        Db.AddSettlement(a.Id, 2026, 8, SettlementStatus.PendingReview);
+        await Db.SaveChangesAsync();
+        _email.SendSettlementReviewEmailAsync(default!, default!, default!, default)
+            .ReturnsForAnyArgs(Task.FromException(new InvalidOperationException("SMTP down")));
+
+        await NewService().SendReviewEmailAsync("https://app.test", isReminder: false);
+    }
 }

@@ -37,8 +37,17 @@ public class MissedClockInReminderService(
                     await SendCalendarTokenExpiryRemindersAsync(stoppingToken);
                 }
 
+                // Settlements: "ready" email right after generation on the 1st, then a weekly
+                // Monday reminder while any remain unconfirmed (skipped if the 1st is a Monday).
                 if (now.Day == 1)
+                {
                     await GenerateMonthlySettlementsAsync(stoppingToken);
+                    await SendSettlementReviewEmailAsync(isReminder: false, stoppingToken);
+                }
+                else if (now.DayOfWeek == DayOfWeek.Monday)
+                {
+                    await SendSettlementReviewEmailAsync(isReminder: true, stoppingToken);
+                }
             }
 
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
@@ -260,6 +269,23 @@ public class MissedClockInReminderService(
         catch (Exception ex)
         {
             logger.LogError(ex, "GenerateMonthlySettlementsAsync encountered an error.");
+        }
+    }
+
+    private async Task SendSettlementReviewEmailAsync(bool isReminder, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var settlementService = scope.ServiceProvider.GetRequiredService<ISettlementService>();
+            var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var appUrl = configuration["AppUrl"] ?? "http://localhost:5173";
+
+            await settlementService.SendReviewEmailAsync(appUrl, isReminder, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "SendSettlementReviewEmailAsync encountered an error.");
         }
     }
 

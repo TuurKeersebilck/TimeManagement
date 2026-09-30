@@ -103,6 +103,57 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         await SendMessageAsync(message, $"missed-clock-in reminder to {toEmail} for {missedDate}");
     }
 
+    public async Task SendSettlementReviewEmailAsync(
+        string toEmail,
+        IReadOnlyList<(DateOnly Month, int PendingCount)> pendingByMonth,
+        string reviewLink,
+        bool isReminder)
+    {
+        var total = pendingByMonth.Sum(p => p.PendingCount);
+        var latest = pendingByMonth[^1].Month;
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Logr", config.From));
+        message.To.Add(new MailboxAddress("Admin", toEmail));
+        message.Subject = isReminder
+            ? $"Reminder: {total} settlement{(total == 1 ? "" : "s")} waiting for review"
+            : $"Settlements for {latest:MMMM yyyy} are ready for review";
+
+        var intro = isReminder
+            ? "These monthly settlements are still waiting for your review:"
+            : $"The settlements for <strong>{latest:MMMM yyyy}</strong> have been generated and are ready for review:";
+
+        var rows = string.Join("", pendingByMonth.Select(p => $"""
+            <tr>
+              <td style="padding:6px 0;color:#334155">{p.Month:MMMM yyyy}</td>
+              <td style="padding:6px 0;color:#334155;text-align:right"><strong>{p.PendingCount}</strong> employee{(p.PendingCount == 1 ? "" : "s")}</td>
+            </tr>
+            """));
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                  <h2 style="color:#1e293b">{(isReminder ? "Settlements awaiting review" : "Settlements ready for review")}</h2>
+                  <p style="color:#475569">{intro}</p>
+                  <table style="width:100%;border-collapse:collapse;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-size:14px">
+                    {rows}
+                  </table>
+                  <a href="{reviewLink}"
+                     style="display:inline-block;margin:16px 0;padding:12px 24px;background:#d97706;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">
+                    Review settlements
+                  </a>
+                  <p style="color:#94a3b8;font-size:13px">
+                    You'll get a reminder every Monday while settlements are pending.
+                    You can turn these emails off under App Settings → Email types.
+                  </p>
+                </div>
+                """
+        };
+
+        await SendMessageAsync(message, $"settlement-review ({(isReminder ? "reminder" : "ready")}) to {toEmail}");
+    }
+
     public async Task SendAdjustmentOutcomeEmailAsync(string toEmail, string toName, DateOnly date, bool approved)
     {
         var (statusWord, color, detail) = approved

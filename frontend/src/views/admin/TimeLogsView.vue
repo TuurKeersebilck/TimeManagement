@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { useRoute } from "vue-router";
-import { adminService, type AdminTimeLog, type AdminVacationDay, type Employee } from "../../services/adminService";
+import {
+  adminService,
+  type AdminTimeLog,
+  type AdminVacationDay,
+  type Employee,
+  type TimeLogSummary,
+} from "../../services/adminService";
 import { holidayService, type PublicHoliday } from "../../services/holidayService";
 import { useAppToast } from "@/composables/useAppToast";
+import { useLiveHours } from "@/composables/useLiveHours";
+import { useAutoRefresh } from "@/composables/useAutoRefresh";
 import {
   Select,
   SelectContent,
@@ -66,16 +74,26 @@ function checkDescOverflow(el: Element | null, key: string) {
 
 const toast = useAppToast();
 const route = useRoute();
+const { liveHours, isOnBreak } = useLiveHours();
 
 const allLogs = ref<AdminTimeLog[]>([]);
 const allVacations = ref<AdminVacationDay[]>([]);
 const allHolidays = ref<PublicHoliday[]>([]);
 const employees = ref<Employee[]>([]);
-const loading = ref(false);
+const loading = ref(true); // true until the first load, so the table doesn't flash its empty state
+
+/** The default view: this month so far (1st → today), the same range as the "This month" chip. */
+function thisMonthRange() {
+  const now = new Date();
+  return {
+    from: toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), 1)),
+    to: toLocalDateStr(now),
+  };
+}
 
 const selectedEmployeeId = ref<string>("all");
-const dateFrom = ref<string>("");
-const dateTo = ref<string>("");
+const dateFrom = ref<string>(thisMonthRange().from);
+const dateTo = ref<string>(thisMonthRange().to);
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
 
@@ -164,7 +182,7 @@ const mergedRows = computed<MergedRow[] | null>(() => {
     currentWeek = week;
     if (entry.kind === "log") {
       result.push({ kind: "log", data: entry.data });
-      weekHours += entry.data.totalHours ?? 0;
+      weekHours += liveHours(entry.data);
     } else if (entry.kind === "vacation") {
       result.push({ kind: "vacation", data: entry.data });
     } else {
@@ -177,49 +195,6 @@ const mergedRows = computed<MergedRow[] | null>(() => {
 
   return result;
 });
-
-// ─── Stats ────────────────────────────────────────────────────────────────────
-
-const hoursThisWeek = computed(() => {
-  const thisWeek = getWeekKey(toLocalDateStr(new Date()));
-  return allLogs.value
-    .filter((l) => getWeekKey(l.date) === thisWeek)
-    .reduce((sum, l) => sum + (l.totalHours ?? 0), 0)
-    .toFixed(2);
-});
-
-const flexBalance = ref<number | null>(null);
-const flexBalanceLoading = ref(false);
-
-function formatFlexHours(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
-
-const fetchFlexBalance = async () => {
-  flexBalanceLoading.value = true;
-  try {
-    if (selectedEmployeeId.value === "all") {
-      const results = await Promise.all(
-        employees.value.map((emp) => adminService.getEmployeeOvertime(emp.id))
-      );
-      flexBalance.value = results.reduce((sum, r) => sum + r.runningBalanceHours, 0);
-    } else {
-      const result = await adminService.getEmployeeOvertime(selectedEmployeeId.value);
-      flexBalance.value = result.runningBalanceHours;
-    }
-  } catch {
-    flexBalance.value = null;
-    toast.error("Failed to load flex balance");
-  } finally {
-    flexBalanceLoading.value = false;
-  }
-};
-
-watch(selectedEmployeeId, fetchFlexBalance);
 
 // ─── Predefined filters ───────────────────────────────────────────────────────
 
@@ -265,9 +240,18 @@ const activePreset = computed(() => {
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
-const fetchLogs = async () => {
-  loading.value = true;
-  currentPage.value = 1;
+// `silent` is used by the background refresh: keep the current page and skip the
+// skeleton/toast, so the table doesn't jump around while the admin is reading it.
+let logsRequest = 0;
+
+const fetchLogs = async ({ silent = false } = {}) => {
+  // A filter change and the background refresh can overlap; only the latest request may
+  // write, so a slow older response can't replace the rows for the current filter.
+  const request = ++logsRequest;
+  if (!silent) {
+    loading.value = true;
+    currentPage.value = 1;
+  }
   try {
     const userId = selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value;
 
@@ -289,17 +273,80 @@ const fetchLogs = async () => {
       ]),
       Promise.all(years.map((y) => holidayService.getHolidays(y))),
     ]);
+    if (request !== logsRequest) return;
     allLogs.value = logs;
     allVacations.value = vacations;
     allHolidays.value = holidayArrays.flat();
+    currentPage.value = Math.min(currentPage.value, totalPages.value);
   } catch {
-    toast.error("Failed to load time logs");
+    if (!silent && request === logsRequest) toast.error("Failed to load time logs");
   } finally {
-    loading.value = false;
+    if (request === logsRequest) loading.value = false;
   }
 };
 
-watch([selectedEmployeeId, dateFrom, dateTo], fetchLogs);
+function formatFlexHours(h: number): string {
+  const abs = Math.abs(h);
+  const hrs = Math.floor(abs);
+  const min = Math.round((abs - hrs) * 60);
+  const sign = h < 0 ? "-" : "+";
+  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
+}
+
+// ─── Summary cards ───────────────────────────────────────────────────────────
+
+const summary = ref<TimeLogSummary | null>(null);
+const summaryLoading = ref(false);
+let summaryRequest = 0;
+
+const fetchSummary = async ({ silent = false } = {}) => {
+  const request = ++summaryRequest;
+  if (!silent) summaryLoading.value = true;
+  try {
+    const result = await adminService.getTimeLogSummary({
+      userId: selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value,
+      dateFrom: dateFrom.value || undefined,
+      dateTo: dateTo.value || undefined,
+    });
+    // Filters can change faster than the (heavier) summary returns — drop stale answers.
+    if (request === summaryRequest) summary.value = result;
+  } catch {
+    if (!silent && request === summaryRequest) summary.value = null;
+  } finally {
+    if (request === summaryRequest) summaryLoading.value = false;
+  }
+};
+
+// The summary only counts finished days; add the running time of anyone still clocked in,
+// like the table's Total column does.
+const workedHoursWithRunning = computed(() => {
+  if (!summary.value) return null;
+  const running = allLogs.value
+    .filter((l) => l.hasOpenSession)
+    .reduce((sum, l) => sum + liveHours(l) - (l.totalHours ?? 0), 0);
+  return summary.value.workedHours + running;
+});
+
+const summaryScope = computed(() => {
+  const who =
+    selectedEmployeeId.value === "all"
+      ? "All employees"
+      : (employees.value.find((e) => e.id === selectedEmployeeId.value)?.fullName ?? "");
+  const to = dateTo.value ? formatDate(dateTo.value) : "today";
+  const period = dateFrom.value ? `${formatDate(dateFrom.value)} – ${to}` : dateTo.value ? `until ${to}` : "all time";
+  return `${who} · ${period}`;
+});
+
+watch([selectedEmployeeId, dateFrom, dateTo], () => {
+  fetchLogs();
+  fetchSummary();
+});
+
+// Only periods that include today can change while the page is open.
+useAutoRefresh(async () => {
+  if (dateTo.value && dateTo.value < toLocalDateStr(new Date())) return;
+  await Promise.all([fetchLogs({ silent: true }), fetchSummary({ silent: true })]);
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -316,35 +363,36 @@ const formatTime = (t?: string) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+// "Clear" goes back to the default view (all employees, this month) rather than all time.
 const clearFilters = () => {
+  const range = thisMonthRange();
   selectedEmployeeId.value = "all";
-  dateFrom.value = "";
-  dateTo.value = "";
+  dateFrom.value = range.from;
+  dateTo.value = range.to;
 };
 
-const hasFilters = computed(
-  () => selectedEmployeeId.value !== "all" || dateFrom.value || dateTo.value
-);
+const hasFilters = computed(() => {
+  const range = thisMonthRange();
+  return (
+    selectedEmployeeId.value !== "all" || dateFrom.value !== range.from || dateTo.value !== range.to
+  );
+});
 
 // ─── Mount ───────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
-  loading.value = true;
   try {
-    [allLogs.value, employees.value] = await Promise.all([
-      adminService.getAllTimeLogs(),
-      adminService.getEmployees(),
-    ]);
-    const preselect = route.query.employeeId as string | undefined;
-    if (preselect) {
-      selectedEmployeeId.value = preselect;
-    }
+    employees.value = await adminService.getEmployees("Employee");
   } catch {
-    toast.error("Failed to load data");
-  } finally {
-    loading.value = false;
+    toast.error("Failed to load employees");
   }
-  fetchFlexBalance();
+  const preselect = route.query.employeeId as string | undefined;
+  if (preselect) {
+    selectedEmployeeId.value = preselect; // the filter watcher loads logs and summary
+  } else {
+    fetchLogs();
+    fetchSummary();
+  }
 });
 </script>
 
@@ -359,62 +407,52 @@ onMounted(async () => {
         </p>
       </div>
 
-      <!-- Stats -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Employees
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ employees.length }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            Entries shown
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ allLogs.length }}</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            This week
-          </p>
-          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
-            <span v-if="loading" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ hoursThisWeek }}h</span>
-          </p>
-        </div>
-        <div class="stat-card">
-          <p
-            class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1"
-          >
-            {{ selectedEmployeeId === "all" ? "Total flex balance" : "Flex balance" }}
+      <!-- Summary cards (follow the employee and date filters below) -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-2">
+        <div class="stat-card" title="Worked minus target in this period, plus manual adjustments. Carry-overs from settlements are not included.">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            Flex balance
           </p>
           <p class="text-3xl font-bold flex items-center gap-1.5">
-            <span v-if="flexBalanceLoading || flexBalance === null" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-if="summaryLoading || !summary" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
             <template v-else>
               <component
-                :is="flexBalance >= 0 ? TrendingUpIcon : TrendingDownIcon"
+                :is="summary.flexHours >= 0 ? TrendingUpIcon : TrendingDownIcon"
                 class="size-5 shrink-0"
-                :class="flexBalance >= 0 ? 'text-emerald-500' : 'text-rose-500'"
+                :class="summary.flexHours >= 0 ? 'text-emerald-500' : 'text-rose-500'"
               />
-              <span :class="flexBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
-                {{ formatFlexHours(flexBalance) }}
+              <span
+                :class="
+                  summary.flexHours >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-rose-600 dark:text-rose-400'
+                "
+              >
+                {{ formatFlexHours(summary.flexHours) }}
               </span>
             </template>
           </p>
         </div>
+        <div class="stat-card">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            Hours worked
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="summaryLoading || workedHoursWithRunning === null" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ workedHoursWithRunning.toFixed(2) }}h</span>
+          </p>
+        </div>
+        <div class="stat-card">
+          <p class="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+            WFH days
+          </p>
+          <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
+            <span v-if="summaryLoading || !summary" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
+            <span v-else>{{ summary.wfhDays }}</span>
+          </p>
+        </div>
       </div>
+      <p class="text-xs text-muted-foreground mb-6">{{ summaryScope }}</p>
 
       <!-- Filters -->
       <div class="card p-4 mb-3 flex flex-wrap items-end gap-3">
@@ -428,6 +466,7 @@ onMounted(async () => {
               <SelectItem value="all">All employees</SelectItem>
               <SelectItem v-for="emp in employees" :key="emp.id" :value="emp.id">
                 {{ emp.fullName }}
+                <span v-if="emp.isDisabled" class="text-slate-400 dark:text-slate-500">(disabled)</span>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -531,9 +570,15 @@ onMounted(async () => {
                 </TableCell>
                 <TableCell>
                   <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                    :title="row.data.hasOpenSession ? 'Still clocked in — running total' : undefined"
                   >
-                    {{ row.data.totalHours?.toFixed(2) ?? "0.00" }}h
+                    <span
+                      v-if="row.data.hasOpenSession"
+                      class="size-1.5 rounded-full"
+                      :class="isOnBreak(row.data) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
+                    />
+                    {{ liveHours(row.data).toFixed(2) }}h
                   </span>
                 </TableCell>
                 <TableCell>
@@ -663,9 +708,15 @@ onMounted(async () => {
               </TableCell>
               <TableCell>
                 <span
-                  class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                  class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-primary/10 text-primary"
+                  :title="log.hasOpenSession ? 'Still clocked in — running total' : undefined"
                 >
-                  {{ log.totalHours?.toFixed(2) ?? "0.00" }}h
+                  <span
+                    v-if="log.hasOpenSession"
+                    class="size-1.5 rounded-full"
+                    :class="isOnBreak(log) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
+                  />
+                  {{ liveHours(log).toFixed(2) }}h
                 </span>
               </TableCell>
               <TableCell>

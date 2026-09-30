@@ -107,6 +107,26 @@ describe("payroll export download", () => {
     expect(anchor.download).toBe("payroll_2026_03.csv");
   });
 
+  it("requests the new daily export from its own endpoint", async () => {
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    await adminService.downloadDailyPayrollExport(2026, 9, "u1");
+
+    expect(api.get).toHaveBeenCalledWith("/admin/export/daily", {
+      params: { year: 2026, month: 9, userId: "u1" },
+      responseType: "blob",
+    });
+  });
+
+  it("adds a filename-safe employee name to a per-employee daily export", async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    await adminService.downloadDailyPayrollExport(2026, 9, "u1", "Élise De Smet-Dubois");
+
+    const anchor = click.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe("hours_2026_09_elise-de-smet-dubois.csv");
+  });
+
   it("releases the object URL after triggering the download", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 

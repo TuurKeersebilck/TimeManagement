@@ -114,3 +114,19 @@ public class AdminVacationDayDto
     public decimal Amount { get; set; }
     public string? Note { get; set; }
 }
+
+/// <summary>Totals for the admin time-logs cards, following the same employee/date filters as the table.</summary>
+public class TimeLogSummaryDto
+{
+    /// <summary>Hours worked in the period, computed like the settlement (minimum break auto-deducted).</summary>
+    public decimal WorkedHours { get; set; }
+
+    /// <summary>
+    /// Flex built up in the period: worked minus target, plus manual admin adjustments. Settlement
+    /// carry-overs are excluded — they only move earlier flex into a later month.
+    /// </summary>
+    public decimal FlexHours { get; set; }
+
+    /// <summary>Days worked from home in the period.</summary>
+    public int WfhDays { get; set; }
+}
