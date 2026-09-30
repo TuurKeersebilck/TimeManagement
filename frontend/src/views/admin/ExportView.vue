@@ -153,7 +153,7 @@ onMounted(async () => {
             <p class="font-medium text-slate-800 dark:text-slate-200 mb-2">Export (new)</p>
             <ul class="space-y-1 list-disc list-inside">
               <li>One row per employee per day: hours worked and overtime that day</li>
-              <li>Decimal hours on the quarter hour (30 min = 0.5), ready to enter in payroll</li>
+              <li>Exact decimal hours with two decimals (30 min = 0.5, 40 min = 0.67), ready to enter in payroll</li>
               <li>Leave type and days (1 or 0.5), holiday or "Missing Log"</li>
               <li>Worked from home (WFH)</li>
               <li>Month totals with the approved overtime from the settlement</li>

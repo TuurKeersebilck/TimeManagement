@@ -617,15 +617,16 @@ public class AdminService(
 
     /// <summary>
     /// New export for entering hours into payroll: one ';'-separated row per employee per day with
-    /// worked hours and overtime as quarter-hour decimals (30 min = 0.5), leave type and days, and
-    /// WFH, followed by month totals and the settlement's approved overtime.
+    /// exact worked hours and overtime as decimal hours (30 min = 0.5, 40 min = 0.67), leave type
+    /// and days, and WFH (no free-text description), followed by month totals and the settlement's
+    /// approved overtime.
     /// </summary>
     public async Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
     {
         var data = await LoadPayrollDataAsync(year, month, userId, ct);
 
         var rows = new List<PayrollRow>();
-        var totalsByUser = new Dictionary<string, (decimal Worked, decimal Overtime)>();
+        var totalsByUser = new Dictionary<string, (long WorkedMinutes, long OvertimeMinutes)>();
 
         foreach (var emp in data.Employees)
         {
@@ -634,7 +635,7 @@ public class AdminService(
             var perDayByDate = (await _overtimeService.CalculateAsync(emp.Id, year, month, ct))
                 .PerDay.ToDictionary(d => d.Date);
 
-            decimal totalWorked = 0, totalOvertime = 0;
+            long totalWorkedMinutes = 0, totalOvertimeMinutes = 0;
 
             for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
             {
@@ -645,9 +646,12 @@ public class AdminService(
                 data.DaySummaries.TryGetValue((emp.Id, date), out var daySummary);
                 perDayByDate.TryGetValue(date, out var perDay);
 
-                var workedHours = RoundToQuarter(perDay?.WorkedHours ?? 0m);
-                var overtimeHours = Math.Max(0m, RoundToQuarter(workedHours - (perDay?.TargetHours ?? 0m)));
-                var hasWorked = workedHours > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
+                // Exact minutes: the balance's per-day hours are rounded to 0.01h (< 30 s), so
+                // rounding back to minutes recovers the exact value; hours are only formatted
+                // (two decimals) when the row is written.
+                var workedMinutes = ToMinutes(perDay?.WorkedHours ?? 0m);
+                var overtimeMinutes = Math.Max(0, workedMinutes - ToMinutes(perDay?.TargetHours ?? 0m));
+                var hasWorked = workedMinutes > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
 
                 if (baseTarget == 0 && !hasWorked && !hasVacation && !isHoliday)
                     continue;
@@ -669,43 +673,37 @@ public class AdminService(
                 else
                     leaveTypeCell = "";
 
-                var description = hasVacation && !string.IsNullOrEmpty(vacation!.Note)
-                    ? vacation.Note
-                    : daySummary?.Description ?? "";
-
                 rows.Add(new PayrollRow(
                     date,
                     emp.FullName,
-                    workedHours,
-                    overtimeHours,
+                    workedMinutes,
+                    overtimeMinutes,
                     leaveTypeCell,
                     hasVacation ? vacation!.Amount : null,
-                    hasWorked ? (daySummary?.WorkedFromHome == true ? "Yes" : "No") : "",
-                    description ?? ""));
+                    hasWorked ? (daySummary?.WorkedFromHome == true ? "Yes" : "No") : ""));
 
-                totalWorked += workedHours;
-                totalOvertime += overtimeHours;
+                totalWorkedMinutes += workedMinutes;
+                totalOvertimeMinutes += overtimeMinutes;
             }
 
-            totalsByUser[emp.Id] = (totalWorked, totalOvertime);
+            totalsByUser[emp.Id] = (totalWorkedMinutes, totalOvertimeMinutes);
         }
 
         var sb = new System.Text.StringBuilder();
 
         // The daily table comes first so it can be read or copied as-is from row 1.
-        sb.AppendLine(CsvRow("Date", "Day", "Employee", "Hours Worked", "Overtime", "Leave Type", "Leave Days", "WFH", "Description"));
+        sb.AppendLine(CsvRow("Date", "Day", "Employee", "Hours Worked", "Overtime", "Leave Type", "Leave Days", "WFH"));
         foreach (var row in rows.OrderBy(r => r.Date).ThenBy(r => r.EmployeeName))
         {
             sb.AppendLine(CsvRow(
                 row.Date.ToString("yyyy-MM-dd"),
                 row.Date.DayOfWeek.ToString(),
                 CsvEscape(row.EmployeeName),
-                FormatHours(row.WorkedHours),
-                FormatHours(row.OvertimeHours),
+                FormatMinutesAsHours(row.WorkedMinutes),
+                FormatMinutesAsHours(row.OvertimeMinutes),
                 CsvEscape(row.LeaveType),
                 row.LeaveDays is { } days ? FormatHours(days) : "",
-                row.Wfh,
-                CsvEscape(row.Description)));
+                row.Wfh));
         }
 
         // Month totals, plus what was actually decided at settlement (blank until confirmed).
@@ -717,8 +715,8 @@ public class AdminService(
             var totals = totalsByUser[emp.Id];
             sb.AppendLine(CsvRow(
                 CsvEscape(emp.FullName),
-                FormatHours(totals.Worked),
-                FormatHours(totals.Overtime),
+                FormatMinutesAsHours(totals.WorkedMinutes),
+                FormatMinutesAsHours(totals.OvertimeMinutes),
                 settlement?.PaidOutHours is { } paid ? FormatHours(paid) : "",
                 CsvEscape(settlement?.Outcome?.ToString() ?? ""),
                 CsvEscape(settlement?.Notes ?? "")));
@@ -730,21 +728,22 @@ public class AdminService(
     private sealed record PayrollRow(
         DateOnly Date,
         string EmployeeName,
-        decimal WorkedHours,
-        decimal OvertimeHours,
+        long WorkedMinutes,
+        long OvertimeMinutes,
         string LeaveType,
         decimal? LeaveDays,
-        string Wfh,
-        string Description);
+        string Wfh);
 
     // Semicolon-separated: Excel with Belgian/Dutch regional settings splits on ';', not ','.
     private const string CsvSeparator = ";";
 
     private static string CsvRow(params string[] cells) => string.Join(CsvSeparator, cells);
 
-    /// <summary>Rounds to the nearest quarter hour (15 min), the unit payroll works in.</summary>
-    private static decimal RoundToQuarter(decimal hours) =>
-        Math.Round(hours * 4, MidpointRounding.AwayFromZero) / 4;
+    private static long ToMinutes(decimal hours) => (long)Math.Round(hours * 60);
+
+    /// <summary>Minutes as decimal hours with two decimals and no trailing zeros: 8, 7.5, 7.67.</summary>
+    private static string FormatMinutesAsHours(long minutes) =>
+        FormatHours(Math.Round(minutes / 60m, 2, MidpointRounding.AwayFromZero));
 
     /// <summary>Decimal hours with a dot and no trailing zeros: 8, 7.75, 0.5.</summary>
     private static string FormatHours(decimal hours) =>

@@ -374,9 +374,9 @@ function toggle(section: string) {
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Export (new)</p>
                 <p class="text-sm text-slate-600 dark:text-slate-400">Made for entering hours into payroll. Pick a month and one employee or everyone. One row per employee per day with:</p>
                 <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
-                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Hours worked</span> and <span class="font-medium text-slate-700 dark:text-slate-300">overtime</span> that day as decimal hours, rounded to the quarter hour — 30 min = 0.5, 1h30 = 1.5. Overtime is never negative.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Hours worked</span> and <span class="font-medium text-slate-700 dark:text-slate-300">overtime</span> that day as exact decimal hours with two decimals — 30 min = 0.5, 1h30 = 1.5, 40 min = 0.67. Overtime is never negative.</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Leave type</span> and <span class="font-medium text-slate-700 dark:text-slate-300">leave days</span> (1 or 0.5), a public holiday, or "Missing Log" for a working day with nothing recorded</li>
-                  <li><span class="font-medium text-slate-700 dark:text-slate-300">WFH</span> and the day's description or leave note</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">WFH</span> (yes or no)</li>
                 </ul>
                 <p class="text-sm text-slate-600 dark:text-slate-400">Month totals and the approved overtime from the settlement follow below the table. The file uses <span class="font-medium text-slate-700 dark:text-slate-300">;</span> as separator and the same numbers as the flex balance (including the automatic minimum break).</p>
               </div>
