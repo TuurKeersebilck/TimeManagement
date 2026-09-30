@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { formatHours } from "@/lib/hours";
 import { useRouter } from "vue-router";
 import { adminService, type Employee } from "../../services/adminService";
 import { inviteService, type Invite } from "../../services/inviteService";
@@ -242,9 +243,9 @@ function deleteEmployee(emp: Employee) {
                 >
                   <div class="flex items-center gap-2">
                     <span class="text-sm text-slate-700 dark:text-slate-300">
-                      {{ employee.weeklyHoursLogged.toFixed(1) }}h
+                      {{ formatHours(employee.weeklyHoursLogged) }}
                       <span v-if="employee.resolvedWeeklyTarget != null" class="text-slate-400 dark:text-slate-500">
-                        / {{ employee.resolvedWeeklyTarget }}h
+                        / {{ formatHours(employee.resolvedWeeklyTarget) }}
                       </span>
                     </span>
                     <span

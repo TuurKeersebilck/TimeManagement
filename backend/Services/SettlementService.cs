@@ -1,3 +1,4 @@
+using System.Globalization;
 using AutoMapper;
 using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
@@ -261,17 +262,24 @@ public class SettlementService(
 
     private static string BuildEmployeeMessage(MonthlySettlement settlement, decimal paidOut, decimal carried)
     {
-        var balanceSign = settlement.NetBalanceHours >= 0 ? "+" : "";
+        // Same hour notation as the rest of the app and the export (2.5h, +6.5h), independent of
+        // the server's culture — a comma-decimal locale would otherwise write "2,5h".
         var prefix = $"Your {settlement.Year}-{settlement.Month:00} time settlement has been confirmed: " +
-                     $"{balanceSign}{settlement.NetBalanceHours}h — ";
+                     $"{FormatSignedHours(settlement.NetBalanceHours)} — ";
 
         var parts = new List<string>();
-        if (paidOut > 0) parts.Add($"{paidOut}h paid out");
-        if (carried > 0) parts.Add($"{carried}h carried over to next month's flex balance");
-        if (carried < 0) parts.Add($"next month starts at {carried}h");
+        if (paidOut > 0) parts.Add($"{FormatHours(paidOut)} paid out");
+        if (carried > 0) parts.Add($"{FormatHours(carried)} carried over to next month's flex balance");
+        if (carried < 0) parts.Add($"next month starts at {FormatHours(carried)}");
 
         return prefix + (parts.Count > 0 ? string.Join(", ", parts) : "settled as unpaid") + ".";
     }
+
+    private static string FormatHours(decimal hours) =>
+        Math.Round(hours, 2, MidpointRounding.AwayFromZero).ToString("0.##", CultureInfo.InvariantCulture) + "h";
+
+    private static string FormatSignedHours(decimal hours) =>
+        (Math.Round(hours, 2, MidpointRounding.AwayFromZero) > 0 ? "+" : "") + FormatHours(hours);
 
     private static bool IsUniqueConstraintViolation(DbUpdateException ex)
         => ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) is true

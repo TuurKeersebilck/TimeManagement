@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatHours } from "@/lib/hours";
 import { computed } from "vue";
 import {
   Chart as ChartJS,
@@ -79,7 +80,7 @@ const chartOptions = computed<ChartOptions<"bar">>(() => ({
     },
     tooltip: {
       callbacks: {
-        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}h`,
+        label: (ctx) => ` ${ctx.dataset.label}: ${formatHours(ctx.parsed.y ?? 0)}`,
       },
     },
   },
@@ -92,7 +93,7 @@ const chartOptions = computed<ChartOptions<"bar">>(() => ({
       ticks: {
         color: textColor.value,
         font: { size: 11 },
-        callback: (v) => `${v}h`,
+        callback: (v) => formatHours(Number(v)),
       },
       grid: { color: gridColor.value },
       beginAtZero: true,

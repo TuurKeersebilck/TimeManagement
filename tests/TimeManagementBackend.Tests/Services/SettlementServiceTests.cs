@@ -277,6 +277,33 @@ public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(
     }
 
     [Fact]
+    public async Task Confirm_WritesHoursInTheAppsNotationWhateverTheServerCulture()
+    {
+        // Decimal hours with a dot, as everywhere else in the app — not "2,5h" on a Belgian server.
+        var original = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("nl-BE");
+        try
+        {
+            var settlement = await ArrangePendingSettlementAsync();
+            var admin = Db.AddUser("Adam Admin", UserRole.Admin);
+            await Db.SaveChangesAsync();
+
+            await NewService().ConfirmAsync(settlement.Id,
+                new ConfirmSettlementDto { PaidOutHours = 2.5m, CarryForwardHours = 1.25m }, admin.Id);
+
+            await _notifications.Received(1).NotifyUserAsync(
+                settlement.UserId,
+                Arg.Is<string>(m => m.Contains("— 2.5h paid out, 1.25h carried over")),
+                NotificationType.MonthlySettlement,
+                Arg.Any<CancellationToken>());
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Fact]
     public async Task Confirm_SurvivesAFailingNotification()
     {
         // The settlement is already committed by this point; losing the notification must

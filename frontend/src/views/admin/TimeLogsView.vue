@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
+import { formatHours, formatSignedHours } from "@/lib/hours";
 import { useRoute } from "vue-router";
 import {
   adminService,
@@ -288,13 +289,6 @@ const fetchLogs = async ({ silent = false } = {}) => {
   }
 };
 
-function formatFlexHours(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
 
 // ─── Summary cards ───────────────────────────────────────────────────────────
 
@@ -457,7 +451,7 @@ onMounted(async () => {
                     : 'text-rose-600 dark:text-rose-400'
                 "
               >
-                {{ formatFlexHours(summary.flexHours) }}
+                {{ formatSignedHours(summary.flexHours) }}
               </span>
             </template>
           </p>
@@ -468,7 +462,7 @@ onMounted(async () => {
           </p>
           <p class="text-3xl font-bold text-slate-900 dark:text-slate-100">
             <span v-if="summaryLoading || workedHoursWithRunning === null" class="animate-pulse text-slate-300 dark:text-slate-600">--</span>
-            <span v-else>{{ workedHoursWithRunning.toFixed(2) }}h</span>
+            <span v-else>{{ formatHours(workedHoursWithRunning) }}</span>
           </p>
         </div>
         <div class="stat-card">
@@ -617,7 +611,7 @@ onMounted(async () => {
                       class="size-1.5 rounded-full"
                       :class="isOnBreak(row.data) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
                     />
-                    {{ liveHours(row.data).toFixed(2) }}h
+                    {{ formatHours(liveHours(row.data)) }}
                   </span>
                 </TableCell>
                 <TableCell>
@@ -710,7 +704,7 @@ onMounted(async () => {
                   <div class="flex items-center justify-between px-1">
                     <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.label }}</span>
                     <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      {{ row.hours.toFixed(2) }}h
+                      {{ formatHours(row.hours) }}
                     </span>
                   </div>
                 </TableCell>
@@ -764,7 +758,7 @@ onMounted(async () => {
                     class="size-1.5 rounded-full"
                     :class="isOnBreak(log) ? 'bg-amber-500' : 'bg-emerald-500 animate-pulse'"
                   />
-                  {{ liveHours(log).toFixed(2) }}h
+                  {{ formatHours(liveHours(log)) }}
                 </span>
               </TableCell>
               <TableCell>

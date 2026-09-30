@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { formatHours, formatSignedHours } from "@/lib/hours";
 import { useRoute, useRouter } from "vue-router";
 import {
   adminService,
@@ -287,13 +288,6 @@ const displayDate = (iso: string) =>
 const settlementHistory = ref<MonthlySettlementDto[]>([]);
 const loadingSettlements = ref(false);
 
-function fmtH(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
 
 onMounted(async () => {
   loading.value = true;
@@ -402,7 +396,7 @@ async function saveAdjustment() {
 function removeAdjustment(adjustment: TimeBankAdjustment) {
   confirm({
     title: "Delete adjustment",
-    message: `Delete the ${adjustment.hours > 0 ? "+" : ""}${adjustment.hours}h adjustment for ${displayDate(adjustment.effectiveDate)}?`,
+    message: `Delete the ${formatSignedHours(adjustment.hours)} adjustment for ${displayDate(adjustment.effectiveDate)}?`,
     confirmLabel: "Delete",
     variant: "destructive",
     onConfirm: async () => {
@@ -589,7 +583,7 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
             <ClockIcon class="size-4 text-primary shrink-0" />
             <div class="text-sm text-slate-600 dark:text-slate-400">
               <span class="font-medium text-slate-900 dark:text-slate-100">
-                {{ weeklyResolvedHours }}h/week
+                {{ formatHours(weeklyResolvedHours) }}/week
               </span>
               <span v-if="target?.resolvedMinimumBreakMinutes">
                 ·
@@ -773,7 +767,7 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
                 ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
                 : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
             >
-              {{ fmtH(s.netBalanceHours) }}
+              {{ formatSignedHours(s.netBalanceHours) }}
             </span>
             <span class="text-xs text-slate-500 dark:text-slate-400">
               {{ s.outcome !== null ? OUTCOME_LABELS[s.outcome!] : '—' }}
@@ -853,7 +847,7 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
                 ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300'
                 : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
             >
-              {{ a.hours > 0 ? '+' : '' }}{{ a.hours }}h
+              {{ formatSignedHours(a.hours) }}
             </span>
             <span class="text-sm text-slate-600 dark:text-slate-400 truncate flex-1 min-w-0">
               {{ a.reason }}
