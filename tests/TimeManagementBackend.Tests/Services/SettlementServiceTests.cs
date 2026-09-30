@@ -78,6 +78,9 @@ public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(
         // the sign of each employee's month without arranging 40 sessions.
         Db.AddAdjustment(surplus.Id, new DateOnly(2026, 3, 1), 45m);   // -40 + 45 = +5
         Db.AddAdjustment(deficit.Id, new DateOnly(2026, 3, 1), 36.5m); // -40 + 36.5 = -3.5
+        // Both employed since February, so all five March Mondays count as missed.
+        Db.AddClosedSession(surplus.Id, new DateOnly(2026, 2, 2), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        Db.AddClosedSession(deficit.Id, new DateOnly(2026, 2, 2), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
         await Db.SaveChangesAsync();
 
         await NewService().GenerateForAllEmployeesAsync(2026, 3);

@@ -438,6 +438,14 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
 
     // ── Payroll export ────────────────────────────────────────────────────────
 
+    /// <summary>A February session, so March's working days fall inside the employment period
+    /// (the balance counts from the first logged day, standing in for a start date).</summary>
+    private async Task EmployedSinceFebruaryAsync(User user)
+    {
+        Db.AddClosedSession(user.Id, new DateOnly(2026, 2, 2), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+    }
+
     private static List<string> Lines(string csv) =>
         csv.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
 
@@ -755,9 +763,25 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
     }
 
     [Fact]
+    public async Task DailyPayroll_LeavesOutDaysBeforeAMidMonthStartersFirstDay()
+    {
+        // Days before someone joined are not "Missing Log" — they weren't employed yet.
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        Db.AddClosedSession(user.Id, new DateOnly(2026, 3, 16), TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var lines = Lines(await NewService().GenerateDailyPayrollCsvAsync(2026, 3));
+
+        Assert.DoesNotContain(lines, l => l.StartsWith("2026-03-02;") || l.StartsWith("2026-03-09;"));
+        Assert.Equal("2026-03-16;Monday;Emma Employee;8;0;;;No;", lines.Single(l => l.StartsWith("2026-03-16;")));
+        Assert.Contains("Missing Log", lines.Single(l => l.StartsWith("2026-03-23;"))); // after the start it still counts
+    }
+
+    [Fact]
     public async Task DailyPayroll_MarksAWorkingDayWithNoHoursAsMissingLog()
     {
-        await ArrangeMondayOnlyEmployeeAsync();
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        await EmployedSinceFebruaryAsync(user);
 
         Assert.Contains("Missing Log", await MondayRowAsync());
     }
@@ -782,7 +806,8 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
     [Fact]
     public async Task DailyPayroll_OmitsNonWorkingDaysWithNothingToReport()
     {
-        await ArrangeMondayOnlyEmployeeAsync();
+        var user = await ArrangeMondayOnlyEmployeeAsync();
+        await EmployedSinceFebruaryAsync(user);
 
         var lines = Lines(await NewService().GenerateDailyPayrollCsvAsync(2026, 3));
 
