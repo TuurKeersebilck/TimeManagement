@@ -242,7 +242,12 @@ const activePreset = computed(() => {
 
 // `silent` is used by the background refresh: keep the current page and skip the
 // skeleton/toast, so the table doesn't jump around while the admin is reading it.
+let logsRequest = 0;
+
 const fetchLogs = async ({ silent = false } = {}) => {
+  // A filter change and the background refresh can overlap; only the latest request may
+  // write, so a slow older response can't replace the rows for the current filter.
+  const request = ++logsRequest;
   if (!silent) {
     loading.value = true;
     currentPage.value = 1;
@@ -268,14 +273,15 @@ const fetchLogs = async ({ silent = false } = {}) => {
       ]),
       Promise.all(years.map((y) => holidayService.getHolidays(y))),
     ]);
+    if (request !== logsRequest) return;
     allLogs.value = logs;
     allVacations.value = vacations;
     allHolidays.value = holidayArrays.flat();
     currentPage.value = Math.min(currentPage.value, totalPages.value);
   } catch {
-    if (!silent) toast.error("Failed to load time logs");
+    if (!silent && request === logsRequest) toast.error("Failed to load time logs");
   } finally {
-    loading.value = false;
+    if (request === logsRequest) loading.value = false;
   }
 };
 
