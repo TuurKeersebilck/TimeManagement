@@ -73,6 +73,7 @@ public class AuthorizationContractTests
             "SettlementsController.GetById",
             "SettlementsController.GetEmployeeHistory",
             "TimeAdjustmentRequestsController.ApproveById",
+            "TimeAdjustmentRequestsController.EditDayAsAdmin",
             "TimeAdjustmentRequestsController.GetAll",
             "TimeAdjustmentRequestsController.Reject",
             "VacationsController.CreateEmployeeVacationDay",

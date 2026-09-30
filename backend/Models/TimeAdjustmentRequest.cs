@@ -46,6 +46,13 @@ public class TimeAdjustmentRequest
 
     public string? ReviewedByUserId { get; set; }
 
+    /// <summary>
+    /// True when an admin edited the day directly instead of an employee requesting it. Stored as an
+    /// already-approved request so every change to someone's hours keeps a who/when/why record.
+    /// Hidden from the employee's own request list.
+    /// </summary>
+    public bool IsAdminEdit { get; set; }
+
     [ForeignKey(nameof(ReviewedByUserId))]
     public User? ReviewedByUser { get; set; }
 }

@@ -57,6 +57,21 @@ public class TimeAdjustmentRequestsController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Admin replaces an employee's sessions for one day directly — no request/approval step.
+    /// Recorded as an approved adjustment request flagged as an admin edit, for the history.
+    /// </summary>
+    [HttpPost("admin-edit")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
+    public async Task<IActionResult> EditDayAsAdmin([FromBody] AdminEditDayDto dto, CancellationToken ct)
+    {
+        var admin = await GetCurrentUserAsync();
+        if (admin == null) return Unauthorized();
+
+        await service.EditDayAsAdminAsync(dto, admin.Id, ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:int}/reject")]
     [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
     public async Task<IActionResult> Reject(int id, CancellationToken ct)
