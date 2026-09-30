@@ -122,6 +122,7 @@ public class TimeAdjustmentRequestService(
                 Status = r.Status,
                 RequestedAt = r.RequestedAt,
                 ReviewedAt = r.ReviewedAt,
+                IsAdminEdit = r.IsAdminEdit,
             })
             .ToListAsync(ct);
     }
@@ -130,7 +131,8 @@ public class TimeAdjustmentRequestService(
     {
         return await db.TimeAdjustmentRequests
             .AsNoTracking()
-            .Where(r => r.UserId == userId)
+            // Admin edits are silent: they stay in the admin's history, not the employee's list.
+            .Where(r => r.UserId == userId && !r.IsAdminEdit)
             .OrderByDescending(r => r.RequestedAt)
             .Select(r => new AdjustmentRequestDto
             {
@@ -143,6 +145,7 @@ public class TimeAdjustmentRequestService(
                 Status = r.Status,
                 RequestedAt = r.RequestedAt,
                 ReviewedAt = r.ReviewedAt,
+                IsAdminEdit = r.IsAdminEdit,
             })
             .ToListAsync(ct);
     }
@@ -370,11 +373,80 @@ public class TimeAdjustmentRequestService(
         }
     }
 
+    // ── Admin direct edit ─────────────────────────────────────────────────────
+
+    public async Task EditDayAsAdminAsync(AdminEditDayDto dto, string adminUserId, CancellationToken ct = default)
+    {
+        var employee = await db.Users.FirstOrDefaultAsync(u => u.Id == dto.UserId, ct)
+            ?? throw new ResourceNotFoundException("Employee not found.");
+        if (employee.Role != UserRole.Employee)
+            throw new ValidationException("Only employees log hours.");
+
+        if (dto.Date > DateOnly.FromDateTime(DateTime.UtcNow))
+            throw new ValidationException("Cannot edit a future date.");
+
+        // Rewriting a day the employee is currently clocked in on would close their running
+        // session under them; the day can be edited once they clock out.
+        var clockedIn = await db.WorkSessions.AnyAsync(
+            s => s.UserId == dto.UserId && s.Date == dto.Date && s.Status == WorkSessionStatus.Open, ct);
+        if (clockedIn)
+            throw new ValidationException(
+                "This employee is still clocked in on this day. You can edit it once they clock out.");
+
+        // An empty list is allowed here: it's how an admin removes a day's sessions.
+        ValidateSnapshot(dto.DesiredDaySnapshot, allowEmpty: true);
+
+        // Every session/break the edit refers to must still belong to this employee's day —
+        // otherwise the day changed since the admin opened it (or the ids are wrong).
+        var existingSessions = await db.WorkSessions
+            .AsNoTracking()
+            .Where(s => s.UserId == dto.UserId && s.Date == dto.Date)
+            .Select(s => new { s.Id, BreakIds = s.Breaks.Select(b => b.Id).ToList() })
+            .ToListAsync(ct);
+        foreach (var session in dto.DesiredDaySnapshot.Sessions)
+        {
+            if (session.WorkSessionId is not { } sessionId)
+                continue;
+            var match = existingSessions.FirstOrDefault(s => s.Id == sessionId);
+            if (match == null || session.Breaks.Any(b => b.BreakRecordId is { } id && !match.BreakIds.Contains(id)))
+                throw new ValidationException("This day was changed in the meantime. Reload the page and try again.");
+        }
+
+        // Settled months are deliberately not blocked (the UI warns instead): the admin may have a
+        // good reason, and the settlement itself keeps the numbers it was confirmed with.
+        await ReconcileWorkSessionsAsync(dto.UserId, dto.Date, dto.DesiredDaySnapshot, ct);
+
+        var now = DateTimeOffset.UtcNow;
+        db.TimeAdjustmentRequests.Add(new TimeAdjustmentRequest
+        {
+            UserId = dto.UserId,
+            Date = dto.Date,
+            DesiredDaySnapshot = JsonSerializer.Serialize(dto.DesiredDaySnapshot,
+                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
+            Reason = dto.Reason?.Trim() ?? string.Empty,
+            Status = AdjustmentRequestStatus.Approved,
+            IsAdminEdit = true,
+            // No approval link is ever sent for an admin edit; the hash only satisfies the column.
+            ApprovalTokenHash = HashToken(WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32))),
+            ExpiresAt = now,
+            TokenUsed = true,
+            RequestedAt = now,
+            ReviewedAt = now,
+            ReviewedByUserId = adminUserId,
+        });
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Admin {AdminId} edited {UserId}'s sessions on {Date} ({Count} session(s)).",
+            adminUserId, dto.UserId, dto.Date, dto.DesiredDaySnapshot.Sessions.Count);
+    }
+
     // ── Snapshot validation ───────────────────────────────────────────────────
 
-    private static void ValidateSnapshot(DesiredDaySnapshotDto snapshot)
+    private static void ValidateSnapshot(DesiredDaySnapshotDto snapshot, bool allowEmpty = false)
     {
-        if (snapshot.Sessions.Count == 0)
+        if (snapshot.Sessions.Count == 0 && !allowEmpty)
             throw new ValidationException("Snapshot must contain at least one session.");
 
         var now = DateTimeOffset.UtcNow;
@@ -475,5 +547,6 @@ public class TimeAdjustmentRequestService(
         Status = r.Status,
         RequestedAt = r.RequestedAt,
         ReviewedAt = r.ReviewedAt,
+        IsAdminEdit = r.IsAdminEdit,
     };
 }

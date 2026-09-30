@@ -7,8 +7,14 @@ import {
   CalendarIcon,
   BellIcon,
   MailIcon,
-  ShieldIcon,
   ChevronDownIcon,
+  LayoutDashboardIcon,
+  PencilLineIcon,
+  ScaleIcon,
+  FileSpreadsheetIcon,
+  UsersIcon,
+  PlaneIcon,
+  SettingsIcon,
 } from "lucide-vue-next";
 
 const { isAdmin } = useAuth();
@@ -19,7 +25,13 @@ const open = ref<Record<string, boolean>>({
   calendar: false,
   notifications: false,
   emails: false,
-  admin: false,
+  adminDashboard: false,
+  adminTimeLogs: false,
+  adminSettlements: false,
+  adminExport: false,
+  adminEmployees: false,
+  adminLeave: false,
+  adminSettings: false,
 });
 
 function toggle(section: string) {
@@ -237,72 +249,226 @@ function toggle(section: string) {
           </div>
         </div>
 
-        <!-- ── Admin ──────────────────────────────────────────────────── -->
-        <div v-if="isAdmin" class="card overflow-hidden">
-          <button
-            class="w-full flex items-center justify-between p-5 text-left cursor-pointer"
-            @click="toggle('admin')"
-          >
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-950 flex items-center justify-center shrink-0">
-                <ShieldIcon class="size-4 text-rose-600 dark:text-rose-400" />
+        <!-- ══ For admins ═══════════════════════════════════════════════ -->
+        <template v-if="isAdmin">
+          <p class="pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+            For admins
+          </p>
+
+          <!-- ── Dashboard ──────────────────────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminDashboard')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-950 flex items-center justify-center shrink-0">
+                  <LayoutDashboardIcon class="size-4 text-amber-600 dark:text-amber-400" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Dashboard — today at a glance</span>
               </div>
-              <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Admin features</span>
-            </div>
-            <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.admin && 'rotate-180']" />
-          </button>
-
-          <div v-show="open.admin" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
-            <div class="space-y-3">
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Employees</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Invite new employees by email (invite link expires in <span class="font-medium text-slate-600 dark:text-slate-300">48 hours</span>). Enable or disable accounts — disabled users can't log in but existing sessions stay valid until they expire. An account must be disabled before it can be deleted.</p>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminDashboard && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminDashboard" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">One row per employee</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Start, break start and end, end, hours worked today (with a bar toward today's target) and this month's <span class="font-medium text-slate-700 dark:text-slate-300">flex balance</span>. Click a row to open that employee's time logs.</p>
               </div>
-
-              <div class="border-t border-border" />
-
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Time logs & adjustment requests</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">View all work sessions across the team, with per-day flex deltas and session status. Approve or reject adjustment requests from the admin panel or via the one-click link in the notification email. Approving reconciles the submitted sessions against existing records and applies the correction immediately.</p>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Status</p>
+                <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Working</span> / <span class="font-medium text-slate-700 dark:text-slate-300">On break</span> — clocked in right now; hours count up live</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Clocked out</span> — done for the day</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Not clocked in</span> (red) — a working day with nothing logged yet</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">On leave</span> / <span class="font-medium text-slate-700 dark:text-slate-300">Day off</span> — full-day leave, weekend, holiday or a non-working weekday for that person</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Auto-closed</span> — a session was left open too long and closed automatically; fix it under All Time Logs</li>
+                </ul>
               </div>
-
-              <div class="border-t border-border" />
-
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Monthly settlements</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">At the end of each month, generate a settlement per employee. The settlement summarises total hours worked, overtime, deficit, and lets you choose an outcome: <span class="font-medium text-slate-600 dark:text-slate-300">Paid</span>, <span class="font-medium text-slate-600 dark:text-slate-300">Leave Deducted</span>, or <span class="font-medium text-slate-600 dark:text-slate-300">Unpaid</span>. Confirmation is blocked if any open sessions or pending adjustment requests remain for that employee. Confirmed settlements are locked.</p>
-              </div>
-
-              <div class="border-t border-border" />
-
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Payroll export</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Export a CSV from the Settlements screen for any confirmed month. The file includes regular hours, overtime hours, total hours, outcome, and notes per employee — sourced directly from the confirmed settlement data.</p>
-              </div>
-
-              <div class="border-t border-border" />
-
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Vacation types</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Create and manage vacation types (name, color, description). Assign each type to employees with a yearly balance. Balances can be adjusted at any time.</p>
-              </div>
-
-              <div class="border-t border-border" />
-
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Public holidays</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Set a country code to auto-import national holidays from an external source. Mark specific days as working if your company operates on them, or add custom holidays manually.</p>
-              </div>
-
-              <div class="border-t border-border" />
-
-              <div class="space-y-0.5">
-                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">App settings</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Set global defaults for per-weekday hour targets (Mon–Fri individually) and minimum break duration — both overridable per employee. Configure the notification email address and toggle whether missed clock-in reminders and adjustment request emails are sent.</p>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Always current</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">The page refreshes itself every minute while it's visible (see "Live · updated" in the top right) and moves on to the new day after midnight.</p>
               </div>
             </div>
           </div>
-        </div>
+
+          <!-- ── Time logs & corrections ────────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminTimeLogs')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950 flex items-center justify-center shrink-0">
+                  <PencilLineIcon class="size-4 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Time logs & corrections</span>
+              </div>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminTimeLogs && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminTimeLogs" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">All Time Logs</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Every logged day, filtered by employee and period (this month by default). The cards on top — <span class="font-medium text-slate-700 dark:text-slate-300">flex balance</span>, <span class="font-medium text-slate-700 dark:text-slate-300">hours worked</span> and <span class="font-medium text-slate-700 dark:text-slate-300">WFH days</span> — follow the same filters. The flex balance there is what was built up in that period (worked minus target, plus manual flex adjustments), without carry-overs from earlier settlements.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Edit, add or delete hours yourself</p>
+                <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Edit</span> — the pencil at the end of a row opens that day's sessions and breaks. Changes apply immediately.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Add hours</span> — select an employee, click Add hours and pick a date, e.g. when someone forgot to clock in.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Delete day</span> — removes all of that day's hours after a confirmation.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Auto-closed sessions</span> — a forgotten clock-out shows as "auto-closed"; fill in the clock-out time and the day counts again.</li>
+                </ul>
+                <p class="text-sm text-slate-600 dark:text-slate-400">A reason is optional. The employee isn't notified, but every change is kept in the adjustment history marked <span class="font-medium text-slate-700 dark:text-slate-300">Admin edit</span> (who, when and why). A day can't be edited while the employee is still clocked in on it. In an already settled month you'll see a warning: the settlement keeps its confirmed numbers, so correct the balance with a flex adjustment if needed.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Adjustment requests from employees</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Found under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → Adjustment Requests</span>. A badge in the menu shows how many are waiting. Approve or reject them there, or approve with the one-click link in the notification email. Approving replaces that day's sessions with the requested ones. Pending requests block the month's settlement until they're handled.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Flex balance & settlements ─────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminSettlements')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center shrink-0">
+                  <ScaleIcon class="size-4 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Flex balance & monthly settlements</span>
+              </div>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminSettlements && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminSettlements" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">How the balance is calculated</p>
+                <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                  <li>Each day, hours worked are compared with that weekday's target (half a target on a half day of leave, none on full leave, holidays or weekends).</li>
+                  <li>If no break was logged, the minimum break is deducted automatically.</li>
+                  <li>Days with an open session don't count until the employee clocks out.</li>
+                  <li>An employee counts from their first logged day, and a disabled employee until their last — so a mid-month start doesn't show up as missed days.</li>
+                  <li>Flex adjustments (manual or carried over from a settlement) are added to the month they're dated in.</li>
+                </ul>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Settlements</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On the 1st of each month a settlement is created automatically for every active employee for the previous month; you can also <span class="font-medium text-slate-700 dark:text-slate-300">Generate</span> them yourself for any completed month. To confirm one, split the month's balance into <span class="font-medium text-slate-700 dark:text-slate-300">pay out</span>, <span class="font-medium text-slate-700 dark:text-slate-300">carry over</span> to next month and/or <span class="font-medium text-slate-700 dark:text-slate-300">deduct from next month</span>, and add notes if you like. Carry-overs appear as flex adjustments in the next month. Open or auto-closed sessions and pending adjustment requests in that month must be resolved first. Confirmed settlements are locked.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Reminders by email</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">When settlements are created on the 1st, the admin notification address gets an email that they're ready, followed by a reminder every Monday while any are still unconfirmed. Turn this off under App Settings → Email types.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Manual flex adjustments</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On an employee's page, add or deduct hours from their flex balance with a date and reason (e.g. a training evening that wasn't clocked). Not possible in a month that's already settled; carry-over adjustments created by a settlement can't be deleted.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Payroll export ─────────────────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminExport')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-sky-100 dark:bg-sky-950 flex items-center justify-center shrink-0">
+                  <FileSpreadsheetIcon class="size-4 text-sky-600 dark:text-sky-400" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Payroll export</span>
+              </div>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminExport && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminExport" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Export (new)</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Made for entering hours into payroll. Pick a month and one employee or everyone. One row per employee per day with:</p>
+                <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Hours worked</span> and <span class="font-medium text-slate-700 dark:text-slate-300">overtime</span> that day as decimal hours, rounded to the quarter hour — 30 min = 0.5, 1h30 = 1.5. Overtime is never negative.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Leave type</span> and <span class="font-medium text-slate-700 dark:text-slate-300">leave days</span> (1 or 0.5), a public holiday, or "Missing Log" for a working day with nothing recorded</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">WFH</span> and the day's description or leave note</li>
+                </ul>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Month totals and the approved overtime from the settlement follow below the table. The file uses <span class="font-medium text-slate-700 dark:text-slate-300">;</span> as separator and the same numbers as the flex balance (including the automatic minimum break).</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Export (original)</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">The earlier layout, still available: a settlement summary on top, then one row per working day with hours worked to two decimals. It doesn't deduct the automatic minimum break, so its hours can be slightly higher than the new export's.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Employees ──────────────────────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminEmployees')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-950 flex items-center justify-center shrink-0">
+                  <UsersIcon class="size-4 text-rose-600 dark:text-rose-400" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Employees</span>
+              </div>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminEmployees && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminEmployees" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Inviting and removing</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Found under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → Employees</span>. Invite someone by email; the link is valid for <span class="font-medium text-slate-700 dark:text-slate-300">48 hours</span>. When someone leaves, <span class="font-medium text-slate-700 dark:text-slate-300">disable</span> their account: they can no longer log in, and days after their last logged day no longer count in their balance. Their history stays available (they're marked "disabled" in filters). An account must be disabled before it can be deleted permanently, which also removes all of its data.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Per-employee settings</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Click an employee to set their vacation balances, their own weekly working-hours target (per weekday, e.g. 0h on Wednesdays for a 4/5 schedule) and minimum break — each falls back to the global default when left empty. The page also shows their weekly hours, planned leave, settlement history and flex adjustments.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Leave & holidays ───────────────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminLeave')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-violet-100 dark:bg-violet-950 flex items-center justify-center shrink-0">
+                  <PlaneIcon class="size-4 text-violet-600 dark:text-violet-400" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Leave & holidays</span>
+              </div>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminLeave && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminLeave" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Vacation types</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → Vacation Types</span>: create types (name, color, description), then give employees a yearly balance per type on their employee page.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave for someone</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On <span class="font-medium text-slate-700 dark:text-slate-300">My Vacations</span>, choose an employee at the top to plan or remove leave on their behalf; they get a notification. The Team Calendar shows everyone's leave.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Public holidays</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → App Settings</span>, choose the country to import its public holidays. Mark a holiday as a working day if the company works on it, or add your own company holidays.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Settings & emails ──────────────────────────────────────── -->
+          <div class="card overflow-hidden">
+            <button class="w-full flex items-center justify-between p-5 text-left cursor-pointer" @click="toggle('adminSettings')">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                  <SettingsIcon class="size-4 text-slate-600 dark:text-slate-300" />
+                </div>
+                <span class="text-sm font-medium text-slate-900 dark:text-slate-100">Settings & emails</span>
+              </div>
+              <ChevronDownIcon :class="['size-4 text-slate-400 transition-transform duration-200', open.adminSettings && 'rotate-180']" />
+            </button>
+            <div v-show="open.adminSettings" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">App Settings</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Global defaults: working-hours target per weekday, minimum break, country and public holidays. Per-employee settings override the defaults.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Emails the app sends</p>
+                <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Adjustment request</span> — to the admin notification address when an employee submits one, with a one-click approve link</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Settlement reminders</span> — to the admin notification address when settlements are ready, and every Monday while any are pending</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Missed clock-in</span> — to an employee the morning after a working day without any clock-in (not on leave)</li>
+                </ul>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Each can be switched off under App Settings → Email types; leaving the notification address empty stops the admin emails.</p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Automatic clean-up</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">A session left open for more than <span class="font-medium text-slate-700 dark:text-slate-300">13 hours</span> is closed automatically and marked auto-closed; the employee is notified and can send an adjustment request, or you can fix it yourself under All Time Logs.</p>
+              </div>
+            </div>
+          </div>
+        </template>
 
       </div>
     </div>

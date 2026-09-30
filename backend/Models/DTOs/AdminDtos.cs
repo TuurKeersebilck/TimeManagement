@@ -16,6 +16,7 @@ public class AdminDaySummaryDto
 
 public class AdminSessionDto
 {
+    public int Id { get; set; }
     public DateTimeOffset ClockIn { get; set; }
     public DateTimeOffset? ClockOut { get; set; }
     public WorkSessionStatus Status { get; set; }
@@ -25,6 +26,7 @@ public class AdminSessionDto
 
 public class AdminBreakDto
 {
+    public int Id { get; set; }
     public DateTimeOffset BreakStart { get; set; }
     public DateTimeOffset? BreakEnd { get; set; }
 }

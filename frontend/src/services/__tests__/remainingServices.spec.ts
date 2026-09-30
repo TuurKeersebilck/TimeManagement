@@ -42,6 +42,14 @@ describe("adjustmentRequestService", () => {
     expect(api.post.mock.calls[1][0]).toBe("/timeadjustmentrequests/6/reject");
   });
 
+  it("posts an admin's direct day edit to its own route", async () => {
+    const payload = { userId: "u1", date: "2026-09-07", desiredDaySnapshot: { sessions: [] } };
+
+    await adjustmentRequestService.adminEditDay(payload);
+
+    expect(api.post).toHaveBeenCalledWith("/timeadjustmentrequests/admin-edit", payload);
+  });
+
   it("submits the snapshot payload unchanged", async () => {
     const payload = {
       date: "2026-03-02",

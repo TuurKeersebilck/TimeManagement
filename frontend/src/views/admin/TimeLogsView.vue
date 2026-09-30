@@ -12,6 +12,7 @@ import { holidayService, type PublicHoliday } from "../../services/holidayServic
 import { useAppToast } from "@/composables/useAppToast";
 import { useLiveHours } from "@/composables/useLiveHours";
 import { useAutoRefresh } from "@/composables/useAutoRefresh";
+import AdminEditDayDialog from "@/components/AdminEditDayDialog.vue";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,8 @@ import {
   StarIcon,
   TrendingUpIcon,
   TrendingDownIcon,
+  PencilIcon,
+  PlusIcon,
 } from "lucide-vue-next";
 import {
   Dialog,
@@ -337,6 +340,32 @@ const summaryScope = computed(() => {
   return `${who} · ${period}`;
 });
 
+// ─── Admin edit of a day ─────────────────────────────────────────────────────
+
+const editDay = ref<{ open: boolean; employeeId: string; employeeName: string; date: string | null }>({
+  open: false,
+  employeeId: "",
+  employeeName: "",
+  date: null,
+});
+
+/** Edit a logged day, or (log = null) add hours for the selected employee on a date they pick. */
+function openEditDay(log: AdminTimeLog | null) {
+  const employeeId = log?.userId ?? selectedEmployeeId.value;
+  editDay.value = {
+    open: true,
+    employeeId,
+    employeeName:
+      log?.employeeName ?? employees.value.find((e) => e.id === employeeId)?.fullName ?? "",
+    date: log ? log.date.split("T")[0] : null,
+  };
+}
+
+function onDayEdited() {
+  fetchLogs({ silent: true });
+  fetchSummary({ silent: true });
+}
+
 watch([selectedEmployeeId, dateFrom, dateTo], () => {
   fetchLogs();
   fetchSummary();
@@ -482,6 +511,15 @@ onMounted(async () => {
         <Button v-if="hasFilters" variant="outline" @click="clearFilters" class="shrink-0">
           Clear filters
         </Button>
+        <Button
+          v-if="selectedEmployeeId !== 'all'"
+          variant="outline"
+          class="shrink-0"
+          @click="openEditDay(null)"
+        >
+          <PlusIcon class="size-4" />
+          Add hours
+        </Button>
       </div>
 
       <!-- Quick filter chips -->
@@ -527,12 +565,13 @@ onMounted(async () => {
               <TableHead>Total</TableHead>
               <TableHead>WFH</TableHead>
               <TableHead>Description</TableHead>
+              <TableHead class="w-10"><span class="sr-only">Edit</span></TableHead>
             </TableRow>
           </TableHeader>
 
           <!-- Single-employee view: merged rows with vacation days + week subtotals -->
           <TableBody v-if="mergedRows !== null">
-            <TableEmpty v-if="mergedRows.length === 0" :colspan="6">
+            <TableEmpty v-if="mergedRows.length === 0" :colspan="7">
               <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
               <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
             </TableEmpty>
@@ -604,6 +643,15 @@ onMounted(async () => {
                   </div>
                   <span v-else class="text-slate-400">—</span>
                 </TableCell>
+                <TableCell class="w-10 text-right">
+                  <button
+                    class="p-1.5 rounded text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                    title="Edit hours"
+                    @click="openEditDay(row.data)"
+                  >
+                    <PencilIcon class="size-3.5" />
+                  </button>
+                </TableCell>
               </TableRow>
 
               <!-- Holiday row -->
@@ -614,7 +662,7 @@ onMounted(async () => {
                 <TableCell :colspan="2" class="font-medium text-slate-900 dark:text-slate-100">
                   {{ formatDate(row.data.date) }}
                 </TableCell>
-                <TableCell :colspan="4">
+                <TableCell :colspan="5">
                   <div class="flex items-center gap-2">
                     <StarIcon class="size-3.5 text-sky-500 shrink-0" />
                     <span class="text-sm text-slate-600 dark:text-slate-400">{{ row.data.name }}</span>
@@ -636,7 +684,7 @@ onMounted(async () => {
                 <TableCell class="font-medium text-slate-900 dark:text-slate-100">
                   {{ formatDate(row.data.date) }}
                 </TableCell>
-                <TableCell :colspan="4">
+                <TableCell :colspan="5">
                   <div class="flex items-center gap-2">
                     <CalendarIcon class="size-3.5 text-violet-500 shrink-0" />
                     <div
@@ -658,7 +706,7 @@ onMounted(async () => {
                 v-else-if="row.kind === 'week-subtotal'"
                 class="bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/80"
               >
-                <TableCell :colspan="6" class="py-2">
+                <TableCell :colspan="7" class="py-2">
                   <div class="flex items-center justify-between px-1">
                     <span class="text-xs text-slate-500 dark:text-slate-400">{{ row.label }}</span>
                     <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -672,7 +720,7 @@ onMounted(async () => {
 
           <!-- All-employees view: paginated -->
           <TableBody v-else>
-            <TableEmpty v-if="allLogs.length === 0" :colspan="6">
+            <TableEmpty v-if="allLogs.length === 0" :colspan="7">
               <ClockIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
               <p class="text-slate-500 dark:text-slate-400">No time logs found.</p>
             </TableEmpty>
@@ -742,6 +790,15 @@ onMounted(async () => {
                 </div>
                 <span v-else class="text-slate-400">—</span>
               </TableCell>
+              <TableCell class="w-10 text-right">
+                <button
+                  class="p-1.5 rounded text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                  title="Edit hours"
+                  @click="openEditDay(log)"
+                >
+                  <PencilIcon class="size-3.5" />
+                </button>
+              </TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -784,6 +841,15 @@ onMounted(async () => {
       </div>
     </div>
   </div>
+
+  <AdminEditDayDialog
+    v-if="editDay.employeeId"
+    v-model:open="editDay.open"
+    :employee-id="editDay.employeeId"
+    :employee-name="editDay.employeeName"
+    :date="editDay.date"
+    @saved="onDayEdited"
+  />
 
   <!-- Description dialog -->
   <Dialog v-model:open="descriptionDialog.open">

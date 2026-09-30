@@ -88,13 +88,14 @@ public class AdminService(
                         .OrderBy(s => s.ClockIn)
                         .Select(s => new AdminSessionDto
                         {
+                            Id = s.Id,
                             ClockIn = s.ClockIn,
                             ClockOut = s.ClockOut,
                             Status = s.Status,
                             Hours = CalcSessionHours(s),
                             Breaks = s.Breaks
                                 .OrderBy(b => b.BreakStart)
-                                .Select(b => new AdminBreakDto { BreakStart = b.BreakStart, BreakEnd = b.BreakEnd })
+                                .Select(b => new AdminBreakDto { Id = b.Id, BreakStart = b.BreakStart, BreakEnd = b.BreakEnd })
                                 .ToList(),
                         })
                         .ToList(),
