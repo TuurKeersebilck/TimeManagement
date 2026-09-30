@@ -2,6 +2,7 @@ using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using TimeManagementBackend.Data;
 using TimeManagementBackend.Exceptions;
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 
@@ -197,7 +198,7 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
 
             var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
             var target = await db.EmployeeTargets.FirstOrDefaultAsync(t => t.UserId == userId, ct);
-            var minimumMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes;
+            var minimumMinutes = TimeCalculationHelper.ResolveMinimumBreakMinutes(target, config);
 
             if (minimumMinutes is > 0)
             {
@@ -358,23 +359,22 @@ public class WorkSessionService(AppDbContext db, IMapper mapper) : IWorkSessionS
         // Mon–Sun order (DayOfWeek: Sun=0, Mon=1 … Sat=6 — sort Sunday last)
         var schedule = Enum.GetValues<DayOfWeek>()
             .OrderBy(d => d == DayOfWeek.Sunday ? 7 : (int)d)
-            .Select(dow =>
+            .Select(dow => new WorkdayTargetDto
             {
-                var userRow = allTargets.FirstOrDefault(t => t.UserId == userId && t.DayOfWeek == dow);
-                var globalRow = allTargets.FirstOrDefault(t => t.UserId == null && t.DayOfWeek == dow);
-                var effective = userRow ?? globalRow;
-                return new WorkdayTargetDto { DayOfWeek = dow, Hours = effective?.Hours ?? 0m };
+                DayOfWeek = dow,
+                Hours = TimeCalculationHelper.ResolveWorkdayTarget(allTargets, userId, dow),
             })
             .ToList();
+
+        var (dailyAllowanceHours, weeklyAllowanceHours) =
+            TimeCalculationHelper.ResolveOvertimeAllowances(employeeTarget, config);
 
         return new WorkScheduleDto
         {
             WorkdayTargets = schedule,
-            MinimumBreakMinutes = employeeTarget?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
-            DailyOvertimeAllowanceHours = employeeTarget?.DailyOvertimeAllowanceHours
-                ?? config?.DefaultDailyOvertimeAllowanceHours,
-            WeeklyOvertimeAllowanceHours = employeeTarget?.WeeklyOvertimeAllowanceHours
-                ?? config?.DefaultWeeklyOvertimeAllowanceHours,
+            MinimumBreakMinutes = TimeCalculationHelper.ResolveMinimumBreakMinutes(employeeTarget, config),
+            DailyOvertimeAllowanceHours = dailyAllowanceHours,
+            WeeklyOvertimeAllowanceHours = weeklyAllowanceHours,
             DefaultWfhWeekdays = Enum.GetValues<DayOfWeek>()
                 .Where(d => (user.DefaultWfhWeekdaysMask & (1 << (int)d)) != 0)
                 .ToList(),

@@ -1,6 +1,6 @@
 {
   "name": "time-management-frontend",
-  "version": "0.6.7",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -10,7 +10,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "prettier --write \"src/**/*.{ts,vue,css}\""
+    "format": "prettier --write \"src/**/*.{ts,vue,css}\"",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",
@@ -33,12 +35,15 @@
     "@prettier/plugin-xml": "^3.4.2",
     "@types/node": "^24.9.2",
     "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/test-utils": "^2.5.1",
     "autoprefixer": "^10.4.21",
-    "postcss": "^8.5.6",
+    "happy-dom": "^20.14.5",
+    "postcss": "^8.5.26",
     "prettier": "^3.8.1",
     "tailwindcss": "^4.1.16",
     "typescript": "^6.0.2",
     "vite": "^8.0.16",
-    "vite-plugin-vue-devtools": "^8.1.2"
+    "vite-plugin-vue-devtools": "^8.1.2",
+    "vitest": "^4.1.11"
   }
 }

@@ -1,0 +1,62 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [staging, main]
+  push:
+    branches: [staging, main]
+
+jobs:
+  backend:
+    name: Backend (xUnit + Testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore tests/TimeManagementBackend.Tests/TimeManagementBackend.Tests.csproj
+
+      # Testcontainers starts a real postgres:16 via the Docker daemon that is
+      # preinstalled on GitHub-hosted runners — no service container needed.
+      - name: Test
+        run: >
+          dotnet test tests/TimeManagementBackend.Tests/TimeManagementBackend.Tests.csproj
+          --no-restore
+          --logger "trx;LogFileName=backend.trx"
+          --results-directory TestResults
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: TestResults/
+
+  frontend:
+    name: Frontend (Vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm run test

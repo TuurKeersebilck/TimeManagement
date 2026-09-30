@@ -1,3 +1,5 @@
+using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Globalization;
@@ -9,10 +11,16 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class AdminService(AppDbContext context, UserManager<User> userManager) : IAdminService
+public class AdminService(
+    AppDbContext context,
+    UserManager<User> userManager,
+    IMapper mapper,
+    IOvertimeCalculationService overtimeService) : IAdminService
 {
     private readonly AppDbContext _context = context;
     private readonly UserManager<User> _userManager = userManager;
+    private readonly IMapper _mapper = mapper;
+    private readonly IOvertimeCalculationService _overtimeService = overtimeService;
 
     private static double CalcSessionHours(WorkSession s)
     {
@@ -27,21 +35,18 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     private static readonly DayOfWeek[] s_weekdays =
         [DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday];
 
-    private static decimal SumWeeklyTarget(List<WorkdayTarget> perEmployee, List<WorkdayTarget> globals)
-        => s_weekdays.Sum(day =>
-        {
-            var emp = perEmployee.FirstOrDefault(t => t.DayOfWeek == day);
-            if (emp != null) return emp.Hours;
-            return globals.FirstOrDefault(t => t.DayOfWeek == day)?.Hours ?? 0m;
-        });
+    private static decimal SumWeeklyTarget(IEnumerable<WorkdayTarget> targets, string userId)
+        => s_weekdays.Sum(day => TimeCalculationHelper.ResolveWorkdayTarget(targets, userId, day));
 
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
+        // Admins don't log hours, so any session of theirs (e.g. from before a role change)
+        // stays out of the time logs, the dashboard and the exports.
         var sessionQuery = _context.WorkSessions
             .AsNoTracking()
             .Include(s => s.User)
             .Include(s => s.Breaks)
-            .AsQueryable();
+            .Where(s => s.User.Role == UserRole.Employee);
 
         if (!string.IsNullOrEmpty(userId))
             sessionQuery = sessionQuery.Where(s => s.UserId == userId);
@@ -99,6 +104,73 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .ToList();
     }
 
+    public async Task<TimeLogSummaryDto> GetTimeLogSummaryAsync(
+        string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var to = dateTo is { } requestedTo && requestedTo < today ? requestedTo : today;
+
+        var employeesQuery = _context.Users.AsNoTracking().Where(u => u.Role == UserRole.Employee);
+        if (!string.IsNullOrEmpty(userId))
+            employeesQuery = employeesQuery.Where(u => u.Id == userId);
+        var employees = await employeesQuery.Select(u => new { u.Id, u.IsDisabled }).ToListAsync(ct);
+        var employeeIds = employees.Select(e => e.Id).ToList();
+
+        // There is no hire or leave date, so each employee's first and last logged session stand in
+        // for it — otherwise the days before someone joined would all count as a deficit.
+        var activity = await _context.WorkSessions
+            .AsNoTracking()
+            .Where(s => employeeIds.Contains(s.UserId))
+            .GroupBy(s => s.UserId)
+            .Select(g => new { UserId = g.Key, First = g.Min(s => s.Date), Last = g.Max(s => s.Date) })
+            .ToDictionaryAsync(a => a.UserId, ct);
+
+        decimal worked = 0, flex = 0;
+        foreach (var emp in employees)
+        {
+            if (!activity.TryGetValue(emp.Id, out var act))
+                continue;
+
+            var start = dateFrom is { } from && from > act.First ? from : act.First;
+            var end = emp.IsDisabled && act.Last < to ? act.Last : to;
+            if (start > end)
+                continue;
+
+            // Same per-day numbers as the monthly settlement, summed over just the requested days.
+            for (var month = new DateOnly(start.Year, start.Month, 1); month <= end; month = month.AddMonths(1))
+            {
+                var result = await _overtimeService.CalculateAsync(emp.Id, month.Year, month.Month, ct);
+                foreach (var day in result.PerDay.Where(d => d.Date >= start && d.Date <= end))
+                {
+                    worked += day.WorkedHours;
+                    flex += day.FlexDelta;
+                }
+            }
+
+            flex += await _context.TimeBankAdjustments
+                .Where(a => a.UserId == emp.Id
+                         && a.SourceSettlementId == null
+                         && a.EffectiveDate >= start
+                         && a.EffectiveDate <= end)
+                .SumAsync(a => (decimal?)a.Hours, ct) ?? 0m;
+        }
+
+        var wfhQuery = _context.WorkDays
+            .AsNoTracking()
+            .Where(d => employeeIds.Contains(d.UserId) && d.WorkedFromHome && d.Date <= to
+                     && _context.WorkSessions.Any(s => s.UserId == d.UserId && s.Date == d.Date
+                                                    && s.Status != WorkSessionStatus.Invalidated));
+        if (dateFrom.HasValue)
+            wfhQuery = wfhQuery.Where(d => d.Date >= dateFrom.Value);
+
+        return new TimeLogSummaryDto
+        {
+            WorkedHours = Math.Round(worked, 2),
+            FlexHours = Math.Round(flex, 2),
+            WfhDays = await wfhQuery.CountAsync(ct),
+        };
+    }
+
     public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(UserRole? role = null, CancellationToken ct = default)
     {
         var (weekStart, weekEnd) = TimeCalculationHelper.GetCurrentWeekBounds();
@@ -120,7 +192,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var allWorkdayTargets = await _context.WorkdayTargets
             .AsNoTracking()
             .ToListAsync(ct);
-        var globalWorkdayTargets = allWorkdayTargets.Where(t => t.UserId == null).ToList();
 
         var weeklyByUser = weekSessions
             .GroupBy(s => s.UserId)
@@ -129,8 +200,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return users.Select(u =>
         {
             var weeklyLogged = weeklyByUser.TryGetValue(u.Id, out var h) ? h : 0m;
-            var userWorkdays = allWorkdayTargets.Where(t => t.UserId == u.Id).ToList();
-            var resolvedWeekly = (decimal?)SumWeeklyTarget(userWorkdays, globalWorkdayTargets);
+            var resolvedWeekly = (decimal?)SumWeeklyTarget(allWorkdayTargets, u.Id);
 
             return new EmployeeDto
             {
@@ -194,14 +264,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return await _context.VacationTypes
             .AsNoTracking()
             .OrderBy(v => v.Name)
-            .Select(v => new VacationTypeDto
-            {
-                Id = v.Id,
-                Name = v.Name,
-                Description = v.Description,
-                Color = v.Color,
-                AssignedEmployeeCount = v.EmployeeBalances.Count(),
-            })
+            .ProjectTo<VacationTypeDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
@@ -217,14 +280,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         _context.VacationTypes.Add(entity);
         await _context.SaveChangesAsync(ct);
 
-        return new VacationTypeDto
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            Description = entity.Description,
-            Color = entity.Color,
-            AssignedEmployeeCount = 0,
-        };
+        return _mapper.Map<VacationTypeDto>(entity);
     }
 
     public async Task<VacationTypeDto> UpdateVacationTypeAsync(int id, VacationTypeFormDto dto, CancellationToken ct = default)
@@ -239,16 +295,11 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         await _context.SaveChangesAsync(ct);
 
-        var assignedCount = await _context.EmployeeVacationBalances.CountAsync(b => b.VacationTypeId == id, ct);
-
-        return new VacationTypeDto
-        {
-            Id = entity.Id,
-            Name = entity.Name,
-            Description = entity.Description,
-            Color = entity.Color,
-            AssignedEmployeeCount = assignedCount,
-        };
+        // entity.EmployeeBalances isn't loaded here, so the mapper's own count resolver
+        // would read an empty in-memory collection — fetch the real count separately.
+        var result = _mapper.Map<VacationTypeDto>(entity);
+        result.AssignedEmployeeCount = await _context.EmployeeVacationBalances.CountAsync(b => b.VacationTypeId == id, ct);
+        return result;
     }
 
     public async Task DeleteVacationTypeAsync(int id, CancellationToken ct = default)
@@ -344,7 +395,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         {
             HasOverride = target?.MinimumBreakMinutes.HasValue ?? false,
             MinimumBreakMinutes = target?.MinimumBreakMinutes,
-            ResolvedMinimumBreakMinutes = target?.MinimumBreakMinutes ?? config?.MinimumBreakMinutes,
+            ResolvedMinimumBreakMinutes = TimeCalculationHelper.ResolveMinimumBreakMinutes(target, config),
         };
     }
 
@@ -386,9 +437,7 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .AsNoTracking()
             .Where(t => t.UserId == userId || t.UserId == null)
             .ToListAsync(ct);
-        var perEmployee = workdayTargets.Where(t => t.UserId == userId).ToList();
-        var globals = workdayTargets.Where(t => t.UserId == null).ToList();
-        var weeklyTarget = (decimal?)SumWeeklyTarget(perEmployee, globals);
+        var weeklyTarget = (decimal?)SumWeeklyTarget(workdayTargets, userId);
 
         return weekRanges.Select(w =>
         {
@@ -411,7 +460,18 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 
-    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    /// <summary>Everything both payroll exports read for one month, loaded once.</summary>
+    private sealed record PayrollData(
+        DateOnly MonthStart,
+        DateOnly LastDate,
+        List<User> Employees,
+        Dictionary<(string UserId, DateOnly Date), AdminDaySummaryDto> DaySummaries,
+        Func<string, DayOfWeek, decimal> BaseWeekdayTarget,
+        Dictionary<DateOnly, string> HolidayByDate,
+        Dictionary<(string UserId, DateOnly Date), AdminVacationDayDto> VacationsByUserDate,
+        Dictionary<string, MonthlySettlement> SettlementByUser);
+
+    private async Task<PayrollData> LoadPayrollDataAsync(int year, int month, string? userId, CancellationToken ct)
     {
         var monthStart = new DateOnly(year, month, 1);
         var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -431,20 +491,12 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
             .AsNoTracking()
             .Where(t => t.UserId == null || employeeIds.Contains(t.UserId))
             .ToListAsync(ct);
-        var globalWorkdayTargets = workdayTargets.Where(t => t.UserId == null).ToList();
-
-        decimal GetBaseWeekdayTarget(string empUserId, DayOfWeek dayOfWeek)
-        {
-            var target = workdayTargets.FirstOrDefault(t => t.UserId == empUserId && t.DayOfWeek == dayOfWeek)
-                       ?? globalWorkdayTargets.FirstOrDefault(t => t.DayOfWeek == dayOfWeek);
-            return target?.Hours ?? 0m;
-        }
 
         var holidaysQuery = _context.PublicHolidays
             .AsNoTracking()
             .Where(h => h.Date.Year == year && h.Date.Month == month && !h.IsWorkingDay);
         var holidayByDate = (await holidaysQuery.ToListAsync(ct))
-            .Where(h => h.Date.DayOfWeek != DayOfWeek.Saturday && h.Date.DayOfWeek != DayOfWeek.Sunday)
+            .Where(h => !TimeCalculationHelper.IsWeekend(h.Date))
             .ToDictionary(h => h.Date, h => h.Name);
 
         var vacationsQuery = _context.VacationDays
@@ -477,17 +529,36 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         var settlementByUser = await settlementsQuery
             .ToDictionaryAsync(s => s.UserId, s => s, ct);
 
+        return new PayrollData(
+            monthStart,
+            lastDate,
+            employees,
+            hoursByUserDate,
+            (empUserId, dayOfWeek) => TimeCalculationHelper.ResolveWorkdayTarget(workdayTargets, empUserId, dayOfWeek),
+            holidayByDate,
+            vacationsByUserDate,
+            settlementByUser);
+    }
+
+    /// <summary>
+    /// Original export: settlement summary block on top, then comma-separated daily rows with
+    /// worked hours to two decimals. Kept unchanged for admins who still rely on this layout.
+    /// </summary>
+    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    {
+        var data = await LoadPayrollDataAsync(year, month, userId, ct);
+
         var rows = new List<(DateOnly Date, string EmployeeName, double Hours, string VacationType, string Description)>();
 
-        foreach (var emp in employees)
+        foreach (var emp in data.Employees)
         {
-            for (var date = monthStart; date <= lastDate; date = date.AddDays(1))
+            for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
             {
-                var baseTarget = GetBaseWeekdayTarget(emp.Id, date.DayOfWeek);
-                holidayByDate.TryGetValue(date, out var holidayName);
+                var baseTarget = data.BaseWeekdayTarget(emp.Id, date.DayOfWeek);
+                data.HolidayByDate.TryGetValue(date, out var holidayName);
                 var isHoliday = baseTarget > 0 && holidayName != null;
-                var hasVacation = vacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
-                hoursByUserDate.TryGetValue((emp.Id, date), out var daySummary);
+                var hasVacation = data.VacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
+                data.DaySummaries.TryGetValue((emp.Id, date), out var daySummary);
                 var workedHours = daySummary?.TotalHours ?? 0.0;
 
                 if (baseTarget == 0 && workedHours == 0 && !hasVacation && !isHoliday)
@@ -515,9 +586,9 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
 
         sb.AppendLine("OVERTIME SUMMARY");
         sb.AppendLine("Employee,Approved Overtime Hours,Outcome,Notes");
-        foreach (var emp in employees)
+        foreach (var emp in data.Employees)
         {
-            settlementByUser.TryGetValue(emp.Id, out var settlement);
+            data.SettlementByUser.TryGetValue(emp.Id, out var settlement);
             var approvedOvertime = settlement?.PaidOutHours?.ToString("F2", CultureInfo.InvariantCulture) ?? "";
             var outcome = settlement?.Outcome?.ToString() ?? "";
             var notes = settlement?.Notes ?? "";
@@ -542,11 +613,139 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return sb.ToString();
     }
 
+    /// <summary>
+    /// New export for entering hours into payroll: one ';'-separated row per employee per day with
+    /// worked hours and overtime as quarter-hour decimals (30 min = 0.5), leave type and days, and
+    /// WFH, followed by month totals and the settlement's approved overtime.
+    /// </summary>
+    public async Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
+    {
+        var data = await LoadPayrollDataAsync(year, month, userId, ct);
+
+        var rows = new List<PayrollRow>();
+        var totalsByUser = new Dictionary<string, (decimal Worked, decimal Overtime)>();
+
+        foreach (var emp in data.Employees)
+        {
+            // Same per-day numbers as the monthly settlement (auto-deducted minimum break,
+            // leave-adjusted targets), so the export always reconciles with the balance.
+            var perDayByDate = (await _overtimeService.CalculateAsync(emp.Id, year, month, ct))
+                .PerDay.ToDictionary(d => d.Date);
+
+            decimal totalWorked = 0, totalOvertime = 0;
+
+            for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
+            {
+                var baseTarget = data.BaseWeekdayTarget(emp.Id, date.DayOfWeek);
+                data.HolidayByDate.TryGetValue(date, out var holidayName);
+                var isHoliday = baseTarget > 0 && holidayName != null;
+                var hasVacation = data.VacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
+                data.DaySummaries.TryGetValue((emp.Id, date), out var daySummary);
+                perDayByDate.TryGetValue(date, out var perDay);
+
+                var workedHours = RoundToQuarter(perDay?.WorkedHours ?? 0m);
+                var overtimeHours = Math.Max(0m, RoundToQuarter(workedHours - (perDay?.TargetHours ?? 0m)));
+                var hasWorked = workedHours > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
+
+                if (baseTarget == 0 && !hasWorked && !hasVacation && !isHoliday)
+                    continue;
+
+                string leaveTypeCell;
+                if (isHoliday)
+                    leaveTypeCell = $"Holiday: {holidayName}";
+                else if (hasVacation)
+                    leaveTypeCell = vacation!.VacationTypeName;
+                else if (baseTarget > 0 && !hasWorked && daySummary?.HasOpenSession != true)
+                    leaveTypeCell = "Missing Log";
+                else
+                    leaveTypeCell = "";
+
+                var description = hasVacation && !string.IsNullOrEmpty(vacation!.Note)
+                    ? vacation.Note
+                    : daySummary?.Description ?? "";
+
+                rows.Add(new PayrollRow(
+                    date,
+                    emp.FullName,
+                    workedHours,
+                    overtimeHours,
+                    leaveTypeCell,
+                    hasVacation ? vacation!.Amount : null,
+                    hasWorked ? (daySummary?.WorkedFromHome == true ? "Yes" : "No") : "",
+                    description ?? ""));
+
+                totalWorked += workedHours;
+                totalOvertime += overtimeHours;
+            }
+
+            totalsByUser[emp.Id] = (totalWorked, totalOvertime);
+        }
+
+        var sb = new System.Text.StringBuilder();
+
+        // The daily table comes first so it can be read or copied as-is from row 1.
+        sb.AppendLine(CsvRow("Date", "Day", "Employee", "Hours Worked", "Overtime", "Leave Type", "Leave Days", "WFH", "Description"));
+        foreach (var row in rows.OrderBy(r => r.Date).ThenBy(r => r.EmployeeName))
+        {
+            sb.AppendLine(CsvRow(
+                row.Date.ToString("yyyy-MM-dd"),
+                row.Date.DayOfWeek.ToString(),
+                CsvEscape(row.EmployeeName),
+                FormatHours(row.WorkedHours),
+                FormatHours(row.OvertimeHours),
+                CsvEscape(row.LeaveType),
+                row.LeaveDays is { } days ? FormatHours(days) : "",
+                row.Wfh,
+                CsvEscape(row.Description)));
+        }
+
+        // Month totals, plus what was actually decided at settlement (blank until confirmed).
+        sb.AppendLine();
+        sb.AppendLine(CsvRow("Employee", "Total Hours Worked", "Total Overtime", "Approved Overtime (settlement)", "Outcome", "Notes"));
+        foreach (var emp in data.Employees)
+        {
+            data.SettlementByUser.TryGetValue(emp.Id, out var settlement);
+            var totals = totalsByUser[emp.Id];
+            sb.AppendLine(CsvRow(
+                CsvEscape(emp.FullName),
+                FormatHours(totals.Worked),
+                FormatHours(totals.Overtime),
+                settlement?.PaidOutHours is { } paid ? FormatHours(paid) : "",
+                CsvEscape(settlement?.Outcome?.ToString() ?? ""),
+                CsvEscape(settlement?.Notes ?? "")));
+        }
+
+        return sb.ToString();
+    }
+
+    private sealed record PayrollRow(
+        DateOnly Date,
+        string EmployeeName,
+        decimal WorkedHours,
+        decimal OvertimeHours,
+        string LeaveType,
+        decimal? LeaveDays,
+        string Wfh,
+        string Description);
+
+    // Semicolon-separated: Excel with Belgian/Dutch regional settings splits on ';', not ','.
+    private const string CsvSeparator = ";";
+
+    private static string CsvRow(params string[] cells) => string.Join(CsvSeparator, cells);
+
+    /// <summary>Rounds to the nearest quarter hour (15 min), the unit payroll works in.</summary>
+    private static decimal RoundToQuarter(decimal hours) =>
+        Math.Round(hours * 4, MidpointRounding.AwayFromZero) / 4;
+
+    /// <summary>Decimal hours with a dot and no trailing zeros: 8, 7.75, 0.5.</summary>
+    private static string FormatHours(decimal hours) =>
+        hours.ToString("0.##", CultureInfo.InvariantCulture);
+
     private static string CsvEscape(string value)
     {
         if (value.Length > 0 && (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@'))
             value = "'" + value;
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+        if (value.Contains(';') || value.Contains(',') || value.Contains('"') || value.Contains('\n'))
             return $"\"{value.Replace("\"", "\"\"")}\"";
         return value;
     }
@@ -565,30 +764,8 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
     public async Task<IEnumerable<WorkdayTargetDto>> SetEmployeeWorkdayTargetsAsync(
         string userId, IEnumerable<WorkdayTargetDto> targets, CancellationToken ct = default)
     {
-        var targetList = targets.ToList();
-        var submittedDays = targetList.Select(t => t.DayOfWeek).ToHashSet();
-
-        var existing = await _context.WorkdayTargets
-            .Where(t => t.UserId == userId)
-            .ToListAsync(ct);
-
-        // The submitted set is authoritative — a day missing from it means "inherit
-        // the global default again", so any existing override for that day is cleared.
-        _context.WorkdayTargets.RemoveRange(existing.Where(t => !submittedDays.Contains(t.DayOfWeek)));
-
-        foreach (var dto in targetList)
-        {
-            var row = existing.FirstOrDefault(t => t.DayOfWeek == dto.DayOfWeek);
-            if (row == null)
-            {
-                row = new WorkdayTarget { UserId = userId, DayOfWeek = dto.DayOfWeek };
-                _context.WorkdayTargets.Add(row);
-            }
-            row.Hours = dto.Hours;
-        }
-
-        await _context.SaveChangesAsync(ct);
-        return await GetEmployeeWorkdayTargetsAsync(userId, ct);
+        var rows = await WorkdayTargetHelper.UpsertWorkdayTargetsAsync(_context, userId, targets, ct);
+        return rows.Select(t => new WorkdayTargetDto { DayOfWeek = t.DayOfWeek, Hours = t.Hours });
     }
 
     // ─── Vacation overview ────────────────────────────────────────────────────
@@ -639,7 +816,6 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         string userId, int? year, int? month, CancellationToken ct = default)
     {
         var query = _context.TimeBankAdjustments
-            .Include(a => a.CreatedByUser)
             .Where(a => a.UserId == userId)
             .AsQueryable();
 
@@ -659,26 +835,15 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         return await query
             .OrderByDescending(a => a.EffectiveDate)
             .ThenByDescending(a => a.CreatedAt)
-            .Select(a => new TimeBankAdjustmentDto
-            {
-                Id = a.Id,
-                UserId = a.UserId,
-                EffectiveDate = a.EffectiveDate,
-                Hours = a.Hours,
-                Reason = a.Reason,
-                SourceSettlementId = a.SourceSettlementId,
-                CreatedByUserId = a.CreatedByUserId,
-                CreatedByName = a.CreatedByUser != null ? a.CreatedByUser.FullName : null,
-                CreatedAt = a.CreatedAt,
-            })
+            .ProjectTo<TimeBankAdjustmentDto>(_mapper.ConfigurationProvider)
             .ToListAsync(ct);
     }
 
     public async Task<TimeBankAdjustmentDto> CreateTimeBankAdjustmentAsync(
         string userId, CreateTimeBankAdjustmentDto dto, string adminUserId, CancellationToken ct = default)
     {
-        var user = await _userManager.FindByIdAsync(userId)
-            ?? throw new ResourceNotFoundException("Employee not found.");
+        if (!await _context.Users.AnyAsync(u => u.Id == userId, ct))
+            throw new ResourceNotFoundException("Employee not found.");
 
         if (await SettlementLockHelper.IsMonthSettledAsync(_context, userId, dto.EffectiveDate, ct))
             throw new ValidationException(
@@ -697,17 +862,16 @@ public class AdminService(AppDbContext context, UserManager<User> userManager) :
         _context.TimeBankAdjustments.Add(adjustment);
         await _context.SaveChangesAsync(ct);
 
-        return new TimeBankAdjustmentDto
-        {
-            Id = adjustment.Id,
-            UserId = adjustment.UserId,
-            EffectiveDate = adjustment.EffectiveDate,
-            Hours = adjustment.Hours,
-            Reason = adjustment.Reason,
-            CreatedByUserId = adjustment.CreatedByUserId,
-            CreatedByName = (await _userManager.FindByIdAsync(adminUserId))?.FullName,
-            CreatedAt = adjustment.CreatedAt,
-        };
+        var adminName = await _context.Users
+            .Where(u => u.Id == adminUserId)
+            .Select(u => u.FullName)
+            .FirstOrDefaultAsync(ct);
+
+        // adjustment.CreatedByUser isn't loaded here, so the mapper's own resolver would
+        // read a null navigation — set the already-fetched admin name directly instead.
+        var result = _mapper.Map<TimeBankAdjustmentDto>(adjustment);
+        result.CreatedByName = adminName;
+        return result;
     }
 
     public async Task DeleteTimeBankAdjustmentAsync(int id, CancellationToken ct = default)

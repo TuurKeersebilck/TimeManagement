@@ -37,8 +37,17 @@ public class MissedClockInReminderService(
                     await SendCalendarTokenExpiryRemindersAsync(stoppingToken);
                 }
 
+                // Settlements: "ready" email right after generation on the 1st, then a weekly
+                // Monday reminder while any remain unconfirmed (skipped if the 1st is a Monday).
                 if (now.Day == 1)
+                {
                     await GenerateMonthlySettlementsAsync(stoppingToken);
+                    await SendSettlementReviewEmailAsync(isReminder: false, stoppingToken);
+                }
+                else if (now.DayOfWeek == DayOfWeek.Monday)
+                {
+                    await SendSettlementReviewEmailAsync(isReminder: true, stoppingToken);
+                }
             }
 
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
@@ -125,7 +134,7 @@ public class MissedClockInReminderService(
             }
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            if (today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            if (TimeCalculationHelper.IsWeekend(today))
             {
                 logger.LogInformation("MissedClockInReminder: skipped — today is a weekend.");
                 return;
@@ -263,13 +272,30 @@ public class MissedClockInReminderService(
         }
     }
 
+    private async Task SendSettlementReviewEmailAsync(bool isReminder, CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var settlementService = scope.ServiceProvider.GetRequiredService<ISettlementService>();
+            var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+            var appUrl = configuration["AppUrl"] ?? "http://localhost:5173";
+
+            await settlementService.SendReviewEmailAsync(appUrl, isReminder, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "SendSettlementReviewEmailAsync encountered an error.");
+        }
+    }
+
     private static async Task<DateOnly?> GetPreviousWorkingDayAsync(DateOnly today, AppDbContext db, CancellationToken ct)
     {
         var candidate = today.AddDays(-1);
 
         for (var i = 0; i < 10; i++)
         {
-            if (candidate.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            if (TimeCalculationHelper.IsWeekend(candidate))
             {
                 candidate = candidate.AddDays(-1);
                 continue;
