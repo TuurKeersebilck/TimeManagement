@@ -28,7 +28,6 @@ public interface IAdminService
     Task<IEnumerable<AdminVacationDayDto>> GetAllVacationDaysAsync(string? userId = null, int? vacationTypeId = null, int? year = null, int? month = null, CancellationToken ct = default);
 
     // Payroll export
-    Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default);
     Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default);
 
     // Working hours targets

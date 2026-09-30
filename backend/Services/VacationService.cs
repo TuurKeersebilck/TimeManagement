@@ -102,7 +102,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         if (used + dto.Amount > balance.YearlyBalance)
             throw new InsufficientVacationBalanceException(
-                $"Insufficient balance. Remaining: {balance.YearlyBalance - used} day(s).");
+                $"Insufficient balance. Remaining: {FormatDays(balance.YearlyBalance - used)} day(s).");
 
         var day = new VacationDay
         {
@@ -139,7 +139,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         if (used + dto.Amount > balance.YearlyBalance)
             throw new InsufficientVacationBalanceException(
-                $"Insufficient balance. Remaining: {balance.YearlyBalance - used} day(s).");
+                $"Insufficient balance. Remaining: {FormatDays(balance.YearlyBalance - used)} day(s).");
 
         var typeChanged = day.VacationTypeId != dto.VacationTypeId;
 
@@ -227,7 +227,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         if (alreadyUsed + totalNewAmount > balance.YearlyBalance)
             throw new InsufficientVacationBalanceException(
-                $"Insufficient balance. Remaining: {balance.YearlyBalance - alreadyUsed} day(s), needed: {totalNewAmount}.");
+                $"Insufficient balance. Remaining: {FormatDays(balance.YearlyBalance - alreadyUsed)} day(s), needed: {FormatDays(totalNewAmount)}.");
 
         var entities = newDays.Select(d => new VacationDay
         {
@@ -275,4 +275,8 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         if (amount != 0.5m && amount != 1.0m)
             throw new InvalidVacationAmountException("Amount must be 0.5 (half day) or 1.0 (full day).");
     }
+
+    /// <summary>Days with a dot and no trailing zeros (0.5, 10), independent of the server's culture.</summary>
+    private static string FormatDays(decimal days) =>
+        days.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { formatHours, formatSignedHours } from "@/lib/hours";
 import { useRouter } from "vue-router";
 import { adminService, type AdminTimeLog, type Employee } from "../../services/adminService";
 import type { OvertimeResultDto } from "../../services/workSessionService";
@@ -148,13 +149,6 @@ const formatTime = (t?: string) => {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
-function formatFlexHours(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
 
 const balanceClass = (h?: number) => {
   if (h === undefined || Math.abs(h) < 0.01)
@@ -263,8 +257,11 @@ useAutoRefresh(() => load({ silent: true }));
               <TableHead class="head">Break end</TableHead>
               <TableHead class="head">End</TableHead>
               <TableHead class="head">Worked today</TableHead>
-              <TableHead class="head pr-5 text-right" title="Flex balance for the current month">
-                Overtime (month)
+              <TableHead
+                class="head pr-5 text-right"
+                title="Worked minus target this month, plus carry-overs and adjustments. Only what's left over at month end can be paid out."
+              >
+                Flex balance (month)
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -341,8 +338,8 @@ useAutoRefresh(() => load({ silent: true }));
               <TableCell class="min-w-36">
                 <div v-if="row.worked !== undefined" class="space-y-1">
                   <p class="data">
-                    {{ row.worked.toFixed(2) }}h
-                    <span v-if="row.target" class="text-muted-foreground">/ {{ row.target }}h</span>
+                    {{ formatHours(row.worked) }}
+                    <span v-if="row.target" class="text-muted-foreground">/ {{ formatHours(row.target) }}</span>
                   </p>
                   <div v-if="row.progress !== undefined" class="h-1 w-full max-w-28 rounded-full bg-muted overflow-hidden">
                     <div
@@ -362,7 +359,7 @@ useAutoRefresh(() => load({ silent: true }));
                   class="data inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold"
                   :class="balanceClass(row.balance)"
                 >
-                  {{ formatFlexHours(row.balance) }}
+                  {{ formatSignedHours(row.balance) }}
                 </span>
                 <span v-else class="data empty">—</span>
               </TableCell>

@@ -18,6 +18,7 @@ import { holidayService, type PublicHoliday, type DayOfWeek } from "@/services/h
 import { useClockEventsStore } from "@/composables/useClockEventsStore";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
+import { formatHours, formatSignedHours } from "@/lib/hours";
 import DaySessionsEditor from "@/components/DaySessionsEditor.vue";
 import {
   emptySession,
@@ -348,21 +349,7 @@ function formatDate(s: string): string {
   });
 }
 
-function formatSeconds(secs: number): string {
-  const abs = Math.abs(secs);
-  const h = Math.floor(abs / 3600);
-  const m = Math.floor((abs % 3600) / 60);
-  const sign = secs < 0 ? "-" : "+";
-  return `${sign}${h}h${m.toString().padStart(2, "0")}m`;
-}
 
-function formatHours(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
 
 function sessionTimeline(session: WorkSessionDto): string {
   const ci = formatUtc(session.clockIn);
@@ -775,7 +762,7 @@ onUnmounted(() => {
               </div>
               <p class="text-3xl font-bold font-mono text-foreground">
                 <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
-                <span v-else>{{ totalHoursThisWeek.toFixed(2) }}h</span>
+                <span v-else>{{ formatHours(totalHoursThisWeek) }}</span>
               </p>
               <template v-if="!loadingSummaries && weeklyTarget != null">
                 <div class="mt-2 w-full bg-muted rounded-full h-1.5">
@@ -784,7 +771,7 @@ onUnmounted(() => {
                     :style="{ width: `${weeklyProgress}%` }"
                   />
                 </div>
-                <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ weeklyTarget }}h target</p>
+                <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ formatHours(weeklyTarget) }} target</p>
               </template>
             </div>
 
@@ -795,7 +782,7 @@ onUnmounted(() => {
               </div>
               <p class="text-3xl font-bold font-mono text-foreground">
                 <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
-                <span v-else>{{ totalHoursThisMonth.toFixed(2) }}h</span>
+                <span v-else>{{ formatHours(totalHoursThisMonth) }}</span>
               </p>
             </div>
           </div>
@@ -875,9 +862,9 @@ onUnmounted(() => {
                     class="text-xl font-mono font-semibold tabular-nums"
                     :class="todayFlexSeconds >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                   >
-                    {{ formatSeconds(Math.floor(todayFlexSeconds)) }}
+                    {{ formatSignedHours(Math.floor(todayFlexSeconds) / 3600) }}
                   </p>
-                  <p class="text-xs text-slate-400 mt-0.5">vs {{ todayTargetHours }}h target</p>
+                  <p class="text-xs text-slate-400 mt-0.5">vs {{ formatHours(todayTargetHours) }} target</p>
                 </div>
               </div>
 
@@ -899,7 +886,7 @@ onUnmounted(() => {
                   class="font-semibold font-mono"
                   :class="monthlyFlexHours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                 >
-                  {{ formatHours(monthlyFlexHours) }}
+                  {{ formatSignedHours(monthlyFlexHours) }}
                 </span>
                 <span v-if="monthlyFlexHours < 0" class="text-slate-500 text-xs ml-1">below target</span>
               </div>
@@ -1169,7 +1156,7 @@ onUnmounted(() => {
                         v-if="row.data.totalWorkedHours > 0"
                         class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-primary/10 text-primary"
                       >
-                        {{ row.data.totalWorkedHours.toFixed(2) }}h
+                        {{ formatHours(row.data.totalWorkedHours) }}
                       </span>
                       <span v-else class="text-slate-400 text-xs">—</span>
                     </TableCell>
@@ -1187,7 +1174,7 @@ onUnmounted(() => {
                             :is="flexDeltaForDay(row.data)! >= 0 ? TrendingUpIcon : TrendingDownIcon"
                             class="size-3"
                           />
-                          {{ formatHours(flexDeltaForDay(row.data)!) }}
+                          {{ formatSignedHours(flexDeltaForDay(row.data)!) }}
                         </span>
                         <CoffeeIcon
                           v-if="breakAutoDeductedMinutesForDay(row.data)"
