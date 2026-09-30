@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
+import { formatHours, formatSignedHours } from "@/lib/hours";
 import {
   settlementService,
   type MonthlySettlementDto,
@@ -223,7 +224,7 @@ async function confirmSettlement() {
 
 async function exportCsv() {
   try {
-    await adminService.downloadPayrollExport(selectedYear.value, selectedMonth.value);
+    await adminService.downloadDailyPayrollExport(selectedYear.value, selectedMonth.value);
   } catch {
     toast.error("Failed to export payroll CSV");
   }
@@ -231,19 +232,7 @@ async function exportCsv() {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmtH(h: number): string {
-  const abs = Math.abs(h);
-  const hrs = Math.floor(abs);
-  const min = Math.round((abs - hrs) * 60);
-  const sign = h < 0 ? "-" : "+";
-  return `${sign}${hrs}h${min.toString().padStart(2, "0")}m`;
-}
 
-function fmtHPlain(h: number): string {
-  const hrs = Math.floor(h);
-  const min = Math.round((h - hrs) * 60);
-  return `${hrs}h${min.toString().padStart(2, "0")}m`;
-}
 
 onMounted(load);
 </script>
@@ -367,18 +356,18 @@ onMounted(load);
                     : 'bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300'"
                 >
                   <component :is="s.netBalanceHours >= 0 ? TrendingUpIcon : TrendingDownIcon" class="size-3" />
-                  {{ fmtH(s.netBalanceHours) }}
+                  {{ formatSignedHours(s.netBalanceHours) }}
                 </span>
               </TableCell>
 
               <!-- Overtime -->
               <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
-                {{ fmtHPlain(s.overtimeHours) }}
+                {{ formatHours(s.overtimeHours) }}
               </TableCell>
 
               <!-- Deficit -->
               <TableCell class="font-mono text-xs text-slate-600 dark:text-slate-400">
-                {{ s.deficitHours > 0 ? fmtHPlain(s.deficitHours) : '—' }}
+                {{ s.deficitHours > 0 ? formatHours(s.deficitHours) : '—' }}
               </TableCell>
 
               <!-- Compliance flags placeholder — loaded in detail -->
@@ -445,19 +434,19 @@ onMounted(load);
               class="text-2xl font-mono font-bold mt-1"
               :class="selected.netBalanceHours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
             >
-              {{ fmtH(selected.netBalanceHours) }}
+              {{ formatSignedHours(selected.netBalanceHours) }}
             </p>
           </div>
           <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-center">
             <p class="text-xs text-slate-500 uppercase tracking-wide font-medium">Overtime</p>
             <p class="text-2xl font-mono font-bold mt-1 text-slate-900 dark:text-slate-100">
-              {{ fmtHPlain(selected.overtimeHours) }}
+              {{ formatHours(selected.overtimeHours) }}
             </p>
           </div>
           <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-center">
             <p class="text-xs text-slate-500 uppercase tracking-wide font-medium">Deficit</p>
             <p class="text-2xl font-mono font-bold mt-1 text-slate-900 dark:text-slate-100">
-              {{ selected.deficitHours > 0 ? fmtHPlain(selected.deficitHours) : '—' }}
+              {{ selected.deficitHours > 0 ? formatHours(selected.deficitHours) : '—' }}
             </p>
           </div>
         </div>
@@ -477,7 +466,7 @@ onMounted(load);
               <AlertTriangleIcon class="size-3.5 text-amber-500 shrink-0 mt-px" />
               <span class="text-amber-800 dark:text-amber-200">
                 {{ flag.date }} — {{ flag.type === 'DailyOvertime' ? 'Daily overtime' : 'Weekly overtime' }}:
-                {{ flag.hoursWorked.toFixed(2) }}h worked vs {{ flag.threshold.toFixed(2) }}h threshold
+                {{ formatHours(flag.hoursWorked) }} worked vs {{ formatHours(flag.threshold) }} threshold
               </span>
             </div>
           </div>
@@ -499,14 +488,14 @@ onMounted(load);
               <TableBody>
                 <TableRow v-for="day in detailOvertime.perDay" :key="day.date">
                   <TableCell class="text-xs text-slate-600 dark:text-slate-400 font-mono">{{ day.date }}</TableCell>
-                  <TableCell class="text-right text-xs font-mono">{{ day.workedHours.toFixed(2) }}h</TableCell>
-                  <TableCell class="text-right text-xs font-mono text-slate-500">{{ day.targetHours.toFixed(2) }}h</TableCell>
+                  <TableCell class="text-right text-xs font-mono">{{ formatHours(day.workedHours) }}</TableCell>
+                  <TableCell class="text-right text-xs font-mono text-slate-500">{{ formatHours(day.targetHours) }}</TableCell>
                   <TableCell class="text-right">
                     <span
                       class="text-xs font-mono font-semibold"
                       :class="day.flexDelta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                     >
-                      {{ fmtH(day.flexDelta) }}
+                      {{ formatSignedHours(day.flexDelta) }}
                     </span>
                   </TableCell>
                 </TableRow>
@@ -528,9 +517,9 @@ onMounted(load);
             v-if="selected.paidOutHours !== null || selected.carriedForwardHours !== null"
             class="text-xs text-emerald-700 dark:text-emerald-300 mt-1 font-mono"
           >
-            <template v-if="(selected.paidOutHours ?? 0) > 0">{{ fmtHPlain(selected.paidOutHours!) }} paid out</template>
+            <template v-if="(selected.paidOutHours ?? 0) > 0">{{ formatHours(selected.paidOutHours!) }} paid out</template>
             <template v-if="(selected.paidOutHours ?? 0) > 0 && (selected.carriedForwardHours ?? 0) !== 0"> · </template>
-            <template v-if="(selected.carriedForwardHours ?? 0) !== 0">{{ fmtH(selected.carriedForwardHours!) }} carried to next month</template>
+            <template v-if="(selected.carriedForwardHours ?? 0) !== 0">{{ formatSignedHours(selected.carriedForwardHours!) }} carried to next month</template>
             <template v-if="(selected.paidOutHours ?? 0) === 0 && (selected.carriedForwardHours ?? 0) === 0">nothing paid out or carried</template>
           </p>
           <p v-if="selected.reviewedByName" class="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
@@ -548,7 +537,7 @@ onMounted(load);
           <!-- Allocation: three fields, always available — admin has full control -->
           <div class="space-y-3">
             <div class="flex items-center gap-1.5">
-              <Label>Allocate {{ fmtH(selected.netBalanceHours) }} balance</Label>
+              <Label>Allocate {{ formatSignedHours(selected.netBalanceHours) }} balance</Label>
               <TooltipProvider :delay-duration="100">
                 <Tooltip>
                   <TooltipTrigger as-child>
@@ -609,11 +598,11 @@ onMounted(load);
               class="text-xs font-mono text-amber-600 dark:text-amber-400"
             >
               <template v-if="allocationDiff > 0">
-                {{ fmtHPlain(allocationDiff) }} of the balance unallocated — it will be
+                {{ formatHours(allocationDiff) }} of the balance unallocated — it will be
                 {{ selected.netBalanceHours >= 0 ? 'forfeited (unpaid)' : 'forgiven' }}.
               </template>
               <template v-else>
-                Allocating {{ fmtHPlain(-allocationDiff) }} more than the computed balance.
+                Allocating {{ formatHours(-allocationDiff) }} more than the computed balance.
               </template>
             </p>
             <p v-else class="text-xs font-mono text-slate-500 dark:text-slate-400">

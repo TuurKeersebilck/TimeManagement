@@ -89,25 +89,16 @@ describe("payroll export download", () => {
     globalThis.URL.revokeObjectURL = vi.fn();
   });
 
-  it("requests the CSV as a blob", async () => {
-    await adminService.downloadPayrollExport(2026, 3);
-
-    expect(api.get).toHaveBeenCalledWith("/admin/export", {
-      params: { year: 2026, month: 3, userId: undefined },
-      responseType: "blob",
-    });
-  });
-
   it("names the file with a zero-padded month", async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
-    await adminService.downloadPayrollExport(2026, 3);
+    await adminService.downloadDailyPayrollExport(2026, 3);
 
     const anchor = click.mock.instances[0] as HTMLAnchorElement;
-    expect(anchor.download).toBe("payroll_2026_03.csv");
+    expect(anchor.download).toBe("hours_2026_03.csv");
   });
 
-  it("requests the new daily export from its own endpoint", async () => {
+  it("requests the export as a blob", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     await adminService.downloadDailyPayrollExport(2026, 9, "u1");
@@ -118,7 +109,7 @@ describe("payroll export download", () => {
     });
   });
 
-  it("adds a filename-safe employee name to a per-employee daily export", async () => {
+  it("adds a filename-safe employee name to a per-employee export", async () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     await adminService.downloadDailyPayrollExport(2026, 9, "u1", "Élise De Smet-Dubois");
@@ -130,7 +121,7 @@ describe("payroll export download", () => {
   it("releases the object URL after triggering the download", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
-    await adminService.downloadPayrollExport(2026, 12);
+    await adminService.downloadDailyPayrollExport(2026, 12);
 
     expect(globalThis.URL.revokeObjectURL).toHaveBeenCalledWith("blob:payroll");
   });
@@ -138,7 +129,7 @@ describe("payroll export download", () => {
   it("drops an empty employee filter rather than sending a blank id", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
-    await adminService.downloadPayrollExport(2026, 3, "");
+    await adminService.downloadDailyPayrollExport(2026, 3, "");
 
     expect(api.get.mock.calls[0][1].params.userId).toBeUndefined();
   });

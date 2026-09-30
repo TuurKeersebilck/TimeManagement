@@ -176,16 +176,7 @@ export const adminService = {
     return res.data;
   },
 
-  /** Original export (settlement summary on top, comma-separated, two-decimal hours). */
-  async downloadPayrollExport(year: number, month: number, userId?: string): Promise<void> {
-    const response = await apiClient.get("/admin/export", {
-      params: { year, month, userId: userId || undefined },
-      responseType: "blob",
-    });
-    saveCsv(response.data, `payroll_${year}_${String(month).padStart(2, "0")}.csv`);
-  },
-
-  /** New per-day export for payroll entry: exact decimal hours, overtime, leave and WFH. */
+  /** Per-day payroll export: exact decimal hours, overtime against the flex balance, leave and WFH. */
   async downloadDailyPayrollExport(
     year: number,
     month: number,

@@ -462,7 +462,7 @@ public class AdminService(
 
     // ─── Payroll export ───────────────────────────────────────────────────────
 
-    /// <summary>Everything both payroll exports read for one month, loaded once.</summary>
+    /// <summary>Everything the payroll export reads for one month, loaded once.</summary>
     private sealed record PayrollData(
         DateOnly MonthStart,
         DateOnly LastDate,
@@ -543,99 +543,25 @@ public class AdminService(
     }
 
     /// <summary>
-    /// Original export: settlement summary block on top, then comma-separated daily rows with
-    /// worked hours to two decimals. Kept unchanged for admins who still rely on this layout.
-    /// </summary>
-    public async Task<string> GeneratePayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
-    {
-        var data = await LoadPayrollDataAsync(year, month, userId, ct);
-
-        var rows = new List<(DateOnly Date, string EmployeeName, double Hours, string VacationType, string Description)>();
-
-        foreach (var emp in data.Employees)
-        {
-            for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
-            {
-                var baseTarget = data.BaseWeekdayTarget(emp.Id, date.DayOfWeek);
-                data.HolidayByDate.TryGetValue(date, out var holidayName);
-                var isHoliday = baseTarget > 0 && holidayName != null;
-                var hasVacation = data.VacationsByUserDate.TryGetValue((emp.Id, date), out var vacation);
-                data.DaySummaries.TryGetValue((emp.Id, date), out var daySummary);
-                var workedHours = daySummary?.TotalHours ?? 0.0;
-
-                if (baseTarget == 0 && workedHours == 0 && !hasVacation && !isHoliday)
-                    continue;
-
-                string vacationTypeCell;
-                if (isHoliday)
-                    vacationTypeCell = $"Holiday: {holidayName}";
-                else if (hasVacation)
-                    vacationTypeCell = vacation!.VacationTypeName;
-                else if (baseTarget > 0 && workedHours == 0)
-                    vacationTypeCell = "Missing Log";
-                else
-                    vacationTypeCell = "";
-
-                var description = hasVacation && !string.IsNullOrEmpty(vacation!.Note)
-                    ? vacation.Note
-                    : daySummary?.Description ?? "";
-
-                rows.Add((date, emp.FullName, workedHours, vacationTypeCell, description ?? ""));
-            }
-        }
-
-        var sb = new System.Text.StringBuilder();
-
-        sb.AppendLine("OVERTIME SUMMARY");
-        sb.AppendLine("Employee,Approved Overtime Hours,Outcome,Notes");
-        foreach (var emp in data.Employees)
-        {
-            data.SettlementByUser.TryGetValue(emp.Id, out var settlement);
-            var approvedOvertime = settlement?.PaidOutHours?.ToString("F2", CultureInfo.InvariantCulture) ?? "";
-            var outcome = settlement?.Outcome?.ToString() ?? "";
-            var notes = settlement?.Notes ?? "";
-            sb.AppendLine(string.Join(",", CsvEscape(emp.FullName), approvedOvertime, CsvEscape(outcome), CsvEscape(notes)));
-        }
-        sb.AppendLine();
-
-        sb.AppendLine("Date,Day,Employee,Hours Worked,Vacation Type,Description");
-
-        foreach (var row in rows.OrderBy(r => r.Date).ThenBy(r => r.EmployeeName))
-        {
-            sb.AppendLine(string.Join(",",
-                row.Date.ToString("yyyy-MM-dd"),
-                row.Date.DayOfWeek.ToString(),
-                CsvEscape(row.EmployeeName),
-                row.Hours.ToString("F2", CultureInfo.InvariantCulture),
-                CsvEscape(row.VacationType),
-                CsvEscape(row.Description)
-            ));
-        }
-
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// New export for entering hours into payroll: one ';'-separated row per employee per day with
-    /// exact worked hours and overtime as decimal hours (30 min = 0.5, 40 min = 0.67), leave type
-    /// and days, and WFH (no free-text description), followed by month totals and the settlement's
-    /// approved overtime.
+    /// Payroll export for entering hours into payroll: one ';'-separated row per employee per day with
+    /// exact worked hours and that day's overtime — the difference with the day's target, negative
+    /// when short — as decimal hours (30 min = 0.5, 40 min = 0.67), leave type and days, and WFH.
+    /// Month totals follow: the overtime adds up to the flex balance (plus any carry-over or manual
+    /// adjustment, shown separately), next to the settlement's approved overtime.
     /// </summary>
     public async Task<string> GenerateDailyPayrollCsvAsync(int year, int month, string? userId = null, CancellationToken ct = default)
     {
         var data = await LoadPayrollDataAsync(year, month, userId, ct);
 
         var rows = new List<PayrollRow>();
-        var totalsByUser = new Dictionary<string, (long WorkedMinutes, long OvertimeMinutes)>();
+        var totalsByUser = new Dictionary<string, (long WorkedMinutes, long OvertimeMinutes, long FlexBalanceMinutes)>();
 
         foreach (var emp in data.Employees)
         {
-            // Same per-day numbers as the monthly settlement (auto-deducted minimum break,
-            // leave-adjusted targets), so the export always reconciles with the balance.
-            var perDayByDate = (await _overtimeService.CalculateAsync(emp.Id, year, month, ct))
-                .PerDay.ToDictionary(d => d.Date);
-
-            long totalWorkedMinutes = 0, totalOvertimeMinutes = 0;
+            // Same per-day numbers as the monthly settlement and the dashboard's flex balance
+            // (auto-deducted minimum break, leave-adjusted targets), so the export reconciles with it.
+            var balance = await _overtimeService.CalculateAsync(emp.Id, year, month, ct);
+            var perDayByDate = balance.PerDay.ToDictionary(d => d.Date);
 
             for (var date = data.MonthStart; date <= data.LastDate; date = date.AddDays(1))
             {
@@ -650,7 +576,9 @@ public class AdminService(
                 // rounding back to minutes recovers the exact value; hours are only formatted
                 // (two decimals) when the row is written.
                 var workedMinutes = ToMinutes(perDay?.WorkedHours ?? 0m);
-                var overtimeMinutes = Math.Max(0, workedMinutes - ToMinutes(perDay?.TargetHours ?? 0m));
+                // Worked minus target, negative when short — the day's contribution to the flex
+                // balance (0 while the employee is still clocked in, like the balance itself).
+                var overtimeMinutes = ToMinutes(perDay?.FlexDelta ?? 0m);
                 var hasWorked = workedMinutes > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
 
                 if (baseTarget == 0 && !hasWorked && !hasVacation && !isHoliday)
@@ -681,12 +609,14 @@ public class AdminService(
                     leaveTypeCell,
                     hasVacation ? vacation!.Amount : null,
                     hasWorked ? (daySummary?.WorkedFromHome == true ? "Yes" : "No") : ""));
-
-                totalWorkedMinutes += workedMinutes;
-                totalOvertimeMinutes += overtimeMinutes;
             }
 
-            totalsByUser[emp.Id] = (totalWorkedMinutes, totalOvertimeMinutes);
+            // Totals over every day of the month, not only the rows written: skipped days (no
+            // target, nothing worked) contribute 0, so this equals the sum of the rows.
+            totalsByUser[emp.Id] = (
+                balance.PerDay.Sum(d => ToMinutes(d.WorkedHours)),
+                balance.PerDay.Sum(d => ToMinutes(d.FlexDelta)),
+                ToMinutes(balance.RunningBalanceHours));
         }
 
         var sb = new System.Text.StringBuilder();
@@ -706,9 +636,11 @@ public class AdminService(
                 row.Wfh));
         }
 
-        // Month totals, plus what was actually decided at settlement (blank until confirmed).
+        // Month totals: the daily overtime adds up to the flex balance; carry-overs and manual flex
+        // adjustments make up any difference. Then what was decided at settlement (blank until confirmed).
         sb.AppendLine();
-        sb.AppendLine(CsvRow("Employee", "Total Hours Worked", "Total Overtime", "Approved Overtime (settlement)", "Outcome", "Notes"));
+        sb.AppendLine(CsvRow("Employee", "Total Hours Worked", "Total Overtime", "Adjustments", "Flex Balance",
+            "Approved Overtime (settlement)", "Outcome", "Notes"));
         foreach (var emp in data.Employees)
         {
             data.SettlementByUser.TryGetValue(emp.Id, out var settlement);
@@ -717,6 +649,8 @@ public class AdminService(
                 CsvEscape(emp.FullName),
                 FormatMinutesAsHours(totals.WorkedMinutes),
                 FormatMinutesAsHours(totals.OvertimeMinutes),
+                FormatMinutesAsHours(totals.FlexBalanceMinutes - totals.OvertimeMinutes),
+                FormatMinutesAsHours(totals.FlexBalanceMinutes),
                 settlement?.PaidOutHours is { } paid ? FormatHours(paid) : "",
                 CsvEscape(settlement?.Outcome?.ToString() ?? ""),
                 CsvEscape(settlement?.Notes ?? "")));

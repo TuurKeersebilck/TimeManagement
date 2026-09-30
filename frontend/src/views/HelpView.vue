@@ -344,6 +344,10 @@ function toggle(section: string) {
                 </ul>
               </div>
               <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Overtime is what's left in the flex balance</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Hours worked beyond the target first make up for days that were shorter than the target — two hours longer on Monday and two hours shorter on Tuesday leave <span class="font-medium text-slate-700 dark:text-slate-300">0</span>. Only what's left over in the flex balance at the end of the month counts as overtime and can be paid out; that's decided in the settlement.</p>
+              </div>
+              <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Settlements</p>
                 <p class="text-sm text-slate-600 dark:text-slate-400">On the 1st of each month a settlement is created automatically for every active employee for the previous month; you can also <span class="font-medium text-slate-700 dark:text-slate-300">Generate</span> them yourself for any completed month. To confirm one, split the month's balance into <span class="font-medium text-slate-700 dark:text-slate-300">pay out</span>, <span class="font-medium text-slate-700 dark:text-slate-300">carry over</span> to next month and/or <span class="font-medium text-slate-700 dark:text-slate-300">deduct from next month</span>, and add notes if you like. Carry-overs appear as flex adjustments in the next month. Open or auto-closed sessions and pending adjustment requests in that month must be resolved first. Confirmed settlements are locked.</p>
               </div>
@@ -371,18 +375,14 @@ function toggle(section: string) {
             </button>
             <div v-show="open.adminExport" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
               <div class="space-y-1.5">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Export (new)</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Made for entering hours into payroll. Pick a month and one employee or everyone. One row per employee per day with:</p>
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">What's in the export</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Made for entering hours into payroll, from the Payroll Export page or the Settlements page. Pick a month and one employee or everyone. One row per employee per day with:</p>
                 <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
-                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Hours worked</span> and <span class="font-medium text-slate-700 dark:text-slate-300">overtime</span> that day as exact decimal hours with two decimals — 30 min = 0.5, 1h30 = 1.5, 40 min = 0.67. Overtime is never negative.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Hours worked</span> and <span class="font-medium text-slate-700 dark:text-slate-300">overtime</span> that day as exact decimal hours with two decimals — 30 min = 0.5, 1h30 = 1.5, 40 min = 0.67. Overtime is the difference with that day's target, so a day that's shorter than the target is negative (e.g. −2 for 6 hours on an 8-hour day).</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Leave type</span> and <span class="font-medium text-slate-700 dark:text-slate-300">leave days</span> (1 or 0.5), a public holiday, or "Missing Log" for a working day with nothing recorded</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">WFH</span> (yes or no)</li>
                 </ul>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Month totals and the approved overtime from the settlement follow below the table. The file uses <span class="font-medium text-slate-700 dark:text-slate-300">;</span> as separator and the same numbers as the flex balance (including the automatic minimum break).</p>
-              </div>
-              <div class="space-y-1.5">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Export (original)</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">The earlier layout, still available: a settlement summary on top, then one row per working day with hours worked to two decimals. It doesn't deduct the automatic minimum break, so its hours can be slightly higher than the new export's.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Month totals follow below the table: <span class="font-medium text-slate-700 dark:text-slate-300">total overtime</span> (the days added up, so +2 on Monday and −2 on Tuesday make 0), <span class="font-medium text-slate-700 dark:text-slate-300">adjustments</span> (a carry-over from last month or a manual flex adjustment), the <span class="font-medium text-slate-700 dark:text-slate-300">flex balance</span> (the two together — the same number as on the dashboard) and the <span class="font-medium text-slate-700 dark:text-slate-300">approved overtime</span> from the settlement — the hours to pay out. The file uses <span class="font-medium text-slate-700 dark:text-slate-300">;</span> as separator and the same numbers as the flex balance (including the automatic minimum break).</p>
               </div>
             </div>
           </div>
