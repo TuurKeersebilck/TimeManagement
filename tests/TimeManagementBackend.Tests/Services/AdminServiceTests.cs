@@ -872,4 +872,24 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Assert.Equal(17.5m, summary.WorkedHours); // 8.5 + 9, not the admin's 11
         Assert.Equal(1.5m, summary.FlexHours);
     }
+
+    // ── Work from home for a day ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task WorkFromHome_UsesWhatIsSetForTheDayElseTheDefaultForDaysToCome()
+    {
+        var user = Db.AddUser();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var nextWeek = today.AddDays(7);
+        var yesterday = today.AddDays(-1);
+        user.DefaultWfhWeekdaysMask = (1 << (int)nextWeek.DayOfWeek) | (1 << (int)yesterday.DayOfWeek);
+        Db.WorkDays.Add(new WorkDay { UserId = user.Id, Date = nextWeek.AddDays(7), WorkedFromHome = false });
+        await Db.SaveChangesAsync();
+
+        Assert.True((await NewService().GetWorkFromHomeAsync(user.Id, nextWeek)).WorkedFromHome);
+        // Set explicitly for the day: the default no longer applies.
+        Assert.False((await NewService().GetWorkFromHomeAsync(user.Id, nextWeek.AddDays(7))).WorkedFromHome);
+        // A past day nobody marked WFH stays office, whatever the default.
+        Assert.False((await NewService().GetWorkFromHomeAsync(user.Id, yesterday)).WorkedFromHome);
+    }
 }

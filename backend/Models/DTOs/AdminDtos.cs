@@ -53,6 +53,11 @@ public class SetEmployeeTargetDto
     public int? MinimumBreakMinutes { get; set; }
 }
 
+public class WorkFromHomeDto
+{
+    public bool WorkedFromHome { get; set; }
+}
+
 public class WeekSummaryDto
 {
     public string WeekLabel { get; set; } = string.Empty;

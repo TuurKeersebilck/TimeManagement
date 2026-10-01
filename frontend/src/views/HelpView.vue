@@ -89,7 +89,7 @@ function toggle(section: string) {
 
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Work from home</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Toggle the WFH flag at any point during the day to mark it as remote. You can also change it after the fact from the time-tracking view.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Toggle the WFH flag at any point during the day to mark it as remote. You can also change it after the fact from the time-tracking view. When you clock in, the switch starts with your default WFH weekdays (Account page), or with what your admin already set for that day; you can still change it before clocking in.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -310,6 +310,8 @@ function toggle(section: string) {
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Edit</span> — the pencil at the end of a row opens that day's sessions and breaks. Changes apply immediately.</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Add hours</span> — select an employee, click Add hours and pick a date, e.g. when someone forgot to clock in.</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Delete day</span> — removes all of that day's hours after a confirmation.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Work from home</span> — the same dialog has a Work from home switch, saved together with the hours.</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Plan work from home ahead</span> — use Add hours and pick a future date (or today, before the employee clocks in) and only the switch is shown. The employee's clock-in then starts with that setting; they can still change it.</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Auto-closed sessions</span> — a forgotten clock-out shows as "auto-closed"; fill in the clock-out time and the day counts again.</li>
                 </ul>
                 <p class="text-sm text-slate-600 dark:text-slate-400">A reason is optional. The employee isn't notified, but every change is kept in the adjustment history marked <span class="font-medium text-slate-700 dark:text-slate-300">Admin edit</span> (who, when and why). A day can't be edited while the employee is still clocked in on it. In an already settled month you'll see a warning: the settlement keeps its confirmed numbers, so correct the balance with a flex adjustment if needed.</p>

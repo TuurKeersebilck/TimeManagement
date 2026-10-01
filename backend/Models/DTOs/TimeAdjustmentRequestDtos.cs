@@ -68,6 +68,9 @@ public class AdminEditDayDto
     /// <summary>Optional note kept in the history of changes.</summary>
     [MaxLength(2000)]
     public string? Reason { get; set; }
+
+    /// <summary>Sets the day's work-from-home flag; null leaves it as it is.</summary>
+    public bool? WorkedFromHome { get; set; }
 }
 
 // ── Response DTOs ──────────────────────────────────────────────────────────────
