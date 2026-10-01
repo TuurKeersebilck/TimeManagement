@@ -83,6 +83,11 @@ function toggle(section: string) {
             </div>
 
             <div class="space-y-1.5">
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Day description</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">While you're clocked in, the description box is saved as you type, so you can add to it throughout the day instead of writing it all at clock-out. It stays there after a reload or on another device, and a second session on the same day continues the same text. Your admin can see it in the time logs while you're still working.</p>
+            </div>
+
+            <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Flex balance</p>
               <p class="text-sm text-slate-600 dark:text-slate-400">Every completed day is compared against your per-weekday target hours. The time-tracking view shows a <span class="font-medium text-slate-700 dark:text-slate-300">daily delta</span> (how much over or under target you were) and a <span class="font-medium text-slate-700 dark:text-slate-300">running monthly flex balance</span>. Days with an open session are excluded from the balance until you clock out.</p>
             </div>
