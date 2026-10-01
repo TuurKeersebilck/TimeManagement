@@ -38,6 +38,22 @@ public class AdminService(
     private static decimal SumWeeklyTarget(IEnumerable<WorkdayTarget> targets, string userId)
         => s_weekdays.Sum(day => TimeCalculationHelper.ResolveWorkdayTarget(targets, userId, day));
 
+    public async Task<WorkFromHomeDto> GetWorkFromHomeAsync(string userId, DateOnly date, CancellationToken ct = default)
+    {
+        var workDay = await _context.WorkDays.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.UserId == userId && d.Date == date, ct);
+        if (workDay != null)
+            return new WorkFromHomeDto { WorkedFromHome = workDay.WorkedFromHome };
+
+        // A past day without a WorkDay was never marked WFH; the default only applies to days to come.
+        if (date < DateOnly.FromDateTime(DateTime.UtcNow))
+            return new WorkFromHomeDto { WorkedFromHome = false };
+
+        var mask = await _context.Users.Where(u => u.Id == userId).Select(u => (int?)u.DefaultWfhWeekdaysMask)
+            .FirstOrDefaultAsync(ct) ?? throw new ResourceNotFoundException("Employee not found.");
+        return new WorkFromHomeDto { WorkedFromHome = (mask & (1 << (int)date.DayOfWeek)) != 0 };
+    }
+
     public async Task<IEnumerable<AdminDaySummaryDto>> GetAllDaySummariesAsync(string? userId = null, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default)
     {
         // Admins don't log hours, so any session of theirs (e.g. from before a role change)
