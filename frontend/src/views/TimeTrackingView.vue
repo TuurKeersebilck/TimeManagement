@@ -468,10 +468,14 @@ async function handleClockIn() {
 async function handleClockOut() {
   acting.value = "clockOut";
   try {
+    // An unsaved edit goes first: clock-out skips an empty description, which would otherwise
+    // keep an earlier draft the employee just cleared.
+    await saveDescriptionDraft();
     await workSessionService.clockOut(minuteOffset.value, description.value);
     await refreshAll();
     minuteOffset.value = 0;
     description.value = "";
+    descriptionStatus.value = "idle";
     toast.success("Clocked out");
   } catch (err) {
     toast.error(extractApiError(err, "Failed to clock out"));
@@ -520,10 +524,51 @@ async function handleEndBreak() {
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
 
+// ─── Day description draft ────────────────────────────────────────────────────
+// While clocked in, the description is saved to the day as it's typed, so it can be filled in
+// throughout the day and survives a reload or another device. Clocking out saves it as before.
+
+const descriptionStatus = ref<"idle" | "saving" | "saved" | "error">("idle");
+let descriptionTimer: ReturnType<typeof setTimeout> | null = null;
+let descriptionDirty = false;
+
+function onDescriptionInput() {
+  descriptionDirty = true;
+  descriptionStatus.value = "idle";
+  if (descriptionTimer) clearTimeout(descriptionTimer);
+  descriptionTimer = setTimeout(saveDescriptionDraft, 1_000);
+}
+
+async function saveDescriptionDraft() {
+  if (descriptionTimer) clearTimeout(descriptionTimer);
+  descriptionTimer = null;
+  const date = today.value?.openSession?.date;
+  if (!date || !descriptionDirty) return;
+  descriptionDirty = false;
+  descriptionStatus.value = "saving";
+  try {
+    await workSessionService.updateDay(date, { description: description.value.trim() });
+    // Typed more while this was saving: the next save reports its own status.
+    if (!descriptionDirty) descriptionStatus.value = "saved";
+  } catch {
+    descriptionDirty = true;
+    descriptionStatus.value = "error";
+  }
+}
+
+/** Fills the box with what's saved for the open session's day, unless there's newer text in it. */
+function loadDescriptionDraft() {
+  const open = today.value?.openSession;
+  if (!open || descriptionDirty || descriptionStatus.value === "saving") return;
+  const workDay = today.value?.workDay;
+  description.value = workDay?.date === open.date ? (workDay.description ?? "") : "";
+}
+
 async function refreshToday() {
   loadingToday.value = true;
   try {
     today.value = await workSessionService.getToday();
+    loadDescriptionDraft();
   } catch {
     toast.error("Failed to load today's status");
   } finally {
@@ -680,7 +725,9 @@ async function submitAdjustmentRequest() {
 // ─── Visibility / mount ───────────────────────────────────────────────────────
 
 function handleVisibilityChange() {
-  if (!document.hidden) {
+  if (document.hidden) {
+    saveDescriptionDraft();
+  } else {
     now.value = new Date();
     refreshToday();
     loadPendingRequests();
@@ -721,6 +768,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  saveDescriptionDraft();
   if (clockInterval) clearInterval(clockInterval);
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
@@ -944,12 +992,27 @@ onUnmounted(() => {
 
               <!-- Description (only when clocked in and break not active) -->
               <div v-if="canClockOut" class="space-y-1.5">
-                <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
+                <div class="flex items-baseline justify-between gap-2">
+                  <Label>Description <span class="font-normal text-slate-400 ml-1">(optional)</span></Label>
+                  <span
+                    class="text-xs"
+                    :class="descriptionStatus === 'error' ? 'text-destructive' : 'text-slate-400'"
+                  >
+                    {{
+                      descriptionStatus === "saving" ? "Saving…"
+                      : descriptionStatus === "saved" ? "Saved"
+                      : descriptionStatus === "error" ? "Not saved yet"
+                      : "Saved as you type"
+                    }}
+                  </span>
+                </div>
                 <textarea
                   v-model="description"
                   rows="3"
+                  maxlength="1000"
                   class="input-field resize-none"
-                  placeholder="What did you work on today?"
+                  placeholder="What are you working on today?"
+                  @input="onDescriptionInput"
                 />
               </div>
 
