@@ -94,7 +94,7 @@ function toggle(section: string) {
 
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Work from home</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Toggle the WFH flag at any point during the day to mark it as remote. You can also change it after the fact from the time-tracking view. When you clock in, the switch starts with your default WFH weekdays (Account page), or with what your admin already set for that day; you can still change it before clocking in.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Set the Working from home switch when you clock in; you can still change a day afterwards with the WFH switch in your history. When you clock in, the switch starts with your default WFH weekdays (Account page), or with what your admin already set for that day; you can still change it before clocking in.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -124,8 +124,8 @@ function toggle(section: string) {
 
           <div v-show="open.vacations" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
             <div class="space-y-1.5">
-              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Requesting leave</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Select a single day or a date range, choose a vacation type (e.g. Annual, Sick), and optionally add a note. Half-day requests use an amount of <span class="font-medium text-slate-700 dark:text-slate-300">0.5</span>.</p>
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Select a single day or a date range, choose a vacation type (e.g. Annual, Sick), and optionally add a note. Half days use an amount of <span class="font-medium text-slate-700 dark:text-slate-300">0.5</span>. There's no approval step: the leave is planned right away and your admin gets a notification. Weekends and public holidays in a range are skipped.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -134,8 +134,8 @@ function toggle(section: string) {
             </div>
 
             <div class="space-y-1.5">
-              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Deleting requests</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Upcoming vacation days can be deleted before the date arrives. Past days cannot be removed.</p>
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Changing or removing leave</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Click a day in the calendar to change or delete its leave, or use the delete button in the list of upcoming days.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -210,7 +210,11 @@ function toggle(section: string) {
             <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">approves</span> your time adjustment request</li>
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">rejects</span> your time adjustment request</li>
+              <li>A session you forgot to clock out of was <span class="font-medium text-slate-700 dark:text-slate-300">auto-closed</span></li>
+              <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">plans, changes or removes</span> leave for you</li>
+              <li>Your <span class="font-medium text-slate-700 dark:text-slate-300">monthly settlement</span> is confirmed</li>
             </ul>
+            <p class="text-sm text-slate-600 dark:text-slate-400">Admins get one when an employee plans leave or sends a time adjustment request.</p>
             <p class="text-sm text-slate-600 dark:text-slate-400">Notifications are not pushed in real time — the app polls periodically. Mark them read individually or all at once via the bell dropdown.</p>
           </div>
         </div>
@@ -248,7 +252,14 @@ function toggle(section: string) {
 
               <div class="space-y-0.5">
                 <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Missed clock-in reminder</p>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Sent at <span class="font-medium text-slate-600 dark:text-slate-300">08:00 UTC</span> on working days if no clock-in was recorded the previous day. You can safely ignore it if you were on approved leave. Submit a time adjustment request if you need to log that day.</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Sent at <span class="font-medium text-slate-600 dark:text-slate-300">08:00 UTC</span> when nothing was logged on the previous working day (on a Monday, that's Friday). Full-day leave doesn't trigger it. Submit a time adjustment request if you need to log that day.</p>
+              </div>
+
+              <div class="border-t border-border" />
+
+              <div class="space-y-0.5">
+                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Calendar feed expiring</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Sent <span class="font-medium text-slate-600 dark:text-slate-300">one to two weeks</span> before your calendar subscription URL expires, so you can regenerate it in time.</p>
               </div>
             </div>
           </div>
@@ -319,7 +330,7 @@ function toggle(section: string) {
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Plan work from home ahead</span> — use Add hours and pick a future date (or today, before the employee clocks in) and only the switch is shown. The employee's clock-in then starts with that setting; they can still change it.</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Auto-closed sessions</span> — a forgotten clock-out shows as "auto-closed"; fill in the clock-out time and the day counts again.</li>
                 </ul>
-                <p class="text-sm text-slate-600 dark:text-slate-400">A reason is optional. The employee isn't notified, but every change is kept in the adjustment history marked <span class="font-medium text-slate-700 dark:text-slate-300">Admin edit</span> (who, when and why). A day can't be edited while the employee is still clocked in on it. In an already settled month you'll see a warning: the settlement keeps its confirmed numbers, so correct the balance with a flex adjustment if needed.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">A reason is optional. The employee isn't notified, but every change to hours is kept in the adjustment history marked <span class="font-medium text-slate-700 dark:text-slate-300">Admin edit</span> (who, when and why). A day can't be edited while the employee is still clocked in on it. In an already settled month you'll see a warning: the settlement keeps its confirmed numbers, so correct the balance with a flex adjustment if needed.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Adjustment requests from employees</p>
@@ -465,9 +476,9 @@ function toggle(section: string) {
                 <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Adjustment request</span> — to the admin notification address when an employee submits one, with a one-click approve link</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Settlement reminders</span> — to the admin notification address when settlements are ready, and every Monday while any are pending</li>
-                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Missed clock-in</span> — to an employee the morning after a working day without any clock-in (not on leave)</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Missed clock-in</span> — to an employee the morning after a working day without any clock-in (not on full-day leave)</li>
                 </ul>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Each can be switched off under App Settings → Email types; leaving the notification address empty stops the admin emails.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Each can be switched off under App Settings → Email types; leaving the notification address empty stops the admin emails. These are always sent: invites, password resets, the outcome of an employee's adjustment request, and a warning to an employee one to two weeks before their calendar feed expires.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Automatic clean-up</p>
