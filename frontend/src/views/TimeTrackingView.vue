@@ -539,9 +539,17 @@ function onDescriptionInput() {
   descriptionTimer = setTimeout(saveDescriptionDraft, 1_000);
 }
 
-async function saveDescriptionDraft() {
+// Saves run one after another: two in flight could land out of order and leave older text.
+let descriptionSaves: Promise<void> = Promise.resolve();
+
+function saveDescriptionDraft(): Promise<void> {
   if (descriptionTimer) clearTimeout(descriptionTimer);
   descriptionTimer = null;
+  descriptionSaves = descriptionSaves.then(sendDescriptionDraft);
+  return descriptionSaves;
+}
+
+async function sendDescriptionDraft() {
   const date = today.value?.openSession?.date;
   if (!date || !descriptionDirty) return;
   descriptionDirty = false;
