@@ -39,6 +39,8 @@ export interface AdminEditDayPayload {
   /** The day's full intended state; an empty session list removes the day's hours. */
   desiredDaySnapshot: DesiredDaySnapshot;
   reason?: string;
+  /** Sets the day's WFH; omitted leaves it as it is. */
+  workedFromHome?: boolean;
 }
 
 export interface CreateAdjustmentRequestPayload {

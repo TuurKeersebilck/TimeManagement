@@ -382,8 +382,20 @@ public class TimeAdjustmentRequestService(
         if (employee.Role != UserRole.Employee)
             throw new ValidationException("Only employees log hours.");
 
+        // A future day can't have hours yet, but its WFH can be planned ahead: the employee's
+        // clock-in switch starts from it.
         if (dto.Date > DateOnly.FromDateTime(DateTime.UtcNow))
-            throw new ValidationException("Cannot edit a future date.");
+        {
+            if (dto.DesiredDaySnapshot.Sessions.Count > 0 || dto.WorkedFromHome is null)
+                throw new ValidationException("Cannot add hours for a future date.");
+
+            await SetWorkedFromHomeAsync(dto.UserId, dto.Date, dto.WorkedFromHome.Value, ct);
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "Admin {AdminId} set {UserId}'s WFH on {Date} to {Wfh}.",
+                adminUserId, dto.UserId, dto.Date, dto.WorkedFromHome.Value);
+            return;
+        }
 
         // Rewriting a day the employee is currently clocked in on would close their running
         // session under them; the day can be edited once they clock out.
@@ -403,6 +415,19 @@ public class TimeAdjustmentRequestService(
             .Where(s => s.UserId == dto.UserId && s.Date == dto.Date)
             .Select(s => new { s.Id, BreakIds = s.Breaks.Select(b => b.Id).ToList() })
             .ToListAsync(ct);
+
+        // No hours before or after: there's nothing for the history, only the WFH flag to set
+        // (e.g. planned for today before the employee clocks in).
+        if (existingSessions.Count == 0 && dto.DesiredDaySnapshot.Sessions.Count == 0)
+        {
+            if (dto.WorkedFromHome is { } wfhOnly)
+            {
+                await SetWorkedFromHomeAsync(dto.UserId, dto.Date, wfhOnly, ct);
+                await db.SaveChangesAsync(ct);
+            }
+            return;
+        }
+
         foreach (var session in dto.DesiredDaySnapshot.Sessions)
         {
             if (session.WorkSessionId is not { } sessionId)
@@ -415,6 +440,9 @@ public class TimeAdjustmentRequestService(
         // Settled months are deliberately not blocked (the UI warns instead): the admin may have a
         // good reason, and the settlement itself keeps the numbers it was confirmed with.
         await ReconcileWorkSessionsAsync(dto.UserId, dto.Date, dto.DesiredDaySnapshot, ct);
+
+        if (dto.WorkedFromHome is { } workedFromHome)
+            await SetWorkedFromHomeAsync(dto.UserId, dto.Date, workedFromHome, ct);
 
         var now = DateTimeOffset.UtcNow;
         db.TimeAdjustmentRequests.Add(new TimeAdjustmentRequest
@@ -440,6 +468,17 @@ public class TimeAdjustmentRequestService(
         logger.LogInformation(
             "Admin {AdminId} edited {UserId}'s sessions on {Date} ({Count} session(s)).",
             adminUserId, dto.UserId, dto.Date, dto.DesiredDaySnapshot.Sessions.Count);
+    }
+
+    private async Task SetWorkedFromHomeAsync(string userId, DateOnly date, bool workedFromHome, CancellationToken ct)
+    {
+        var workDay = await db.WorkDays.FirstOrDefaultAsync(d => d.UserId == userId && d.Date == date, ct);
+        if (workDay == null)
+        {
+            workDay = new WorkDay { UserId = userId, Date = date };
+            db.WorkDays.Add(workDay);
+        }
+        workDay.WorkedFromHome = workedFromHome;
     }
 
     // ── Snapshot validation ───────────────────────────────────────────────────

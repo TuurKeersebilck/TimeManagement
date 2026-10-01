@@ -45,6 +45,7 @@ public class AuthorizationContractTests
             "AdminController.GetTimeBankAdjustments",
             "AdminController.GetVacationTypes",
             "AdminController.GetWeeklySummary",
+            "AdminController.GetWorkFromHome",
             "AdminController.RemoveEmployeeVacationType",
             "AdminController.SetEmployeeTarget",
             "AdminController.SetEmployeeWorkdayTargets",

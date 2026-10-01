@@ -774,4 +774,78 @@ public class TimeAdjustmentRequestServiceTests(PostgresFixture fixture) : Databa
         await Assert.ThrowsAsync<ValidationException>(() => NewService().EditDayAsAdminAsync(
             AdminEdit(admin.Id, Snapshot(Session(At(9), At(17)))), admin.Id));
     }
+
+    [Fact]
+    public async Task AdminEdit_SetsWorkFromHomeTogetherWithTheHours()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var edit = AdminEdit(employee.Id, Snapshot(Session(At(9), At(17))));
+        edit.WorkedFromHome = true;
+
+        await NewService().EditDayAsAdminAsync(edit, admin.Id);
+
+        var workDay = await NewContext().WorkDays.SingleAsync(d => d.UserId == employee.Id && d.Date == Date);
+        Assert.True(workDay.WorkedFromHome);
+    }
+
+    [Fact]
+    public async Task AdminEdit_WithoutWorkFromHomeLeavesItAlone()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        Db.WorkDays.Add(new WorkDay { UserId = employee.Id, Date = Date, WorkedFromHome = true });
+        await Db.SaveChangesAsync();
+
+        await NewService().EditDayAsAdminAsync(AdminEdit(employee.Id, Snapshot(Session(At(9), At(17)))), admin.Id);
+
+        Assert.True((await NewContext().WorkDays.SingleAsync(d => d.UserId == employee.Id)).WorkedFromHome);
+    }
+
+    [Fact]
+    public async Task AdminEdit_PlansWorkFromHomeOnAFutureDayWithoutHistory()
+    {
+        // Planning ahead only sets the flag the employee's clock-in starts from; there are no
+        // hours to change, so nothing goes into the adjustment history.
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+
+        await NewService().EditDayAsAdminAsync(new AdminEditDayDto
+        {
+            UserId = employee.Id, Date = tomorrow, DesiredDaySnapshot = Snapshot(), WorkedFromHome = true,
+        }, admin.Id);
+
+        var workDay = await NewContext().WorkDays.SingleAsync(d => d.UserId == employee.Id);
+        Assert.Equal(tomorrow, workDay.Date);
+        Assert.True(workDay.WorkedFromHome);
+        Assert.Empty(await NewContext().TimeAdjustmentRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdminEdit_RefusesHoursOnAFutureDay()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => NewService().EditDayAsAdminAsync(
+            new AdminEditDayDto
+            {
+                UserId = employee.Id, Date = tomorrow, WorkedFromHome = true,
+                DesiredDaySnapshot = Snapshot(Session(At(9), At(17))),
+            }, admin.Id));
+
+        Assert.Contains("future date", ex.Message);
+        Assert.Empty(await NewContext().WorkDays.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AdminEdit_SetsOnlyWorkFromHomeOnADayWithoutHours()
+    {
+        var (employee, admin) = await ArrangeEmployeeAndAdminAsync();
+        var edit = AdminEdit(employee.Id, Snapshot());
+        edit.WorkedFromHome = true;
+
+        await NewService().EditDayAsAdminAsync(edit, admin.Id);
+
+        Assert.True((await NewContext().WorkDays.SingleAsync(d => d.UserId == employee.Id)).WorkedFromHome);
+        Assert.Empty(await NewContext().TimeAdjustmentRequests.ToListAsync());
+    }
 }
