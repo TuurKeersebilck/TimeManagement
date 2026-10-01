@@ -456,7 +456,6 @@ async function handleClockIn() {
     await workSessionService.clockIn(minuteOffset.value, wfh.value);
     await refreshAll();
     minuteOffset.value = 0;
-    wfh.value = false;
     toast.success("Clocked in");
   } catch (err) {
     toast.error(extractApiError(err, "Failed to clock in"));
@@ -472,6 +471,7 @@ async function handleClockOut() {
     await refreshAll();
     minuteOffset.value = 0;
     description.value = "";
+    resetWfh();
     toast.success("Clocked out");
   } catch (err) {
     toast.error(extractApiError(err, "Failed to clock out"));
@@ -519,6 +519,19 @@ async function handleEndBreak() {
 }
 
 // ─── Data loading ─────────────────────────────────────────────────────────────
+
+/**
+ * The clock-in switch starts with what's already set for today — planned by an admin, or by an
+ * earlier session of a split day — and otherwise with the employee's default WFH weekdays.
+ */
+function resetWfh() {
+  const workDay = today.value?.workDay;
+  if (workDay && workDay.date === localDateString(new Date())) {
+    wfh.value = workDay.workedFromHome;
+  } else {
+    wfh.value = schedule.value?.defaultWfhWeekdays.includes(ALL_DAY_NAMES[new Date().getDay()]) ?? false;
+  }
+}
 
 async function refreshToday() {
   loadingToday.value = true;
@@ -696,10 +709,6 @@ onMounted(async () => {
     (async () => {
       try {
         schedule.value = await workSessionService.getMySchedule();
-        const todayName = ALL_DAY_NAMES[new Date().getDay()];
-        if (schedule.value.defaultWfhWeekdays.includes(todayName)) {
-          wfh.value = true;
-        }
       } catch {}
     })(),
     (async () => {
@@ -718,6 +727,7 @@ onMounted(async () => {
     loadWeekVacations(),
     loadPendingRequests(),
   ]);
+  resetWfh();
 });
 
 onUnmounted(() => {

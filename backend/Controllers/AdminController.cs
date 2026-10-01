@@ -166,6 +166,13 @@ public class AdminController(
         CancellationToken ct)
         => Ok(await _adminService.SetEmployeeWorkdayTargetsAsync(userId, dto.Targets, ct));
 
+    [HttpGet("employees/{userId}/work-from-home")]
+    public async Task<ActionResult<WorkFromHomeDto>> GetWorkFromHome(
+        string userId,
+        [FromQuery] DateOnly date,
+        CancellationToken ct)
+        => Ok(await _adminService.GetWorkFromHomeAsync(userId, date, ct));
+
     [HttpGet("employees/{userId}/weekly-summary")]
     public async Task<ActionResult<IEnumerable<WeekSummaryDto>>> GetWeeklySummary(
         string userId,

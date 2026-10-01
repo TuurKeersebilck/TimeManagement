@@ -164,6 +164,14 @@ export const adminService = {
     return res.data;
   },
 
+  /** WFH as the employee's clock-in would start that day: set for the day, else their default weekdays (from today on). */
+  async getWorkFromHome(userId: string, date: string): Promise<boolean> {
+    const res = await apiClient.get<{ workedFromHome: boolean }>(`/admin/employees/${userId}/work-from-home`, {
+      params: { date },
+    });
+    return res.data.workedFromHome;
+  },
+
   async getWeeklySummary(userId: string, weeks = 8): Promise<WeekSummary[]> {
     const res = await apiClient.get<WeekSummary[]>(`/admin/employees/${userId}/weekly-summary`, { params: { weeks } });
     return res.data;

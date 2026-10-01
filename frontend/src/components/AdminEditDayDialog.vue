@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,8 @@ import { AlertTriangleIcon, Loader2Icon, Trash2Icon } from "lucide-vue-next";
 /**
  * Lets an admin set an employee's sessions for one day directly — edit, add or remove — instead
  * of waiting for the employee to send an adjustment request. Always loads the day fresh from the
- * server so it never edits a stale copy.
+ * server so it never edits a stale copy. Also sets the day's WFH; for a future day that's all it
+ * sets, and the employee's clock-in switch starts from it.
  */
 const props = defineProps<{
   employeeId: string;
@@ -48,6 +50,7 @@ const { confirm } = useConfirmDialog();
 const selectedDate = ref("");
 const sessions = ref<EditableSession[]>([]);
 const reason = ref("");
+const wfh = ref(false);
 const dayLog = ref<AdminTimeLog | null>(null);
 const settledMonths = ref(new Set<string>());
 const loading = ref(false);
@@ -63,6 +66,7 @@ const stillClockedIn = computed(() => dayLog.value?.hasOpenSession === true);
 const monthSettled = computed(() => settledMonths.value.has(selectedDate.value.slice(0, 7)));
 const hasLoggedHours = computed(() => (dayLog.value?.sessions.length ?? 0) > 0);
 const removesDay = computed(() => sessions.value.length === 0 && hasLoggedHours.value);
+const isFuture = computed(() => selectedDate.value > todayStr());
 
 const dateLabel = computed(() =>
   selectedDate.value
@@ -100,14 +104,14 @@ async function loadDay(date: string) {
   loadedDate.value = date;
   loading.value = true;
   try {
-    const logs = await adminService.getAllTimeLogs({
-      userId: props.employeeId,
-      dateFrom: date,
-      dateTo: date,
-    });
+    const [logs, workedFromHome] = await Promise.all([
+      adminService.getAllTimeLogs({ userId: props.employeeId, dateFrom: date, dateTo: date }),
+      adminService.getWorkFromHome(props.employeeId, date),
+    ]);
     if (request !== loadRequest) return;
     dayLog.value = logs.find((l) => l.date.startsWith(date)) ?? null;
     sessions.value = toEditable(dayLog.value);
+    wfh.value = workedFromHome;
   } catch {
     if (request === loadRequest) toast.error("Failed to load this day");
   } finally {
@@ -156,6 +160,8 @@ async function submit(date: string, daySessions: EditableSession[], successMessa
       date,
       desiredDaySnapshot: toSnapshot(date, daySessions),
       reason: reason.value.trim() || undefined,
+      // Removing the day's hours leaves its WFH alone.
+      workedFromHome: daySessions.length > 0 || !hasLoggedHours.value ? wfh.value : undefined,
     });
     toast.success(successMessage);
     open.value = false;
@@ -168,13 +174,15 @@ async function submit(date: string, daySessions: EditableSession[], successMessa
 }
 
 async function save() {
+  // A future day, or a day without hours where the admin left them blank: only its WFH is saved.
+  const blank = sessions.value.every((s) => !s.clockIn && !s.clockOut && s.breaks.length === 0);
+  if (isFuture.value || (!hasLoggedHours.value && blank)) {
+    await submit(selectedDate.value, [], "Work from home saved");
+    return;
+  }
   const invalid = validateDaySessions(sessions.value, { allowEmpty: true });
   if (invalid) {
     toast.error(invalid);
-    return;
-  }
-  if (selectedDate.value > todayStr()) {
-    toast.error("You can't enter hours for a future date");
     return;
   }
   await submit(selectedDate.value, sessions.value, removesDay.value ? "Hours removed" : "Hours saved");
@@ -198,7 +206,7 @@ function deleteDay() {
   <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-130 max-h-[90vh] overflow-y-auto">
       <DialogHeader>
-        <DialogTitle>{{ isAdding ? "Add hours" : "Edit hours" }} — {{ employeeName }}</DialogTitle>
+        <DialogTitle>{{ isFuture ? "Plan work from home" : isAdding ? "Add hours" : "Edit hours" }} — {{ employeeName }}</DialogTitle>
         <DialogDescription>
           Changes apply immediately; no request or approval is needed.
         </DialogDescription>
@@ -207,7 +215,7 @@ function deleteDay() {
       <div class="space-y-4 py-1">
         <div v-if="isAdding" class="space-y-1.5">
           <Label>Date</Label>
-          <Input v-model="selectedDate" type="date" :max="todayStr()" class="cursor-pointer" />
+          <Input v-model="selectedDate" type="date" class="cursor-pointer" />
         </div>
         <p v-else class="text-sm font-medium text-slate-700 dark:text-slate-300">{{ dateLabel }}</p>
 
@@ -232,8 +240,26 @@ function deleteDay() {
           <Loader2Icon class="size-3 animate-spin" />
           Loading this day…
         </div>
+        <template v-else-if="isFuture">
+          <div class="flex items-center gap-3">
+            <Switch id="admin-edit-wfh" v-model="wfh" />
+            <Label for="admin-edit-wfh">Work from home</Label>
+          </div>
+          <p class="text-xs text-slate-400">
+            Hours can't be added ahead of time. {{ employeeName }}'s clock-in starts with this setting
+            on that day; they can still change it.
+          </p>
+        </template>
         <template v-else-if="!stillClockedIn">
           <DaySessionsEditor v-model="sessions" allow-empty />
+
+          <div v-if="sessions.length > 0 || !hasLoggedHours" class="flex items-center gap-3">
+            <Switch id="admin-edit-wfh" v-model="wfh" />
+            <Label for="admin-edit-wfh">Work from home</Label>
+          </div>
+          <p v-if="!hasLoggedHours" class="text-xs text-slate-400">
+            Leave the hours empty to only set work from home.
+          </p>
 
           <p v-if="removesDay" class="text-xs text-amber-600 dark:text-amber-400">
             No sessions left — saving removes all hours for this day.

@@ -33,6 +33,8 @@ public interface IAdminService
     // Working hours targets
     Task<EmployeeTargetDto> GetEmployeeTargetAsync(string userId, CancellationToken ct = default);
     Task<EmployeeTargetDto> SetEmployeeTargetAsync(string userId, SetEmployeeTargetDto dto, CancellationToken ct = default);
+    /// <summary>WFH as the employee's clock-in switch would start for that day: what's set for the day, else (from today on) their default WFH weekdays.</summary>
+    Task<WorkFromHomeDto> GetWorkFromHomeAsync(string userId, DateOnly date, CancellationToken ct = default);
     Task<IEnumerable<WeekSummaryDto>> GetEmployeeWeeklySummaryAsync(string userId, int weeks, CancellationToken ct = default);
 
     // Workday targets (per-employee schedule)
