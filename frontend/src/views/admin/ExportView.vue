@@ -53,7 +53,7 @@ const handleExport = async () => {
   exporting.value = true;
   const userId = selectedEmployeeId.value === "all" ? undefined : selectedEmployeeId.value;
   try {
-    await adminService.downloadDailyPayrollExport(
+    await adminService.downloadPayrollExport(
       Number(selectedYear.value),
       Number(selectedMonth.value),
       userId,

@@ -13,6 +13,7 @@ public class MissedClockInReminderService(
     ILogger<MissedClockInReminderService> logger) : BackgroundService
 {
     private DateOnly _lastRunDate = DateOnly.MinValue;
+    private DateOnly _lastSettlementRunDate = DateOnly.MinValue;
     private DateOnly _lastCalendarExpiryWeekStart = DateOnly.MinValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -36,9 +37,16 @@ public class MissedClockInReminderService(
                     _lastCalendarExpiryWeekStart = currentWeekStart;
                     await SendCalendarTokenExpiryRemindersAsync(stoppingToken);
                 }
+            }
 
-                // Settlements: "ready" email right after generation on the 1st, then a weekly
-                // Monday reminder while any remain unconfirmed (skipped if the 1st is a Monday).
+            // Settlements run earlier (06:00 UTC = 07:00/08:00 Brussels) so the admin's email
+            // is waiting at the start of the workday. "Ready" email right after generation on
+            // the 1st, then a weekly Monday reminder while any remain unconfirmed (skipped if
+            // the 1st is a Monday).
+            if (now.Hour >= 6 && DateOnly.FromDateTime(now) != _lastSettlementRunDate)
+            {
+                _lastSettlementRunDate = DateOnly.FromDateTime(now);
+
                 if (now.Day == 1)
                 {
                     await GenerateMonthlySettlementsAsync(stoppingToken);
