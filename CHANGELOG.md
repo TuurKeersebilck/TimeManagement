@@ -1,5 +1,16 @@
 # Changelog
 
+## [v0.7.2] - 2026-10-01
+
+### New Features
+
+- Admins can now set whether a day was worked from home, right in the Edit hours / Add hours dialog on All Time Logs, together with the hours. Work from home can also be planned ahead: pick a future date (or today, before the employee clocks in) and only the switch is shown. On that day the employee's clock-in starts with the admin's choice instead of their default work-from-home weekdays; they can still change it. Planning work from home isn't added to the adjustment history, since no hours change.
+- The day description on the time-tracking page is now saved as you type while you're clocked in, so you can add to it throughout the day instead of writing it all at clock-out. It stays after a reload or on another device, and a second session on the same day continues the same text instead of replacing it. A small label shows whether it's saved.
+
+### Bug Fixes
+
+- On a day split into several sessions, the work-from-home switch went back to "office" after clocking out. It now starts with what's already set for that day.
+
 ## [v0.7.1] - 2026-09-30
 
 ### New Features
