@@ -853,6 +853,17 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- Legal limits on voluntary overtime -->
+          <div class="flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-3">
+            <ScaleIcon class="size-4 text-slate-400 shrink-0 mt-0.5" />
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+              Voluntary overtime has limits: work at most
+              <span class="font-medium text-slate-700 dark:text-slate-300">11h per day</span> and
+              <span class="font-medium text-slate-700 dark:text-slate-300">50h per week</span>, with no more than
+              <span class="font-medium text-slate-700 dark:text-slate-300">240h of overtime per calendar year</span>.
+            </p>
+          </div>
+
           <!-- Full vacation -->
           <div
             v-if="isFullDayVacation"
