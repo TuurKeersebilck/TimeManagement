@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,7 +68,7 @@ import {
   CalendarDaysIcon,
   TrendingUpIcon,
   TrendingDownIcon,
-  ScaleIcon,
+  InfoIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -825,6 +826,23 @@ onUnmounted(() => {
               <div class="flex items-center gap-2 mb-1">
                 <ClockIcon class="size-3.5 text-slate-400" />
                 <p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">This week</p>
+                <!-- Legal limits on voluntary overtime -->
+                <Popover>
+                  <PopoverTrigger
+                    class="text-slate-400 hover:text-foreground transition-colors rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Limits on voluntary overtime"
+                  >
+                    <InfoIcon class="size-3.5" />
+                  </PopoverTrigger>
+                  <PopoverContent align="start" class="w-64 p-3 text-xs text-muted-foreground" :collision-padding="12">
+                    <p class="font-medium text-foreground mb-1">Limits on voluntary overtime</p>
+                    <ul class="space-y-0.5">
+                      <li>At most <span class="font-medium text-foreground">11h per day</span></li>
+                      <li>At most <span class="font-medium text-foreground">50h per week</span></li>
+                      <li>At most <span class="font-medium text-foreground">240h of overtime</span> per calendar year</li>
+                    </ul>
+                  </PopoverContent>
+                </Popover>
               </div>
               <p class="text-3xl font-bold font-mono text-foreground">
                 <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
@@ -851,17 +869,6 @@ onUnmounted(() => {
                 <span v-else>{{ formatHours(totalHoursThisMonth) }}</span>
               </p>
             </div>
-          </div>
-
-          <!-- Legal limits on voluntary overtime -->
-          <div class="flex items-start gap-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 px-4 py-3">
-            <ScaleIcon class="size-4 text-slate-400 shrink-0 mt-0.5" />
-            <p class="text-sm text-slate-600 dark:text-slate-400">
-              Voluntary overtime has limits: work at most
-              <span class="font-medium text-slate-700 dark:text-slate-300">11h per day</span> and
-              <span class="font-medium text-slate-700 dark:text-slate-300">50h per week</span>, with no more than
-              <span class="font-medium text-slate-700 dark:text-slate-300">240h of overtime per calendar year</span>.
-            </p>
           </div>
 
           <!-- Full vacation -->
