@@ -18,7 +18,7 @@ import { holidayService, type PublicHoliday, type DayOfWeek } from "@/services/h
 import { useClockEventsStore } from "@/composables/useClockEventsStore";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
-import { formatHours, formatSignedHours } from "@/lib/hours";
+import { formatDuration, formatSignedDuration } from "@/lib/hours";
 import DaySessionsEditor from "@/components/DaySessionsEditor.vue";
 import {
   emptySession,
@@ -846,7 +846,7 @@ onUnmounted(() => {
               </div>
               <p class="text-3xl font-bold font-mono text-foreground">
                 <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
-                <span v-else>{{ formatHours(totalHoursThisWeek) }}</span>
+                <span v-else>{{ formatDuration(totalHoursThisWeek) }}</span>
               </p>
               <template v-if="!loadingSummaries && weeklyTarget != null">
                 <div class="mt-2 w-full bg-muted rounded-full h-1.5">
@@ -855,7 +855,7 @@ onUnmounted(() => {
                     :style="{ width: `${weeklyProgress}%` }"
                   />
                 </div>
-                <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ formatHours(weeklyTarget) }} target</p>
+                <p class="text-xs font-mono text-muted-foreground mt-1">/ {{ formatDuration(weeklyTarget) }} target</p>
               </template>
             </div>
 
@@ -866,7 +866,7 @@ onUnmounted(() => {
               </div>
               <p class="text-3xl font-bold font-mono text-foreground">
                 <span v-if="loadingSummaries" class="animate-pulse text-muted-foreground/40">--</span>
-                <span v-else>{{ formatHours(totalHoursThisMonth) }}</span>
+                <span v-else>{{ formatDuration(totalHoursThisMonth) }}</span>
               </p>
             </div>
           </div>
@@ -946,9 +946,9 @@ onUnmounted(() => {
                     class="text-xl font-mono font-semibold tabular-nums"
                     :class="todayFlexSeconds >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                   >
-                    {{ formatSignedHours(Math.floor(todayFlexSeconds) / 3600) }}
+                    {{ formatSignedDuration(Math.floor(todayFlexSeconds) / 3600) }}
                   </p>
-                  <p class="text-xs text-slate-400 mt-0.5">vs {{ formatHours(todayTargetHours) }} target</p>
+                  <p class="text-xs text-slate-400 mt-0.5">vs {{ formatDuration(todayTargetHours) }} target</p>
                 </div>
               </div>
 
@@ -970,7 +970,7 @@ onUnmounted(() => {
                   class="font-semibold font-mono"
                   :class="monthlyFlexHours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                 >
-                  {{ formatSignedHours(monthlyFlexHours) }}
+                  {{ formatSignedDuration(monthlyFlexHours) }}
                 </span>
                 <span v-if="monthlyFlexHours < 0" class="text-slate-500 text-xs ml-1">below target</span>
               </div>
@@ -1255,7 +1255,7 @@ onUnmounted(() => {
                         v-if="row.data.totalWorkedHours > 0"
                         class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold font-mono bg-primary/10 text-primary"
                       >
-                        {{ formatHours(row.data.totalWorkedHours) }}
+                        {{ formatDuration(row.data.totalWorkedHours) }}
                       </span>
                       <span v-else class="text-slate-400 text-xs">—</span>
                     </TableCell>
@@ -1273,7 +1273,7 @@ onUnmounted(() => {
                             :is="flexDeltaForDay(row.data)! >= 0 ? TrendingUpIcon : TrendingDownIcon"
                             class="size-3"
                           />
-                          {{ formatSignedHours(flexDeltaForDay(row.data)!) }}
+                          {{ formatSignedDuration(flexDeltaForDay(row.data)!) }}
                         </span>
                         <CoffeeIcon
                           v-if="breakAutoDeductedMinutesForDay(row.data)"
