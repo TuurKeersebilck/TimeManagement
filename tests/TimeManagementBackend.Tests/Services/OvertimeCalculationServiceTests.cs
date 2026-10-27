@@ -1,3 +1,4 @@
+using TimeManagementBackend.Helpers;
 using TimeManagementBackend.Models;
 using TimeManagementBackend.Models.DTOs;
 using TimeManagementBackend.Services;
@@ -518,12 +519,110 @@ public class OvertimeCalculationServiceTests(PostgresFixture fixture) : Database
         var user = Db.AddUser();
         await Db.SaveChangesAsync();
         await Db.SetGlobalScheduleAsync((DayOfWeek.Monday, 8m));
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = TimeCalculationHelper.BusinessDate(DateTimeOffset.UtcNow);
 
         var result = await NewService().CalculateAsync(user.Id, today.Year, today.Month);
 
         Assert.Equal(today, result.PerDay.Last().Date);
         Assert.DoesNotContain(result.PerDay, d => d.Date > today);
+    }
+
+    // ── Today ─────────────────────────────────────────────────────────────────
+
+    /// <summary>A service whose "now" is NextMonday (9 March 2026) at <paramref name="utcTime"/> UTC.</summary>
+    private OvertimeCalculationService ServiceOnNextMondayAt(TimeSpan utcTime) =>
+        new(NewContext(), new FixedTimeProvider(new DateTimeOffset(NextMonday.ToDateTime(TimeOnly.MinValue) + utcTime, TimeSpan.Zero)));
+
+    [Fact]
+    public async Task Today_BeforeClockingIn_OwesNothingYet()
+    {
+        // At the start of the day everyone would otherwise show a full target behind.
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(9), TimeSpan.FromHours(17));
+        await Db.SaveChangesAsync();
+
+        var result = await ServiceOnNextMondayAt(TimeSpan.FromHours(7)).CalculateAsync(user.Id, 2026, 3);
+        var today = Day(result, NextMonday);
+
+        Assert.True(today.IsProvisional);
+        Assert.Equal(8m, today.TargetHours); // still reported, for the "x of 8h" display
+        Assert.Equal(0m, today.FlexDelta);
+        Assert.Equal(0m, result.RunningBalanceHours);
+        Assert.False(Day(result, Monday).IsProvisional);
+    }
+
+    [Fact]
+    public async Task Today_AfterClockingOutForLunch_StillOwesNothing()
+    {
+        // A closed morning session must not drop the balance by the hours still to come.
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, NextMonday, TimeSpan.FromHours(8), TimeSpan.FromHours(12));
+        await Db.SaveChangesAsync();
+
+        var today = Day(await ServiceOnNextMondayAt(TimeSpan.FromHours(12.5)).CalculateAsync(user.Id, 2026, 3), NextMonday);
+
+        Assert.Equal(4m, today.WorkedHours);
+        Assert.Equal(0m, today.FlexDelta);
+    }
+
+    [Fact]
+    public async Task Today_WhileClockedIn_ReportsTheSessionsClosedSoFar()
+    {
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, NextMonday, TimeSpan.FromHours(8), TimeSpan.FromHours(12));
+        Db.AddOpenSession(user.Id, NextMonday, TimeSpan.FromHours(13));
+        await Db.SaveChangesAsync();
+
+        var today = Day(await ServiceOnNextMondayAt(TimeSpan.FromHours(15)).CalculateAsync(user.Id, 2026, 3), NextMonday);
+
+        Assert.Equal(4m, today.WorkedHours);
+        Assert.Equal(0m, today.FlexDelta);
+    }
+
+    [Fact]
+    public async Task Today_HoursBeyondTheTarget_CountStraightAway()
+    {
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, NextMonday, TimeSpan.FromHours(7), TimeSpan.FromHours(17),
+            aBreak: (TimeSpan.FromHours(12), TimeSpan.FromHours(12.5)));
+        await Db.SaveChangesAsync();
+
+        var result = await ServiceOnNextMondayAt(TimeSpan.FromHours(17)).CalculateAsync(user.Id, 2026, 3);
+
+        Assert.Equal(1.5m, Day(result, NextMonday).FlexDelta);
+        Assert.Equal(1.5m, result.RunningBalanceHours);
+    }
+
+    [Fact]
+    public async Task Yesterday_IsNoLongerProvisional_AndOwesItsTargetInFull()
+    {
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        await Db.SetGlobalScheduleAsync((DayOfWeek.Monday, 8m), (DayOfWeek.Tuesday, 8m));
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(8), TimeSpan.FromHours(12));
+        await Db.SaveChangesAsync();
+
+        var result = await new OvertimeCalculationService(NewContext(), new FixedTimeProvider(
+            new DateTimeOffset(Tuesday.ToDateTime(new TimeOnly(10, 0)), TimeSpan.Zero))).CalculateAsync(user.Id, 2026, 3);
+
+        Assert.False(Day(result, Monday).IsProvisional);
+        Assert.Equal(-4m, Day(result, Monday).FlexDelta);
+        Assert.True(Day(result, Tuesday).IsProvisional);
+        Assert.Equal(-4m, result.RunningBalanceHours);
+    }
+
+    [Fact]
+    public async Task TheDayTurnsOverAtLocalMidnight_NotUtcMidnight()
+    {
+        // 23:30 UTC on Monday 2 March is already 00:30 on Tuesday in Brussels (CET, UTC+1).
+        var user = await ArrangeMondayOnlyScheduleAsync();
+        Db.AddClosedSession(user.Id, Monday, TimeSpan.FromHours(8), TimeSpan.FromHours(12));
+        await Db.SaveChangesAsync();
+
+        var result = await new OvertimeCalculationService(NewContext(), new FixedTimeProvider(
+            new DateTimeOffset(Monday.ToDateTime(new TimeOnly(23, 30)), TimeSpan.Zero))).CalculateAsync(user.Id, 2026, 3);
+
+        Assert.Equal(Tuesday, result.PerDay.Last().Date);
+        Assert.Equal(-4m, Day(result, Monday).FlexDelta);
     }
 
     [Fact]

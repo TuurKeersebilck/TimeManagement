@@ -259,7 +259,7 @@ useAutoRefresh(() => load({ silent: true }));
               <TableHead class="head">Worked today</TableHead>
               <TableHead
                 class="head pr-5 text-right"
-                title="Worked minus target this month, plus carry-overs and adjustments. Only what's left over at month end can be paid out."
+                title="Worked minus target this month, plus carry-overs and adjustments. Today's hours still to go only count once the day is over; overtime counts straight away. Only what's left over at month end can be paid out."
               >
                 Flex balance (month)
               </TableHead>
