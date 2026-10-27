@@ -89,7 +89,7 @@ function toggle(section: string) {
 
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Flex balance</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Every completed day is compared against your per-weekday target hours. The time-tracking view shows a <span class="font-medium text-slate-700 dark:text-slate-300">daily delta</span> (how much over or under target you were) and a <span class="font-medium text-slate-700 dark:text-slate-300">running monthly flex balance</span>. Days with an open session are excluded from the balance until you clock out.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Every completed day is compared against your per-weekday target hours. The time-tracking view shows a <span class="font-medium text-slate-700 dark:text-slate-300">daily delta</span> (how much over or under target you were) and a <span class="font-medium text-slate-700 dark:text-slate-300">running monthly flex balance</span>. Today only counts against you once the day is over: until you reach your target the page shows the time still to go, and hours beyond it count as soon as you clock out.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -356,7 +356,7 @@ function toggle(section: string) {
                 <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
                   <li>Each day, hours worked are compared with that weekday's target (half a target on a half day of leave, none on full leave, holidays or weekends).</li>
                   <li>If no break was logged, the minimum break is deducted automatically.</li>
-                  <li>Days with an open session don't count until the employee clocks out.</li>
+                  <li>Today only counts against an employee once the day is over, so nobody starts the day a full day behind; hours beyond today's target count as soon as they clock out.</li>
                   <li>An employee counts from their first logged day, and a disabled employee until their last — so a mid-month start doesn't show up as missed days.</li>
                   <li>Flex adjustments (manual or carried over from a settlement) are added to the month they're dated in.</li>
                 </ul>
