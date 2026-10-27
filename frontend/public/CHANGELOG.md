@@ -1,5 +1,18 @@
 # Changelog
 
+## [v0.7.3] - 2026-10-27
+
+### Improvements
+
+- The flex balance no longer starts every working day a full day behind. Before, everyone showed −8h from midnight until they clocked in, and the balance dropped again when someone clocked out for lunch. Hours still to go today now only count once the day is over, while overtime counts as soon as you clock out. The day also turns over at midnight Belgian time instead of 01:00 or 02:00. This applies to the dashboard, the employee's overview, settlements and the payroll export, which no longer marks today as "Missing Log".
+- On the time-tracking page, today's progress shows the time still to go (for example "To go 5h12m of 8h00m") instead of a red negative balance, and switches to the green overtime once the target is reached. Today's row in your history reads "in progress" until then.
+- The time-tracking page shows hours and balances as hours and minutes again (7h36m, +3h59m) instead of decimal hours. Admin pages, the weekly chart and the payroll export keep decimal hours.
+- An info icon next to "This week" on the time-tracking page lists the limits for voluntary overtime: at most 11h per day, 50h per week and 240h of overtime per calendar year. It's for information only; nothing is enforced.
+
+### Maintenance
+
+- Updated frontend dependencies (axios 1.20.0, source-map-js 1.2.2).
+
 ## [v0.7.2] - 2026-10-01
 
 ### New Features
