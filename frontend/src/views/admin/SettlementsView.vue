@@ -492,6 +492,12 @@ onMounted(load);
                   <TableCell class="text-right text-xs font-mono text-slate-500">{{ formatHours(day.targetHours) }}</TableCell>
                   <TableCell class="text-right">
                     <span
+                      v-if="day.isProvisional && day.flexDelta === 0 && day.targetHours > 0"
+                      class="text-xs italic text-slate-400"
+                      title="Counts once the day is over"
+                    >in progress</span>
+                    <span
+                      v-else
                       class="text-xs font-mono font-semibold"
                       :class="day.flexDelta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
                     >

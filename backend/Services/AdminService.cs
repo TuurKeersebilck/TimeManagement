@@ -593,7 +593,7 @@ public class AdminService(
                 // (two decimals) when the row is written.
                 var workedMinutes = ToMinutes(perDay?.WorkedHours ?? 0m);
                 // Worked minus target, negative when short — the day's contribution to the flex
-                // balance (0 while the employee is still clocked in, like the balance itself).
+                // balance (never negative for today, which isn't over yet, like the balance itself).
                 var overtimeMinutes = ToMinutes(perDay?.FlexDelta ?? 0m);
                 var hasWorked = workedMinutes > 0 || daySummary?.Sessions.Any(s => s.Status == WorkSessionStatus.Closed) == true;
 
@@ -612,7 +612,8 @@ public class AdminService(
                     leaveTypeCell = $"Holiday: {holidayName}";
                 else if (hasVacation)
                     leaveTypeCell = vacation!.VacationTypeName;
-                else if (baseTarget > 0 && !hasWorked && daySummary?.HasOpenSession != true)
+                else if (baseTarget > 0 && !hasWorked && daySummary?.HasOpenSession != true
+                         && perDay?.IsProvisional != true)
                     leaveTypeCell = "Missing Log";
                 else
                     leaveTypeCell = "";
