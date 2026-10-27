@@ -10,8 +10,14 @@ public class PerDayOvertimeDto
     /// <summary>Effective target hours (applies vacation fractions, holidays, weekends).</summary>
     public decimal TargetHours { get; set; }
 
-    /// <summary>WorkedHours − TargetHours. Positive = surplus, negative = deficit.</summary>
+    /// <summary>WorkedHours − TargetHours. Positive = surplus, negative = deficit. Never negative while <see cref="IsProvisional"/>.</summary>
     public decimal FlexDelta { get; set; }
+
+    /// <summary>
+    /// True for today: the day isn't over, so a shortfall isn't counted yet (FlexDelta is 0 until
+    /// the target is reached) and WorkedHours covers only the sessions closed so far.
+    /// </summary>
+    public bool IsProvisional { get; set; }
 
     /// <summary>Minutes auto-deducted from WorkedHours because no break was logged this day. Null = no deduction applied.</summary>
     public int? BreakAutoDeductedMinutes { get; set; }

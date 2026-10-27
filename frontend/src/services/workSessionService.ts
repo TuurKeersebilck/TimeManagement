@@ -65,6 +65,8 @@ export interface PerDayOvertimeDto {
   targetHours: number;
   flexDelta: number;
   breakAutoDeductedMinutes: number | null;
+  /** Today: a shortfall isn't counted until the day is over, so flexDelta is never negative. */
+  isProvisional: boolean;
 }
 
 export interface OvertimeResultDto {

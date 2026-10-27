@@ -4,6 +4,13 @@ namespace TimeManagementBackend.Helpers;
 
 public static class TimeCalculationHelper
 {
+    /// <summary>The company's timezone, which decides where one business day ends and the next begins.</summary>
+    public static readonly TimeZoneInfo BusinessTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Brussels");
+
+    /// <summary>The calendar date at <paramref name="utcNow"/> in <see cref="BusinessTimeZone"/>.</summary>
+    public static DateOnly BusinessDate(DateTimeOffset utcNow) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, BusinessTimeZone).DateTime);
+
     /// <summary>Returns the Monday–Sunday bounds of the current ISO week (UTC).</summary>
     public static (DateOnly Start, DateOnly End) GetCurrentWeekBounds()
     {

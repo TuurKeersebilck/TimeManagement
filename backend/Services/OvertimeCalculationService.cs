@@ -6,14 +6,15 @@ using TimeManagementBackend.Models.DTOs;
 
 namespace TimeManagementBackend.Services;
 
-public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationService
+public class OvertimeCalculationService(AppDbContext db, TimeProvider? clock = null) : IOvertimeCalculationService
 {
     public async Task<OvertimeResultDto> CalculateAsync(
         string userId, int year, int month, CancellationToken ct = default)
     {
         var monthStart = new DateOnly(year, month, 1);
         var monthEnd = new DateOnly(year, month, DateTime.DaysInMonth(year, month));
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // The business day, not the UTC one — in Belgium the UTC date only rolls over at 01:00/02:00.
+        var today = TimeCalculationHelper.BusinessDate((clock ?? TimeProvider.System).GetUtcNow());
 
         // Cap at today so future days don't appear in PerDay or the balance
         var endDate = monthEnd < today ? monthEnd : today;
@@ -104,12 +105,19 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             var targetHours = GetEffectiveTarget(date);
             var targetMinutes = (long)Math.Round(targetHours * 60);
 
+            // Today isn't over yet, so it never counts against the employee: a deficit only lands
+            // once the day ends, while hours beyond the target show up straight away. Without this
+            // everyone would open each day a full target behind, and drop back mid-day whenever
+            // they clock out for lunch.
+            var isToday = date == today;
+
             var dayWorkedMinutes = 0L;
             int? breakAutoDeductedMinutes = null;
             if (sessionsByDate.TryGetValue(date, out var daySessions))
             {
-                // Day still in progress — exclude from balance to avoid a false deficit.
-                if (daySessions.Any(s => s.Status == WorkSessionStatus.Open))
+                // An earlier day still clocked in (e.g. a shift past midnight) — exclude it from the
+                // balance until it is closed or invalidated, to avoid a false deficit.
+                if (!isToday && daySessions.Any(s => s.Status == WorkSessionStatus.Open))
                 {
                     perDay.Add(new PerDayOvertimeDto
                     {
@@ -122,6 +130,9 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
                 }
 
                 var closedSessions = daySessions.Where(s => s.Status == WorkSessionStatus.Closed).ToList();
+                // A break taken in today's still-open session counts as "a break was logged".
+                var breakLoggedInOpenSession = daySessions
+                    .Any(s => s.Status == WorkSessionStatus.Open && s.Breaks.Any(b => b.BreakEnd != null));
                 var dayBreakMinutes = 0L;
                 foreach (var s in closedSessions)
                 {
@@ -135,7 +146,8 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
 
                 // No break was logged anywhere in the day's closed sessions — deduct the
                 // resolved minimum break so unrecorded breaks don't inflate the flex balance.
-                if (closedSessions.Count > 0 && dayBreakMinutes == 0 && minimumBreakMinutes is > 0)
+                if (closedSessions.Count > 0 && dayBreakMinutes == 0 && !breakLoggedInOpenSession
+                    && minimumBreakMinutes is > 0)
                 {
                     breakAutoDeductedMinutes = minimumBreakMinutes.Value;
                     dayWorkedMinutes = Math.Max(0, dayWorkedMinutes - minimumBreakMinutes.Value);
@@ -143,6 +155,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
             }
 
             var flexDeltaMinutes = dayWorkedMinutes - targetMinutes;
+            if (isToday) flexDeltaMinutes = Math.Max(0, flexDeltaMinutes);
             totalBalanceMinutes += flexDeltaMinutes;
 
             perDay.Add(new PerDayOvertimeDto
@@ -152,6 +165,7 @@ public class OvertimeCalculationService(AppDbContext db) : IOvertimeCalculationS
                 TargetHours = targetHours,
                 FlexDelta = Math.Round(flexDeltaMinutes / 60m, 2),
                 BreakAutoDeductedMinutes = breakAutoDeductedMinutes,
+                IsProvisional = isToday,
             });
         }
 

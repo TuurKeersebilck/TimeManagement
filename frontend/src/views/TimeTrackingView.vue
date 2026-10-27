@@ -169,6 +169,10 @@ const todayTargetHours = computed<number>(() => {
 
 const todayFlexSeconds = computed(() => todayWorkedSeconds.value - todayTargetHours.value * 3600);
 
+// Today's shortfall isn't held against the balance until the day is over, so while it lasts
+// it reads as time still to go rather than as a deficit.
+const todayRemainingSeconds = computed(() => Math.max(0, -todayFlexSeconds.value));
+
 const monthlyFlexHours = computed(() => overtime.value?.runningBalanceHours ?? null);
 
 // ─── Week / month summary (from DashboardView) ────────────────────────────────
@@ -322,6 +326,12 @@ function flexDeltaForDay(s: WorkDaySummaryDto): number | null {
   if (!overtime.value) return null;
   const dayEntry = overtime.value.perDay.find((p) => p.date === s.date);
   return dayEntry ? dayEntry.flexDelta : null;
+}
+
+// Today before its target is reached: nothing is counted yet, so there's no Δ to show.
+function isDayInProgress(s: WorkDaySummaryDto): boolean {
+  const dayEntry = overtime.value?.perDay.find((p) => p.date === s.date);
+  return !!dayEntry?.isProvisional && dayEntry.flexDelta === 0 && dayEntry.targetHours > 0;
 }
 
 function breakAutoDeductedMinutesForDay(s: WorkDaySummaryDto): number | null {
@@ -937,15 +947,21 @@ onUnmounted(() => {
                     })() }}
                   </p>
                 </div>
-                <!-- Daily flex -->
-                <div class="text-right">
+                <!-- Daily progress: time still to go, then overtime once the target is reached -->
+                <div v-if="todayRemainingSeconds > 0" class="text-right">
+                  <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    To go
+                  </p>
+                  <p class="text-xl font-mono font-semibold tabular-nums text-slate-700 dark:text-slate-300">
+                    {{ formatDuration(Math.ceil(todayRemainingSeconds / 60) / 60) }}
+                  </p>
+                  <p class="text-xs text-slate-400 mt-0.5">of {{ formatDuration(todayTargetHours) }} target</p>
+                </div>
+                <div v-else class="text-right">
                   <p class="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     Today's Δ
                   </p>
-                  <p
-                    class="text-xl font-mono font-semibold tabular-nums"
-                    :class="todayFlexSeconds >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
-                  >
+                  <p class="text-xl font-mono font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                     {{ formatSignedDuration(Math.floor(todayFlexSeconds) / 3600) }}
                   </p>
                   <p class="text-xs text-slate-400 mt-0.5">vs {{ formatDuration(todayTargetHours) }} target</p>
@@ -1262,7 +1278,12 @@ onUnmounted(() => {
 
                     <!-- Flex delta -->
                     <TableCell>
-                      <template v-if="flexDeltaForDay(row.data) !== null">
+                      <span
+                        v-if="isDayInProgress(row.data)"
+                        class="text-slate-400 text-xs italic"
+                        title="Counts once the day is over"
+                      >in progress</span>
+                      <template v-else-if="flexDeltaForDay(row.data) !== null">
                         <span
                           class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold font-mono"
                           :class="flexDeltaForDay(row.data)! >= 0
