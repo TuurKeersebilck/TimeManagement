@@ -6,6 +6,8 @@ import type { VacationDay } from "../services/vacationService";
 defineProps<{
   vacationDays: VacationDay[];
   loading: boolean;
+  /** Days the viewer may not remove (admin-only types for an employee). */
+  isLocked?: (day: VacationDay) => boolean;
 }>();
 
 const emit = defineEmits<{
@@ -54,7 +56,14 @@ const displayDate = (iso: string) =>
             <span v-if="day.note" class="text-slate-400 dark:text-slate-500"> · {{ day.note }}</span>
           </span>
         </div>
+        <span
+          v-if="isLocked?.(day)"
+          class="text-xs text-slate-400 dark:text-slate-500 shrink-0"
+        >
+          Set by admin
+        </span>
         <Button
+          v-else
           variant="ghost"
           size="icon"
           class="size-8 text-slate-400 hover:text-red-500 dark:hover:text-red-400 shrink-0"

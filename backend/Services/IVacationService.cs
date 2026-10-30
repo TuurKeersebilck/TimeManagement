@@ -7,9 +7,9 @@ public interface IVacationService
     Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, int? year = null, CancellationToken ct = default);
     Task<IEnumerable<VacationDayDto>> GetMyVacationDaysAsync(string userId, DateOnly? dateFrom = null, DateOnly? dateTo = null, CancellationToken ct = default);
     Task<bool> ExistsForDateAndTypeAsync(string userId, DateOnly date, int vacationTypeId, CancellationToken ct = default);
-    Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, CancellationToken ct = default);
-    Task<VacationDayDto> UpdateVacationDayAsync(string userId, int id, CreateVacationDayDto dto, CancellationToken ct = default);
-    Task DeleteVacationDayAsync(string userId, int id, CancellationToken ct = default);
-    Task<VacationRangeResultDto> CreateVacationRangeAsync(string userId, CreateVacationRangeDto dto, CancellationToken ct = default);
+    Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, bool asAdmin = false, CancellationToken ct = default);
+    Task<VacationDayDto> UpdateVacationDayAsync(string userId, int id, CreateVacationDayDto dto, bool asAdmin = false, CancellationToken ct = default);
+    Task DeleteVacationDayAsync(string userId, int id, bool asAdmin = false, CancellationToken ct = default);
+    Task<VacationRangeResultDto> CreateVacationRangeAsync(string userId, CreateVacationRangeDto dto, bool asAdmin = false, CancellationToken ct = default);
     Task<VacationDayDto?> GetVacationForDateAsync(string userId, DateOnly date, CancellationToken ct = default);
 }

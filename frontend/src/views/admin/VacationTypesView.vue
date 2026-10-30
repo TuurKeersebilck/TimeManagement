@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { PlusIcon, PencilIcon, Trash2Icon, TagIcon, Loader2Icon } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -27,13 +28,21 @@ const dialogVisible = ref(false);
 const saving = ref(false);
 const editingId = ref<number | null>(null);
 
-const form = ref({ name: "", description: "", color: "#6366f1" });
+const emptyForm = () => ({
+  name: "",
+  description: "",
+  color: "#6366f1",
+  isUnlimited: false,
+  isAdminOnly: false,
+});
+
+const form = ref(emptyForm());
 
 const dialogTitle = computed(() => (editingId.value ? "Edit vacation type" : "New vacation type"));
 
 const openCreate = () => {
   editingId.value = null;
-  form.value = { name: "", description: "", color: "#6366f1" };
+  form.value = emptyForm();
   dialogVisible.value = true;
 };
 
@@ -43,6 +52,8 @@ const openEdit = (type: VacationType) => {
     name: type.name,
     description: type.description ?? "",
     color: type.color ?? "#6366f1",
+    isUnlimited: type.isUnlimited,
+    isAdminOnly: type.isAdminOnly,
   };
   dialogVisible.value = true;
 };
@@ -55,6 +66,8 @@ const saveType = async () => {
       name: form.value.name.trim(),
       description: form.value.description.trim() || undefined,
       color: form.value.color || undefined,
+      isUnlimited: form.value.isUnlimited,
+      isAdminOnly: form.value.isAdminOnly,
     };
     if (editingId.value) {
       const updated = await vacationTypeService.update(editingId.value, payload);
@@ -162,7 +175,17 @@ onMounted(async () => {
 
           <!-- Name + description -->
           <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ type.name }}</p>
+            <p class="flex flex-wrap items-center gap-1.5 text-sm font-medium text-slate-900 dark:text-slate-100">
+              {{ type.name }}
+              <span
+                v-if="type.isUnlimited"
+                class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400"
+              >No limit</span>
+              <span
+                v-if="type.isAdminOnly"
+                class="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 dark:text-slate-400"
+              >Admin only</span>
+            </p>
             <p
               v-if="type.description"
               class="text-xs text-slate-400 dark:text-slate-500 truncate mt-0.5"
@@ -173,9 +196,12 @@ onMounted(async () => {
 
           <!-- Assigned count badge -->
           <span class="text-xs text-slate-500 dark:text-slate-400 shrink-0">
-            {{ type.assignedEmployeeCount }} employee{{
-              type.assignedEmployeeCount !== 1 ? "s" : ""
-            }}
+            <template v-if="type.isUnlimited">All employees</template>
+            <template v-else>
+              {{ type.assignedEmployeeCount }} employee{{
+                type.assignedEmployeeCount !== 1 ? "s" : ""
+              }}
+            </template>
           </span>
 
           <!-- Actions -->
@@ -217,7 +243,7 @@ onMounted(async () => {
           <Input
             v-model="form.name"
             type="text"
-            placeholder="e.g. ADV, European, Student"
+            placeholder="e.g. ADV, Sick leave, Student"
             maxlength="100"
           />
         </div>
@@ -239,6 +265,24 @@ onMounted(async () => {
               class="w-10 h-10 rounded-lg cursor-pointer border border-border p-0.5 bg-background"
             />
             <span class="text-sm text-muted-foreground font-mono">{{ form.color }}</span>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <Switch id="type-unlimited" v-model="form.isUnlimited" class="mt-0.5" />
+          <div class="space-y-0.5">
+            <Label for="type-unlimited">No balance limit</Label>
+            <p class="text-xs text-muted-foreground">
+              Available to every employee without assigning a yearly balance, e.g. sick leave.
+            </p>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <Switch id="type-admin-only" v-model="form.isAdminOnly" class="mt-0.5" />
+          <div class="space-y-0.5">
+            <Label for="type-admin-only">Only admins can register</Label>
+            <p class="text-xs text-muted-foreground">
+              Employees see these days but can't add, change or remove them.
+            </p>
           </div>
         </div>
       </div>
