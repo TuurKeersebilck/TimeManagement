@@ -446,7 +446,7 @@ function toggle(section: string) {
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave for someone</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">On <span class="font-medium text-slate-700 dark:text-slate-300">My Vacations</span>, choose an employee at the top to plan or remove leave on their behalf; they get a notification. The Team Calendar shows everyone's leave.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On <span class="font-medium text-slate-700 dark:text-slate-300">Vacations</span>, choose an employee at the top to plan or remove leave on their behalf; they get a notification. The Team Calendar shows everyone's leave.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Public holidays</p>
