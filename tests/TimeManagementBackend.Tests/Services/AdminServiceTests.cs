@@ -296,6 +296,54 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         Assert.Empty(await NewService().GetEmployeeBalancesAsync(user.Id));
     }
 
+    [Fact]
+    public async Task VacationTypes_StoreTheUnlimitedAndAdminOnlyFlags()
+    {
+        var created = await NewService().CreateVacationTypeAsync(new VacationTypeFormDto
+        {
+            Name = "Sick Leave", IsUnlimited = true, IsAdminOnly = true,
+        });
+        Assert.True(created.IsUnlimited);
+        Assert.True(created.IsAdminOnly);
+
+        var updated = await NewService().UpdateVacationTypeAsync(created.Id, new VacationTypeFormDto
+        {
+            Name = "Sick Leave", IsUnlimited = false, IsAdminOnly = false,
+        });
+        Assert.False(updated.IsUnlimited);
+        Assert.False(updated.IsAdminOnly);
+        var row = await NewContext().VacationTypes.SingleAsync();
+        Assert.False(row.IsUnlimited);
+        Assert.False(row.IsAdminOnly);
+    }
+
+    [Fact]
+    public async Task AssignVacationType_RefusesAnUnlimitedType()
+    {
+        var user = Db.AddUser();
+        var type = Db.AddVacationType("Sick Leave", isUnlimited: true);
+        await Db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => NewService().AssignVacationTypeAsync(user.Id,
+            new AssignVacationTypeDto { VacationTypeId = type.Id, YearlyBalance = 5m }));
+        Assert.Empty(await NewContext().EmployeeVacationBalances.ToListAsync());
+    }
+
+    [Fact]
+    public async Task EmployeeBalances_HideRowsOfAnUnlimitedType()
+    {
+        var user = Db.AddUser();
+        var annual = Db.AddVacationType();
+        var sick = Db.AddVacationType("Sick Leave", isUnlimited: true);
+        await Db.SaveChangesAsync();
+        Db.AddBalance(user.Id, annual, 20m);
+        Db.AddBalance(user.Id, sick, 5m); // left over from before the type was made unlimited
+        await Db.SaveChangesAsync();
+
+        var balance = Assert.Single(await NewService().GetEmployeeBalancesAsync(user.Id));
+        Assert.Equal("Annual Leave", balance.VacationTypeName);
+    }
+
     // ── Employee targets ──────────────────────────────────────────────────────
 
     [Fact]

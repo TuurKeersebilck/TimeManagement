@@ -125,12 +125,12 @@ function toggle(section: string) {
           <div v-show="open.vacations" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Select a single day or a date range, choose a vacation type (e.g. Annual, Sick), and optionally add a note. Half days use an amount of <span class="font-medium text-slate-700 dark:text-slate-300">0.5</span>. There's no approval step: the leave is planned right away and your admin gets a notification. Weekends and public holidays in a range are skipped.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Select a single day or a date range, choose a vacation type (e.g. Annual), and optionally add a note. Half days use an amount of <span class="font-medium text-slate-700 dark:text-slate-300">0.5</span>. There's no approval step: the leave is planned right away and your admin gets a notification. Weekends and public holidays in a range are skipped. Some types, such as sick leave, can only be registered by your admin: you see those days, but can't add, change or remove them yourself.</p>
             </div>
 
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Balance</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Your yearly allowance, days used, and days remaining are shown per vacation type at the top of the Vacations page. Balances are set by your admin.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Your yearly allowance, days used, and days remaining are shown per vacation type at the top of the Vacations page. Balances are set by your admin. Types without a limit, such as sick leave, just show how many days you've used this year.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -442,7 +442,7 @@ function toggle(section: string) {
             <div v-show="open.adminLeave" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Vacation types</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → Vacation Types</span>: create types (name, color, description), then give employees a yearly balance per type on their employee page.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → Vacation Types</span>: create types (name, color, description), then give employees a yearly balance per type on their employee page. Turn on <span class="font-medium text-slate-700 dark:text-slate-300">No balance limit</span> for a type like sick leave: it's available to everyone without a balance. Turn on <span class="font-medium text-slate-700 dark:text-slate-300">Only admins can register</span> so only you can enter those days, via Vacations with the employee selected.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave for someone</p>

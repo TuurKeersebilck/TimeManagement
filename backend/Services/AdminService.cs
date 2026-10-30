@@ -293,6 +293,8 @@ public class AdminService(
             Name = dto.Name,
             Description = dto.Description,
             Color = dto.Color,
+            IsUnlimited = dto.IsUnlimited,
+            IsAdminOnly = dto.IsAdminOnly,
         };
 
         _context.VacationTypes.Add(entity);
@@ -310,6 +312,8 @@ public class AdminService(
         entity.Name = dto.Name;
         entity.Description = dto.Description;
         entity.Color = dto.Color;
+        entity.IsUnlimited = dto.IsUnlimited;
+        entity.IsAdminOnly = dto.IsAdminOnly;
 
         await _context.SaveChangesAsync(ct);
 
@@ -336,7 +340,8 @@ public class AdminService(
     {
         return await _context.EmployeeVacationBalances
             .AsNoTracking()
-            .Where(b => b.UserId == userId)
+            // Rows of an unlimited type are dormant: they don't limit anything, so they aren't listed.
+            .Where(b => b.UserId == userId && !b.VacationType.IsUnlimited)
             .OrderBy(b => b.VacationType.Name)
             .Select(b => new EmployeeVacationBalanceDto
             {
@@ -351,6 +356,11 @@ public class AdminService(
 
     public async Task<EmployeeVacationBalanceDto> AssignVacationTypeAsync(string userId, AssignVacationTypeDto dto, CancellationToken ct = default)
     {
+        var type = await _context.VacationTypes.FirstOrDefaultAsync(v => v.Id == dto.VacationTypeId, ct)
+            ?? throw new ResourceNotFoundException($"Vacation type {dto.VacationTypeId} not found.");
+        if (type.IsUnlimited)
+            throw new ValidationException($"\"{type.Name}\" has no balance limit and is already available to every employee.");
+
         var entity = new EmployeeVacationBalance
         {
             UserId = userId,

@@ -65,7 +65,7 @@ public class VacationsController(
         if (await _service.ExistsForDateAndTypeAsync(user.Id, dto.Date, dto.VacationTypeId, ct))
             return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
 
-        var created = await _service.CreateVacationDayAsync(user.Id, dto, ct);
+        var created = await _service.CreateVacationDayAsync(user.Id, dto, User.IsInRole("Admin"), ct);
 
         var dateLabel = dto.Date.ToString("d MMM yyyy");
         await _notificationService.NotifyAdminsAsync(
@@ -80,7 +80,7 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var updated = await _service.UpdateVacationDayAsync(user.Id, id, dto, ct);
+        var updated = await _service.UpdateVacationDayAsync(user.Id, id, dto, User.IsInRole("Admin"), ct);
         return Ok(updated);
     }
 
@@ -90,7 +90,7 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var result = await _service.CreateVacationRangeAsync(user.Id, dto, ct);
+        var result = await _service.CreateVacationRangeAsync(user.Id, dto, User.IsInRole("Admin"), ct);
 
         if (result.Created.Any())
         {
@@ -111,7 +111,7 @@ public class VacationsController(
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        await _service.DeleteVacationDayAsync(user.Id, id, ct);
+        await _service.DeleteVacationDayAsync(user.Id, id, User.IsInRole("Admin"), ct);
         return NoContent();
     }
 
@@ -145,11 +145,11 @@ public class VacationsController(
         if (await _service.ExistsForDateAndTypeAsync(userId, dto.Date, dto.VacationTypeId, ct))
             return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
 
-        var created = await _service.CreateVacationDayAsync(userId, dto, ct);
+        var created = await _service.CreateVacationDayAsync(userId, dto, asAdmin: true, ct);
 
         var dateLabel = dto.Date.ToString("d MMM yyyy");
         await _notificationService.NotifyUserAsync(
-            userId, $"An admin planned a vacation for you on {dateLabel}", NotificationType.Vacation, ct);
+            userId, $"An admin registered {created.VacationTypeName} for you on {dateLabel}", NotificationType.Vacation, ct);
 
         return CreatedAtAction(nameof(GetEmployeeVacationDays), new { userId }, created);
     }
@@ -159,11 +159,11 @@ public class VacationsController(
     public async Task<ActionResult<VacationDayDto>> UpdateEmployeeVacationDay(
         string userId, int id, [FromBody] CreateVacationDayDto dto, CancellationToken ct)
     {
-        var updated = await _service.UpdateVacationDayAsync(userId, id, dto, ct);
+        var updated = await _service.UpdateVacationDayAsync(userId, id, dto, asAdmin: true, ct);
 
         var dateLabel = dto.Date.ToString("d MMM yyyy");
         await _notificationService.NotifyUserAsync(
-            userId, $"An admin updated your vacation on {dateLabel}", NotificationType.Vacation, ct);
+            userId, $"An admin updated your {updated.VacationTypeName} on {dateLabel}", NotificationType.Vacation, ct);
 
         return Ok(updated);
     }
@@ -176,15 +176,16 @@ public class VacationsController(
         _ = await UserManager.FindByIdAsync(userId)
             ?? throw new ResourceNotFoundException("Employee not found.");
 
-        var result = await _service.CreateVacationRangeAsync(userId, dto, ct);
+        var result = await _service.CreateVacationRangeAsync(userId, dto, asAdmin: true, ct);
 
         if (result.Created.Any())
         {
+            var typeName = result.Created.First().VacationTypeName;
             var startLabel = dto.StartDate.ToString("d MMM yyyy");
             var endLabel = dto.EndDate.ToString("d MMM yyyy");
             var message = dto.StartDate == dto.EndDate
-                ? $"An admin planned a vacation for you on {startLabel}"
-                : $"An admin planned a vacation for you from {startLabel} until {endLabel}";
+                ? $"An admin registered {typeName} for you on {startLabel}"
+                : $"An admin registered {typeName} for you from {startLabel} until {endLabel}";
             await _notificationService.NotifyUserAsync(userId, message, NotificationType.Vacation, ct);
         }
 
@@ -198,13 +199,13 @@ public class VacationsController(
         var existing = (await _service.GetMyVacationDaysAsync(userId, ct: ct))
             .FirstOrDefault(d => d.Id == id);
 
-        await _service.DeleteVacationDayAsync(userId, id, ct);
+        await _service.DeleteVacationDayAsync(userId, id, asAdmin: true, ct);
 
         if (existing != null)
         {
             var dateLabel = existing.Date.ToString("d MMM yyyy");
             await _notificationService.NotifyUserAsync(
-                userId, $"An admin removed your vacation on {dateLabel}", NotificationType.Vacation, ct);
+                userId, $"An admin removed your {existing.VacationTypeName} on {dateLabel}", NotificationType.Vacation, ct);
         }
 
         return NoContent();

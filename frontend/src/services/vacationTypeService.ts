@@ -5,7 +5,17 @@ export interface VacationType {
   name: string;
   description?: string;
   color?: string;
+  isUnlimited: boolean;
+  isAdminOnly: boolean;
   assignedEmployeeCount: number;
+}
+
+export interface VacationTypeForm {
+  name: string;
+  description?: string;
+  color?: string;
+  isUnlimited: boolean;
+  isAdminOnly: boolean;
 }
 
 export interface EmployeeVacationBalance {
@@ -22,19 +32,12 @@ export const vacationTypeService = {
     return res.data;
   },
 
-  async create(data: {
-    name: string;
-    description?: string;
-    color?: string;
-  }): Promise<VacationType> {
+  async create(data: VacationTypeForm): Promise<VacationType> {
     const res = await apiClient.post<VacationType>("/admin/vacation-types", data);
     return res.data;
   },
 
-  async update(
-    id: number,
-    data: { name: string; description?: string; color?: string }
-  ): Promise<VacationType> {
+  async update(id: number, data: VacationTypeForm): Promise<VacationType> {
     const res = await apiClient.put<VacationType>(`/admin/vacation-types/${id}`, data);
     return res.data;
   },

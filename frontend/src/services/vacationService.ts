@@ -4,9 +4,13 @@ export interface VacationBalance {
   vacationTypeId: number;
   vacationTypeName: string;
   vacationTypeColor?: string;
-  yearlyBalance: number;
+  /** No yearly balance (e.g. sick leave): yearlyBalance and remainingDays are null. */
+  isUnlimited: boolean;
+  /** Only an admin can book, change or remove days of this type. */
+  isAdminOnly: boolean;
+  yearlyBalance: number | null;
   usedDays: number;
-  remainingDays: number;
+  remainingDays: number | null;
 }
 
 export interface VacationDay {
