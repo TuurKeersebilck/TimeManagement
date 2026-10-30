@@ -9,6 +9,7 @@ import {
 } from "../services/vacationService";
 import { holidayService, type PublicHoliday } from "../services/holidayService";
 import { adminService, type Employee } from "../services/adminService";
+import { settlementService } from "../services/settlementService";
 import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
@@ -36,6 +37,8 @@ import {
   PlusIcon,
   Maximize2Icon,
   Trash2Icon,
+  AlertTriangleIcon,
+  LockIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -79,6 +82,7 @@ watch(selectedEmployeeId, (id) => {
 
 const loadVacationAndBalances = async () => {
   loading.value = true;
+  loadSettledMonths();
   try {
     const [b, d] = await Promise.all([
       vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value),
@@ -90,6 +94,44 @@ const loadVacationAndBalances = async () => {
     toast.error("Failed to load vacation data");
   } finally {
     loading.value = false;
+  }
+};
+
+// ─── Admin-only types (e.g. sick leave) ──────────────────────────────────────
+
+const adminOnlyTypeIds = computed(
+  () => new Set(balances.value.filter((b) => b.isAdminOnly).map((b) => b.vacationTypeId))
+);
+
+// Types the viewer can book: an employee doesn't get the admin-only ones.
+const bookableBalances = computed(() =>
+  isAdmin.value ? balances.value : balances.value.filter((b) => !b.isAdminOnly)
+);
+
+const isLockedDay = (day: VacationDay) =>
+  !isAdmin.value && adminOnlyTypeIds.value.has(day.vacationTypeId);
+
+// ─── Admin: settled months of the employee ───────────────────────────────────
+
+// "YYYY-MM" of the acting employee's settled months; only feeds a warning.
+const settledMonths = ref(new Set<string>());
+
+const loadSettledMonths = async () => {
+  const employeeId = actingEmployeeId.value;
+  if (!employeeId) {
+    settledMonths.value = new Set();
+    return;
+  }
+  try {
+    const history = await settlementService.getEmployeeHistory(employeeId);
+    if (employeeId !== actingEmployeeId.value) return;
+    settledMonths.value = new Set(
+      history
+        .filter((s) => s.status === "Settled")
+        .map((s) => `${s.year}-${String(s.month).padStart(2, "0")}`)
+    );
+  } catch {
+    settledMonths.value = new Set();
   }
 };
 
@@ -242,7 +284,7 @@ const popoverLiveRemaining = computed(() => {
   if (!popoverForm.value.vacationTypeId) return null;
   const typeId = parseInt(popoverForm.value.vacationTypeId);
   const balance = balances.value.find((b) => b.vacationTypeId === typeId);
-  if (!balance) return null;
+  if (!balance || balance.remainingDays === null) return null;
   if (isPopoverEditMode.value) {
     const orig = vacationDays.value.find((d) => d.id === popoverEditingId.value);
     let base = balance.remainingDays;
@@ -258,7 +300,11 @@ const popoverLiveRemaining = computed(() => {
 
 const canPopoverSubmit = computed(() => {
   if (!popoverForm.value.vacationTypeId || !popoverForm.value.startDate) return false;
-  if (popoverLiveRemaining.value === null || popoverLiveRemaining.value < 0) return false;
+  if (popoverEntryLocked.value) return false;
+  const typeId = parseInt(popoverForm.value.vacationTypeId);
+  if (!bookableBalances.value.some((b) => b.vacationTypeId === typeId)) return false;
+  // null = unlimited type, nothing to check
+  if (popoverLiveRemaining.value !== null && popoverLiveRemaining.value < 0) return false;
   if (!isPopoverEditMode.value && workingDaysInRange.value === 0) return false;
   return true;
 });
@@ -287,6 +333,22 @@ const popoverDateLabel = computed(() => {
   });
 });
 
+// An employee looking at a day the admin registered with an admin-only type.
+const popoverEntryLocked = computed(() => {
+  if (!isPopoverEditMode.value) return false;
+  const entry = vacationDays.value.find((d) => d.id === popoverEditingId.value);
+  return !!entry && isLockedDay(entry);
+});
+
+const popoverTouchesSettledMonth = computed(() => {
+  if (settledMonths.value.size === 0) return false;
+  const { startDate } = popoverForm.value;
+  const dates = isPopoverEditMode.value
+    ? [startDate, vacationDays.value.find((d) => d.id === popoverEditingId.value)?.date ?? ""]
+    : [...highlightedRange.value];
+  return dates.some((d) => settledMonths.value.has(d.slice(0, 7)));
+});
+
 const fillFormForEntry = (v: VacationDay) => {
   popoverEditingId.value = v.id;
   popoverForm.value = {
@@ -302,7 +364,7 @@ const switchToNewMode = () => {
   popoverEditingId.value = null;
   const remaining = 1 - popoverDayTotal.value;
   popoverForm.value = {
-    vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
+    vacationTypeId: bookableBalances.value.length === 1 ? String(bookableBalances.value[0].vacationTypeId) : "",
     startDate: openPopoverIso.value ?? "",
     endDate: openPopoverIso.value ?? "",
     amount: String(remaining <= 0.5 ? 0.5 : 1),
@@ -318,7 +380,7 @@ const openPopover = (iso: string) => {
   } else {
     popoverEditingId.value = null;
     popoverForm.value = {
-      vacationTypeId: balances.value.length === 1 ? String(balances.value[0].vacationTypeId) : "",
+      vacationTypeId: bookableBalances.value.length === 1 ? String(bookableBalances.value[0].vacationTypeId) : "",
       startDate: iso,
       endDate: iso,
       amount: "1",
@@ -403,9 +465,12 @@ const displayDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 const deleteDay = (day: VacationDay) => {
+  const settledNote = settledMonths.value.has(day.date.slice(0, 7))
+    ? " This month has already been settled; the settlement keeps its confirmed numbers."
+    : "";
   confirm({
     title: "Delete vacation day",
-    message: `Remove the ${day.amount === 0.5 ? "half" : "full"} day on ${displayDate(day.date)} (${day.vacationTypeName})?`,
+    message: `Remove the ${day.amount === 0.5 ? "half" : "full"} day on ${displayDate(day.date)} (${day.vacationTypeName})?${settledNote}`,
     confirmLabel: "Delete",
     variant: "destructive",
     onConfirm: async () => {
@@ -437,6 +502,7 @@ onMounted(async () => {
     vacationDays.value = d;
     holidays.value = h;
     employees.value = emps;
+    loadSettledMonths();
   } catch {
     toast.error("Failed to load vacation data");
   } finally {
@@ -527,7 +593,7 @@ onMounted(async () => {
                 :open="openPopoverIso === cell.iso"
                 @update:open="
                   (v) => {
-                    if (v && cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay))))
+                    if (v && cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && bookableBalances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay))))
                       openPopover(cell.iso);
                     else if (!v) closePopover();
                   }
@@ -542,7 +608,7 @@ onMounted(async () => {
                       cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
                       openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-primary' : '',
                       highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-primary/10' : '',
-                      cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && balances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
+                      cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && bookableBalances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
                         ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
                         : 'cursor-default pointer-events-none',
                     ]"
@@ -667,8 +733,26 @@ onMounted(async () => {
                   <!-- Create / Edit form -->
                   <div class="p-4 space-y-3">
                     <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                      {{ isPopoverEditMode ? "Edit vacation" : "Plan vacation" }}
+                      {{ popoverEntryLocked ? "Registered by your admin" : isPopoverEditMode ? "Edit vacation" : "Plan vacation" }}
                     </p>
+
+                    <div
+                      v-if="popoverEntryLocked"
+                      class="flex items-start gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs text-slate-600 dark:text-slate-300"
+                    >
+                      <LockIcon class="size-3.5 shrink-0 mt-px" />
+                      Only an admin can change or remove this day. Ask your admin if something isn't right.
+                    </div>
+
+                    <template v-else>
+                    <div
+                      v-if="popoverTouchesSettledMonth"
+                      class="flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-700 dark:text-amber-300"
+                    >
+                      <AlertTriangleIcon class="size-3.5 shrink-0 mt-px" />
+                      This month has already been settled. The settlement keeps its confirmed numbers; use a
+                      flex adjustment on the employee page if the balance needs correcting too.
+                    </div>
 
                     <div class="space-y-1">
                       <Label class="text-xs">Type</Label>
@@ -678,7 +762,7 @@ onMounted(async () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem
-                            v-for="balance in balances"
+                            v-for="balance in bookableBalances"
                             :key="balance.vacationTypeId"
                             :value="String(balance.vacationTypeId)"
                           >
@@ -763,6 +847,7 @@ onMounted(async () => {
                       <Trash2Icon class="size-3.5" />
                       Delete
                     </Button>
+                    </template>
                   </div>
                   </div><!-- end scrollable body -->
                 </PopoverContent>
@@ -775,6 +860,7 @@ onMounted(async () => {
         <VacationDaysList
           :vacation-days="upcomingVacationDays"
           :loading="loading"
+          :is-locked="isLockedDay"
           @delete="deleteDay"
         />
       </div>

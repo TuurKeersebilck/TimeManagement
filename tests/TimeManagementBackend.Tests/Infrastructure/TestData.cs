@@ -84,9 +84,11 @@ internal static class TestData
         return session;
     }
 
-    public static VacationType AddVacationType(this AppDbContext db, string name = "Annual Leave", string color = "#3366FF")
+    public static VacationType AddVacationType(
+        this AppDbContext db, string name = "Annual Leave", string color = "#3366FF",
+        bool isUnlimited = false, bool isAdminOnly = false)
     {
-        var type = new VacationType { Name = name, Color = color };
+        var type = new VacationType { Name = name, Color = color, IsUnlimited = isUnlimited, IsAdminOnly = isAdminOnly };
         db.VacationTypes.Add(type);
         return type;
     }

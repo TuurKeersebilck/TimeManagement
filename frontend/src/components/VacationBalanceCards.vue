@@ -8,12 +8,12 @@ defineProps<{
 }>();
 
 const barWidth = (balance: VacationBalance) => {
-  if (balance.yearlyBalance === 0) return "0%";
+  if (!balance.yearlyBalance) return "0%";
   return `${Math.min((balance.usedDays / balance.yearlyBalance) * 100, 100)}%`;
 };
 
 const barColor = (balance: VacationBalance) => {
-  const pct = balance.yearlyBalance > 0 ? balance.usedDays / balance.yearlyBalance : 0;
+  const pct = balance.yearlyBalance ? balance.usedDays / balance.yearlyBalance : 0;
   if (pct >= 1) return "bg-red-500";
   if (pct >= 0.8) return "bg-amber-400";
   return "bg-emerald-500";
@@ -52,17 +52,20 @@ const barColor = (balance: VacationBalance) => {
             {{ balance.vacationTypeName }}
           </span>
         </div>
-        <div class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
+        <p v-if="balance.isUnlimited" class="text-xs text-slate-500 dark:text-slate-400">
+          {{ balance.usedDays }} day{{ balance.usedDays !== 1 ? "s" : "" }} this year · no limit
+        </p>
+        <div v-else class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
           <div
             :class="['h-1.5 rounded-full transition-all duration-300', barColor(balance)]"
             :style="{ width: barWidth(balance) }"
           />
         </div>
-        <div class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
+        <div v-if="!balance.isUnlimited" class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
           <span>{{ balance.usedDays }} / {{ balance.yearlyBalance }} days used</span>
           <span
             :class="
-              balance.remainingDays <= 0
+              balance.remainingDays! <= 0
                 ? 'text-red-600 dark:text-red-400 font-semibold'
                 : 'text-emerald-600 dark:text-emerald-400 font-semibold'
             "

@@ -56,6 +56,7 @@ import {
   ScaleIcon,
   InfoIcon,
   RotateCcwIcon,
+  CalendarPlusIcon,
 } from "lucide-vue-next";
 import {
   settlementService,
@@ -178,9 +179,12 @@ const form = ref<{ vacationTypeId: string; yearlyBalance: string }>({
 
 const assignedTypeIds = computed(() => new Set(balances.value.map((b) => b.vacationTypeId)));
 
+// Unlimited types (e.g. sick leave) are available to everyone and are never assigned.
 const availableTypes = computed(() =>
   allTypes.value.filter(
-    (t) => !assignedTypeIds.value.has(t.id) || editingBalance.value?.vacationTypeId === t.id
+    (t) =>
+      !t.isUnlimited &&
+      (!assignedTypeIds.value.has(t.id) || editingBalance.value?.vacationTypeId === t.id)
   )
 );
 
@@ -279,6 +283,9 @@ const usedByType = computed(() => {
   }
   return map;
 });
+
+// No balance to manage, but the admin still wants to see how many days were taken (e.g. sick days).
+const unlimitedTypes = computed(() => allTypes.value.filter((t) => t.isUnlimited));
 
 const displayDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
@@ -450,22 +457,30 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
 
       <!-- Vacation balances section -->
       <div>
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
             Vacation balances
           </h2>
-          <Button
-            variant="outline"
-            size="sm"
-            @click="openAssign"
-            :disabled="availableTypes.length === 0"
-            :title="
-              availableTypes.length === 0 ? 'All vacation types are already assigned' : undefined
-            "
-          >
-            <PlusIcon class="size-3.5" />
-            Assign type
-          </Button>
+          <div class="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" as-child>
+              <router-link :to="{ name: 'vacations', query: { employeeId: employee?.id } }">
+                <CalendarPlusIcon class="size-3.5" />
+                Plan leave / sick days
+              </router-link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              @click="openAssign"
+              :disabled="availableTypes.length === 0"
+              :title="
+                availableTypes.length === 0 ? 'All vacation types are already assigned' : undefined
+              "
+            >
+              <PlusIcon class="size-3.5" />
+              Assign type
+            </Button>
+          </div>
         </div>
 
         <!-- Loading skeleton -->
@@ -480,15 +495,15 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
         </div>
 
         <!-- Empty state -->
-        <div v-else-if="balances.length === 0" class="card text-center py-10">
+        <div v-else-if="balances.length === 0 && unlimitedTypes.length === 0" class="card text-center py-10">
           <CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
           <p class="text-sm text-slate-500 dark:text-slate-400 mb-3">
             No vacation types assigned yet.
           </p>
-          <Button v-if="allTypes.length > 0" variant="outline" size="sm" @click="openAssign">
+          <Button v-if="availableTypes.length > 0" variant="outline" size="sm" @click="openAssign">
             Assign a type
           </Button>
-          <p v-else class="text-xs text-slate-400 dark:text-slate-500">
+          <p v-else-if="allTypes.length === 0" class="text-xs text-slate-400 dark:text-slate-500">
             Create vacation types first in
             <router-link
               :to="{ name: 'admin-vacation-types' }"
@@ -566,6 +581,21 @@ function removeAdjustment(adjustment: TimeBankAdjustment) {
                 }}
                 remaining</span
               >
+            </div>
+          </div>
+          <div v-for="type in unlimitedTypes" :key="`unlimited-${type.id}`" class="px-5 py-4">
+            <div class="flex items-center gap-4">
+              <div
+                class="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/10"
+                :style="{ backgroundColor: type.color ?? '#6366f1' }"
+              />
+              <span class="flex-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                {{ type.name }}
+              </span>
+              <span class="text-xs text-slate-500 dark:text-slate-400 shrink-0">
+                {{ usedByType.get(type.id) ?? 0 }} day{{ (usedByType.get(type.id) ?? 0) !== 1 ? "s" : "" }}
+                in {{ new Date().getFullYear() }} · no limit
+              </span>
             </div>
           </div>
         </div>

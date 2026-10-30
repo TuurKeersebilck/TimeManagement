@@ -410,6 +410,199 @@ public class VacationServiceTests(PostgresFixture fixture) : DatabaseTestBase(fi
         Assert.Equal(1.0m, (await NewService().GetMyBalancesAsync(user.Id, 2027)).Single().UsedDays);
     }
 
+    // ── Unlimited types (e.g. sick leave) ─────────────────────────────────────
+
+    private async Task<(User User, VacationType Type)> ArrangeUnlimitedAsync()
+    {
+        var user = Db.AddUser();
+        var type = Db.AddVacationType("Sick Leave", isUnlimited: true);
+        await Db.SaveChangesAsync(); // deliberately no balance row
+        return (user, type);
+    }
+
+    [Fact]
+    public async Task Unlimited_CreateDay_NeedsNoAssignment()
+    {
+        var (user, type) = await ArrangeUnlimitedAsync();
+
+        var dto = await NewService().CreateVacationDayAsync(user.Id, new CreateVacationDayDto
+        {
+            VacationTypeId = type.Id, Date = Monday, Amount = 1.0m,
+        });
+
+        Assert.Equal("Sick Leave", dto.VacationTypeName);
+        Assert.Equal(1, await NewContext().VacationDays.CountAsync());
+    }
+
+    [Fact]
+    public async Task Unlimited_IgnoresALeftoverBalanceRow()
+    {
+        // A type switched to unlimited keeps its old balance rows; they no longer limit anything.
+        var (user, type) = await ArrangeUnlimitedAsync();
+        Db.AddBalance(user.Id, type, 0m);
+        await Db.SaveChangesAsync();
+
+        await NewService().CreateVacationDayAsync(user.Id, new CreateVacationDayDto
+        {
+            VacationTypeId = type.Id, Date = Monday, Amount = 1.0m,
+        });
+
+        var balance = Assert.Single(await NewService().GetMyBalancesAsync(user.Id, 2026));
+        Assert.True(balance.IsUnlimited);
+        Assert.Null(balance.YearlyBalance);
+    }
+
+    [Fact]
+    public async Task Unlimited_UpdateDay_IsNotBalanceChecked()
+    {
+        var (user, type) = await ArrangeUnlimitedAsync();
+        var day = Db.AddVacationDay(user.Id, type, Monday, 0.5m);
+        await Db.SaveChangesAsync();
+
+        var dto = await NewService().UpdateVacationDayAsync(user.Id, day.Id, new CreateVacationDayDto
+        {
+            VacationTypeId = type.Id, Date = Tuesday, Amount = 1.0m,
+        });
+
+        Assert.Equal(Tuesday, dto.Date);
+    }
+
+    [Fact]
+    public async Task Unlimited_Range_BooksEveryWorkingDay()
+    {
+        var (user, type) = await ArrangeUnlimitedAsync();
+
+        // Mon 2 March → Fri 27 March 2026: 20 working days, more than any usual allowance.
+        var result = await NewService().CreateVacationRangeAsync(user.Id, new CreateVacationRangeDto
+        {
+            VacationTypeId = type.Id, StartDate = Monday, EndDate = new DateOnly(2026, 3, 27), Amount = 1.0m,
+        });
+
+        Assert.Equal(20, result.Created.Count());
+    }
+
+    [Fact]
+    public async Task Unlimited_ShowsUpInEveryEmployeesBalancesWithUsedDays()
+    {
+        var (user, annual) = await ArrangeAsync(yearlyBalance: 20m);
+        var sick = Db.AddVacationType("Sick Leave", isUnlimited: true);
+        await Db.SaveChangesAsync();
+        Db.AddVacationDay(user.Id, sick, Monday, 1.0m);
+        Db.AddVacationDay(user.Id, sick, Tuesday, 0.5m);
+        await Db.SaveChangesAsync();
+
+        var balances = (await NewService().GetMyBalancesAsync(user.Id, 2026)).ToList();
+
+        Assert.Equal(["Annual Leave", "Sick Leave"], balances.Select(b => b.VacationTypeName));
+        var sickBalance = balances[1];
+        Assert.True(sickBalance.IsUnlimited);
+        Assert.Equal(1.5m, sickBalance.UsedDays);
+        Assert.Null(sickBalance.RemainingDays);
+        Assert.False(balances[0].IsUnlimited);
+        Assert.Equal(20m, balances[0].YearlyBalance);
+        Assert.NotNull(annual);
+    }
+
+    // ── Admin-only types (e.g. sick leave) ────────────────────────────────────
+
+    private async Task<(User User, VacationType Type)> ArrangeAdminOnlyAsync()
+    {
+        var user = Db.AddUser();
+        var type = Db.AddVacationType("Sick Leave", isUnlimited: true, isAdminOnly: true);
+        await Db.SaveChangesAsync();
+        return (user, type);
+    }
+
+    [Fact]
+    public async Task AdminOnly_EmployeeCannotBookADayOrRange()
+    {
+        var (user, type) = await ArrangeAdminOnlyAsync();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            NewService().CreateVacationDayAsync(user.Id, new CreateVacationDayDto
+            {
+                VacationTypeId = type.Id, Date = Monday, Amount = 1.0m,
+            }));
+        Assert.Contains("Sick Leave", ex.Message);
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            NewService().CreateVacationRangeAsync(user.Id, new CreateVacationRangeDto
+            {
+                VacationTypeId = type.Id, StartDate = Monday, EndDate = Tuesday, Amount = 1.0m,
+            }));
+        Assert.Equal(0, await NewContext().VacationDays.CountAsync());
+    }
+
+    [Fact]
+    public async Task AdminOnly_AdminCanBookChangeAndRemove()
+    {
+        var (user, type) = await ArrangeAdminOnlyAsync();
+
+        var created = await NewService().CreateVacationDayAsync(user.Id, new CreateVacationDayDto
+        {
+            VacationTypeId = type.Id, Date = Monday, Amount = 1.0m,
+        }, asAdmin: true);
+        await NewService().UpdateVacationDayAsync(user.Id, created.Id, new CreateVacationDayDto
+        {
+            VacationTypeId = type.Id, Date = Monday, Amount = 0.5m,
+        }, asAdmin: true);
+        var range = await NewService().CreateVacationRangeAsync(user.Id, new CreateVacationRangeDto
+        {
+            VacationTypeId = type.Id, StartDate = Tuesday, EndDate = Tuesday, Amount = 1.0m,
+        }, asAdmin: true);
+        await NewService().DeleteVacationDayAsync(user.Id, created.Id, asAdmin: true);
+
+        Assert.Single(range.Created);
+        Assert.Equal(Tuesday, (await NewContext().VacationDays.SingleAsync()).Date);
+    }
+
+    [Fact]
+    public async Task AdminOnly_EmployeeCannotChangeOrRemoveADayTheAdminBooked()
+    {
+        var (user, sick) = await ArrangeAdminOnlyAsync();
+        var annual = Db.AddVacationType();
+        await Db.SaveChangesAsync();
+        Db.AddBalance(user.Id, annual, 20m);
+        var day = Db.AddVacationDay(user.Id, sick, Monday);
+        await Db.SaveChangesAsync();
+
+        // Turning a sick day into annual leave is a change to an admin-only day too.
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            NewService().UpdateVacationDayAsync(user.Id, day.Id, new CreateVacationDayDto
+            {
+                VacationTypeId = annual.Id, Date = Monday, Amount = 1.0m,
+            }));
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            NewService().DeleteVacationDayAsync(user.Id, day.Id));
+
+        var saved = await NewContext().VacationDays.SingleAsync();
+        Assert.Equal(sick.Id, saved.VacationTypeId);
+    }
+
+    [Fact]
+    public async Task AdminOnly_EmployeeCannotTurnTheirOwnDayIntoOne()
+    {
+        var (user, annual) = await ArrangeAsync();
+        var sick = Db.AddVacationType("Sick Leave", isUnlimited: true, isAdminOnly: true);
+        var day = Db.AddVacationDay(user.Id, annual, Monday);
+        await Db.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            NewService().UpdateVacationDayAsync(user.Id, day.Id, new CreateVacationDayDto
+            {
+                VacationTypeId = sick.Id, Date = Monday, Amount = 1.0m,
+            }));
+    }
+
+    [Fact]
+    public async Task AdminOnly_IsReportedInTheBalances()
+    {
+        var (user, _) = await ArrangeAdminOnlyAsync();
+
+        var balance = Assert.Single(await NewService().GetMyBalancesAsync(user.Id, 2026));
+
+        Assert.True(balance.IsAdminOnly);
+    }
+
     // ── Balances and reads ────────────────────────────────────────────────────
 
     [Fact]

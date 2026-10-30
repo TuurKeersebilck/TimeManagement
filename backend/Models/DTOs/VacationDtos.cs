@@ -7,9 +7,13 @@ public class VacationBalanceDto
     public int VacationTypeId { get; set; }
     public string VacationTypeName { get; set; } = string.Empty;
     public string? VacationTypeColor { get; set; }
-    public decimal YearlyBalance { get; set; }
+    public bool IsUnlimited { get; set; }
+    public bool IsAdminOnly { get; set; }
+    /// <summary>Null for an unlimited type.</summary>
+    public decimal? YearlyBalance { get; set; }
     public decimal UsedDays { get; set; }
-    public decimal RemainingDays { get; set; }
+    /// <summary>Null for an unlimited type.</summary>
+    public decimal? RemainingDays { get; set; }
 }
 
 public class VacationDayDto

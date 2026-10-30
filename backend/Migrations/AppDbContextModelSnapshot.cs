@@ -678,7 +678,13 @@ namespace TimeManagementBackend.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
 
+                    b.Property<bool>("IsAdminOnly")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsUnlimited")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Name")

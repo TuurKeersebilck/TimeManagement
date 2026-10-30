@@ -79,6 +79,8 @@ public class VacationTypeDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Color { get; set; }
+    public bool IsUnlimited { get; set; }
+    public bool IsAdminOnly { get; set; }
     public int AssignedEmployeeCount { get; set; }
 }
 
@@ -87,6 +89,8 @@ public class VacationTypeFormDto
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? Color { get; set; }
+    public bool IsUnlimited { get; set; }
+    public bool IsAdminOnly { get; set; }
 }
 
 public class EmployeeVacationBalanceDto

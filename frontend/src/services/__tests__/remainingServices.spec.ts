@@ -182,11 +182,12 @@ describe("setupService", () => {
 describe("vacationTypeService", () => {
   it("manages vacation types under the admin route", async () => {
     await vacationTypeService.getAll();
-    await vacationTypeService.create({ name: "Study Leave" });
+    const sickLeave = { name: "Sick Leave", isUnlimited: true, isAdminOnly: true };
+    await vacationTypeService.create(sickLeave);
     await vacationTypeService.delete(2);
 
     expect(api.get).toHaveBeenCalledWith("/admin/vacation-types");
-    expect(api.post).toHaveBeenCalledWith("/admin/vacation-types", { name: "Study Leave" });
+    expect(api.post).toHaveBeenCalledWith("/admin/vacation-types", sickLeave);
     expect(api.delete).toHaveBeenCalledWith("/admin/vacation-types/2");
   });
 

@@ -20,17 +20,34 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         // users in UTC+13/UTC-12 don't see wrong balances around the Jan 1 boundary.
         var currentYear = year ?? DateTime.UtcNow.Year;
 
-        var balances = await _db.EmployeeVacationBalances
+        var assigned = await _db.EmployeeVacationBalances
             .AsNoTracking()
-            .Where(b => b.UserId == userId)
+            .Where(b => b.UserId == userId && !b.VacationType.IsUnlimited)
             .Select(b => new
             {
                 b.VacationTypeId,
                 b.VacationType.Name,
                 b.VacationType.Color,
-                b.YearlyBalance,
+                b.VacationType.IsAdminOnly,
+                YearlyBalance = (decimal?)b.YearlyBalance,
             })
             .ToListAsync(ct);
+
+        // Unlimited types (e.g. sick leave) are available to everyone without being assigned.
+        var unlimited = await _db.VacationTypes
+            .AsNoTracking()
+            .Where(t => t.IsUnlimited)
+            .Select(t => new
+            {
+                VacationTypeId = t.Id,
+                t.Name,
+                t.Color,
+                t.IsAdminOnly,
+                YearlyBalance = (decimal?)null,
+            })
+            .ToListAsync(ct);
+
+        var balances = assigned.Concat(unlimited);
 
         var usedByType = await _db.VacationDays
             .Where(d => d.UserId == userId && d.Date.Year == currentYear)
@@ -46,6 +63,8 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
                 VacationTypeId = b.VacationTypeId,
                 VacationTypeName = b.Name,
                 VacationTypeColor = b.Color,
+                IsUnlimited = b.YearlyBalance == null,
+                IsAdminOnly = b.IsAdminOnly,
                 YearlyBalance = b.YearlyBalance,
                 UsedDays = used,
                 RemainingDays = b.YearlyBalance - used,
@@ -80,7 +99,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, CancellationToken ct = default)
+    public async Task<VacationDayDto> CreateVacationDayAsync(string userId, CreateVacationDayDto dto, bool asAdmin = false, CancellationToken ct = default)
     {
         ValidateAmount(dto.Amount);
 
@@ -91,18 +110,19 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var balance = await _db.EmployeeVacationBalances
-            .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
-            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
+        var yearlyBalance = await GetYearlyBalanceAsync(userId, dto.VacationTypeId, asAdmin, ct);
 
-        // Use the year of the submitted date — not the server's UTC year — so that
-        // balance checks are always scoped to the correct year for the vacation being planned.
-        var currentYear = dto.Date.Year;
-        var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
+        if (yearlyBalance is decimal limit)
+        {
+            // Use the year of the submitted date — not the server's UTC year — so that
+            // balance checks are always scoped to the correct year for the vacation being planned.
+            var currentYear = dto.Date.Year;
+            var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
 
-        if (used + dto.Amount > balance.YearlyBalance)
-            throw new InsufficientVacationBalanceException(
-                $"Insufficient balance. Remaining: {FormatDays(balance.YearlyBalance - used)} day(s).");
+            if (used + dto.Amount > limit)
+                throw new InsufficientVacationBalanceException(
+                    $"Insufficient balance. Remaining: {FormatDays(limit - used)} day(s).");
+        }
 
         var day = new VacationDay
         {
@@ -121,7 +141,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         return _mapper.Map<VacationDayDto>(day);
     }
 
-    public async Task<VacationDayDto> UpdateVacationDayAsync(string userId, int id, CreateVacationDayDto dto, CancellationToken ct = default)
+    public async Task<VacationDayDto> UpdateVacationDayAsync(string userId, int id, CreateVacationDayDto dto, bool asAdmin = false, CancellationToken ct = default)
     {
         ValidateAmount(dto.Amount);
 
@@ -130,16 +150,20 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
             .FirstOrDefaultAsync(d => d.Id == id && d.UserId == userId, ct)
             ?? throw new ResourceNotFoundException("Vacation day not found.");
 
-        var balance = await _db.EmployeeVacationBalances
-            .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
-            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
+        if (day.VacationType.IsAdminOnly && !asAdmin)
+            throw AdminOnly(day.VacationType.Name);
 
-        var currentYear = dto.Date.Year;
-        var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, excludeId: id, ct: ct);
+        var yearlyBalance = await GetYearlyBalanceAsync(userId, dto.VacationTypeId, asAdmin, ct);
 
-        if (used + dto.Amount > balance.YearlyBalance)
-            throw new InsufficientVacationBalanceException(
-                $"Insufficient balance. Remaining: {FormatDays(balance.YearlyBalance - used)} day(s).");
+        if (yearlyBalance is decimal limit)
+        {
+            var currentYear = dto.Date.Year;
+            var used = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, excludeId: id, ct: ct);
+
+            if (used + dto.Amount > limit)
+                throw new InsufficientVacationBalanceException(
+                    $"Insufficient balance. Remaining: {FormatDays(limit - used)} day(s).");
+        }
 
         var typeChanged = day.VacationTypeId != dto.VacationTypeId;
 
@@ -156,17 +180,21 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         return _mapper.Map<VacationDayDto>(day);
     }
 
-    public async Task DeleteVacationDayAsync(string userId, int id, CancellationToken ct = default)
+    public async Task DeleteVacationDayAsync(string userId, int id, bool asAdmin = false, CancellationToken ct = default)
     {
         var day = await _db.VacationDays
+            .Include(d => d.VacationType)
             .FirstOrDefaultAsync(d => d.Id == id && d.UserId == userId, ct)
             ?? throw new ResourceNotFoundException("Vacation day not found.");
+
+        if (day.VacationType.IsAdminOnly && !asAdmin)
+            throw AdminOnly(day.VacationType.Name);
 
         _db.VacationDays.Remove(day);
         await _db.SaveChangesAsync(ct);
     }
 
-    public async Task<VacationRangeResultDto> CreateVacationRangeAsync(string userId, CreateVacationRangeDto dto, CancellationToken ct = default)
+    public async Task<VacationRangeResultDto> CreateVacationRangeAsync(string userId, CreateVacationRangeDto dto, bool asAdmin = false, CancellationToken ct = default)
     {
         ValidateAmount(dto.Amount);
 
@@ -175,9 +203,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var balance = await _db.EmployeeVacationBalances
-            .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == dto.VacationTypeId, ct)
-            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
+        var yearlyBalance = await GetYearlyBalanceAsync(userId, dto.VacationTypeId, asAdmin, ct);
 
         // Enumerate all calendar days in the range
         var allDays = new List<DateOnly>();
@@ -220,14 +246,17 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         // Validate balance — scope to the start date's year. Ranges that straddle a
         // year boundary are unusual; the balance check uses the start year as the
         // reference so the user isn't blocked by the following year's (empty) balance.
-        var currentYear = dto.StartDate.Year;
-        var alreadyUsed = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
+        if (yearlyBalance is decimal limit)
+        {
+            var currentYear = dto.StartDate.Year;
+            var alreadyUsed = await GetUsedVacationDaysAsync(userId, dto.VacationTypeId, currentYear, ct: ct);
 
-        decimal totalNewAmount = newDays.Count(d => d.Year == currentYear) * dto.Amount;
+            decimal totalNewAmount = newDays.Count(d => d.Year == currentYear) * dto.Amount;
 
-        if (alreadyUsed + totalNewAmount > balance.YearlyBalance)
-            throw new InsufficientVacationBalanceException(
-                $"Insufficient balance. Remaining: {FormatDays(balance.YearlyBalance - alreadyUsed)} day(s), needed: {FormatDays(totalNewAmount)}.");
+            if (alreadyUsed + totalNewAmount > limit)
+                throw new InsufficientVacationBalanceException(
+                    $"Insufficient balance. Remaining: {FormatDays(limit - alreadyUsed)} day(s), needed: {FormatDays(totalNewAmount)}.");
+        }
 
         var entities = newDays.Select(d => new VacationDay
         {
@@ -258,6 +287,26 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         };
     }
 
+    /// <summary>
+    /// The employee's yearly balance for a type, or null when the type is unlimited.
+    /// Throws when a limited type isn't assigned to the employee, or when an employee
+    /// books an admin-only type.
+    /// </summary>
+    private async Task<decimal?> GetYearlyBalanceAsync(string userId, int vacationTypeId, bool asAdmin, CancellationToken ct)
+    {
+        var type = await _db.VacationTypes
+            .Where(t => t.Id == vacationTypeId)
+            .Select(t => new { t.Name, t.IsUnlimited, t.IsAdminOnly })
+            .FirstOrDefaultAsync(ct);
+        if (type is { IsAdminOnly: true } && !asAdmin) throw AdminOnly(type.Name);
+        if (type is { IsUnlimited: true }) return null;
+
+        var balance = await _db.EmployeeVacationBalances
+            .FirstOrDefaultAsync(b => b.UserId == userId && b.VacationTypeId == vacationTypeId, ct)
+            ?? throw new ResourceNotFoundException("This vacation type is not assigned to you.");
+        return balance.YearlyBalance;
+    }
+
     private Task<decimal> GetUsedVacationDaysAsync(
         string userId, int vacationTypeId, int year, int? excludeId = null, CancellationToken ct = default)
     {
@@ -269,6 +318,9 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         return query.SumAsync(d => d.Amount, ct);
     }
+
+    private static ValidationException AdminOnly(string typeName) =>
+        new($"Only an admin can register or change \"{typeName}\" days.");
 
     private static void ValidateAmount(decimal amount)
     {

@@ -46,7 +46,7 @@ const employeeNav: NavItem[] = [
 
 const adminPersonalNav: NavItem[] = [
   { name: "Dashboard", to: "/admin/dashboard" },
-  { name: "My Vacations", to: "/vacations" },
+  { name: "Vacations", to: "/vacations" },
   { name: "Team Calendar", to: "/team-calendar" },
   { name: "Account", to: "/account" },
   { name: "Help", to: "/help" },
