@@ -1,11 +1,17 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { CalendarIcon } from "lucide-vue-next";
 import type { VacationBalance } from "../services/vacationService";
 
-defineProps<{
+const props = defineProps<{
   balances: VacationBalance[];
   loading: boolean;
 }>();
+
+// Unlimited types (e.g. sick leave) apply to everyone, so only show them once a day was taken.
+const visibleBalances = computed(() =>
+  props.balances.filter((b) => !b.isUnlimited || b.usedDays > 0),
+);
 
 const barWidth = (balance: VacationBalance) => {
   if (!balance.yearlyBalance) return "0%";
@@ -34,7 +40,7 @@ const barColor = (balance: VacationBalance) => {
       </div>
     </div>
 
-    <div v-else-if="balances.length === 0" class="card text-center py-10">
+    <div v-else-if="visibleBalances.length === 0" class="card text-center py-10">
       <CalendarIcon class="size-8 text-slate-300 dark:text-slate-600 mb-2 mx-auto" />
       <p class="text-sm text-slate-500 dark:text-slate-400">
         No vacation types have been assigned to you yet.
@@ -42,7 +48,7 @@ const barColor = (balance: VacationBalance) => {
     </div>
 
     <div v-else class="grid gap-3 sm:grid-cols-2">
-      <div v-for="balance in balances" :key="balance.vacationTypeId" class="card p-4">
+      <div v-for="balance in visibleBalances" :key="balance.vacationTypeId" class="card p-4">
         <div class="flex items-center gap-2 mb-3">
           <div
             class="w-3 h-3 rounded-full shrink-0 ring-1 ring-black/10"
