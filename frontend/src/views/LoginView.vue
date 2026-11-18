@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { authService } from "../services/authService";
 import { extractApiError } from "@/utils/apiError";
+import { safeRedirect } from "@/utils/safeRedirect";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Loader2Icon, EyeIcon, EyeOffIcon } from "lucide-vue-next";
 
 const router = useRouter();
+const route = useRoute();
+
 const email = ref<string>("");
 const password = ref<string>("");
 const rememberMe = ref<boolean>(false);
@@ -28,7 +31,7 @@ const handleLogin = async (): Promise<void> => {
     });
 
     authService.setUserInfo(response.email, response.fullName, response.roles);
-    router.push(response.roles.includes("Admin") ? "/admin/dashboard" : "/");
+    router.push(safeRedirect(route.query.redirect) ?? (response.roles.includes("Admin") ? "/admin/dashboard" : "/"));
   } catch (err) {
     error.value = extractApiError(err, "Invalid email or password");
   } finally {

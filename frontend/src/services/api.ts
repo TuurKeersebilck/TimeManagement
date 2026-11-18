@@ -23,7 +23,10 @@ apiClient.interceptors.response.use(
       const isAuthCall = url?.includes("/auth/");
       if (!isAuthCall) {
         authService.clearSession();
-        window.location.href = "/login";
+        const here = window.location.pathname + window.location.search;
+        window.location.href = here === "/" || here.startsWith("/login")
+          ? "/login"
+          : `/login?redirect=${encodeURIComponent(here)}`;
       }
     }
     return Promise.reject(error);

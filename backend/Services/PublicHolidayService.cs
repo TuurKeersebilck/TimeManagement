@@ -23,6 +23,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogge
                 EnableAdjustmentRequestEmails = true,
                 EnableMissedClockInEmails = true,
                 EnableSettlementEmails = true,
+                EnableVacationRequestEmails = true,
             };
         return ToConfigDto(config);
     }
@@ -260,7 +261,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogge
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task<AppConfigurationDto> SetNotificationTogglesAsync(bool enableAdjustmentRequestEmails, bool enableMissedClockInEmails, bool? enableSettlementEmails = null, CancellationToken ct = default)
+    public async Task<AppConfigurationDto> SetNotificationTogglesAsync(bool enableAdjustmentRequestEmails, bool enableMissedClockInEmails, bool? enableSettlementEmails = null, bool? enableVacationRequestEmails = null, CancellationToken ct = default)
     {
         var config = await db.AppConfigurations.FirstOrDefaultAsync(ct);
         if (config == null)
@@ -270,6 +271,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogge
                 EnableAdjustmentRequestEmails = enableAdjustmentRequestEmails,
                 EnableMissedClockInEmails = enableMissedClockInEmails,
                 EnableSettlementEmails = enableSettlementEmails ?? true,
+                EnableVacationRequestEmails = enableVacationRequestEmails ?? true,
             };
             db.AppConfigurations.Add(config);
         }
@@ -279,6 +281,8 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogge
             config.EnableMissedClockInEmails = enableMissedClockInEmails;
             if (enableSettlementEmails is { } settlementEmails)
                 config.EnableSettlementEmails = settlementEmails;
+            if (enableVacationRequestEmails is { } vacationRequestEmails)
+                config.EnableVacationRequestEmails = vacationRequestEmails;
         }
 
         await db.SaveChangesAsync(ct);
@@ -309,6 +313,7 @@ public class PublicHolidayService(AppDbContext db, HttpClient httpClient, ILogge
         EnableAdjustmentRequestEmails = c.EnableAdjustmentRequestEmails,
         EnableMissedClockInEmails = c.EnableMissedClockInEmails,
         EnableSettlementEmails = c.EnableSettlementEmails,
+        EnableVacationRequestEmails = c.EnableVacationRequestEmails,
         MinimumBreakMinutes = c.MinimumBreakMinutes,
     };
 

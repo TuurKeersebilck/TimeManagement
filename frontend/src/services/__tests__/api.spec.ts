@@ -45,7 +45,7 @@ describe("401 handling", () => {
   beforeEach(() => {
     authService.clearSession.mockClear();
     Object.defineProperty(window, "location", {
-      value: { href: "http://localhost/dashboard" },
+      value: { href: "http://localhost/dashboard", pathname: "/admin/requests", search: "?tab=vacation" },
       writable: true,
       configurable: true,
     });
@@ -57,6 +57,16 @@ describe("401 handling", () => {
     await expect(reject(error)).rejects.toBe(error);
 
     expect(authService.clearSession).toHaveBeenCalledOnce();
+    // Back to the same page after signing in again, e.g. a review link opened from an email.
+    expect(window.location.href).toBe("/login?redirect=%2Fadmin%2Frequests%3Ftab%3Dvacation");
+  });
+
+  it("sends the user to plain login when the session expires on the home page", async () => {
+    Object.assign(window.location, { pathname: "/", search: "" });
+    const error = { response: { status: 401 }, config: { url: "/worksessions/today" } };
+
+    await expect(reject(error)).rejects.toBe(error);
+
     expect(window.location.href).toBe("/login");
   });
 

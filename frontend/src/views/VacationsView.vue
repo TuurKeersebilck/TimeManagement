@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
   vacationService,
   type VacationBalance,
@@ -10,8 +10,10 @@ import {
 import { holidayService, type PublicHoliday } from "../services/holidayService";
 import { adminService, type Employee } from "../services/adminService";
 import { settlementService } from "../services/settlementService";
+import { vacationRequestService, type VacationRequest } from "../services/vacationRequestService";
 import { useAuth } from "@/composables/useAuth";
 import { useAppToast } from "@/composables/useAppToast";
+import { useDraftRequests } from "@/composables/useDraftRequests";
 import { extractApiError } from "@/utils/apiError";
 import { useConfirmDialog } from "@/composables/useConfirmDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -28,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import YearCalendarOverlay from "@/components/YearCalendarOverlay.vue";
 import VacationBalanceCards from "@/components/VacationBalanceCards.vue";
 import VacationDaysList from "@/components/VacationDaysList.vue";
+import MyVacationRequestsList from "@/components/MyVacationRequestsList.vue";
 import {
   CheckCircleIcon,
   XCircleIcon,
@@ -39,6 +42,9 @@ import {
   Trash2Icon,
   AlertTriangleIcon,
   LockIcon,
+  SendIcon,
+  HourglassIcon,
+  PencilLineIcon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -53,6 +59,43 @@ const balances = ref<VacationBalance[]>([]);
 const vacationDays = ref<VacationDay[]>([]);
 const holidays = ref<PublicHoliday[]>([]);
 const loading = ref(false);
+
+// ─── Approval ────────────────────────────────────────────────────────────────
+
+// Employees plan days as drafts, submit them together, and an admin approves each period.
+// Admins book directly, for anyone.
+const requiresApproval = computed(() => !isAdmin.value);
+
+const myRequests = ref<VacationRequest[]>([]);
+const cancellingRequestId = ref<number | null>(null);
+const submitting = ref(false);
+
+const drafts = computed(() =>
+  myRequests.value
+    .filter((r) => r.status === "Draft")
+    .sort((a, b) => a.startDate.localeCompare(b.startDate))
+);
+const draftTotalDays = computed(() => drafts.value.reduce((sum, r) => sum + r.totalDays, 0));
+
+// Drafts and requests awaiting review: shown on the calendar, not booked yet.
+const openRequests = computed(() =>
+  myRequests.value.filter((r) => r.status === "Pending" || r.status === "Draft")
+);
+
+const { draftCount } = useDraftRequests();
+watch(
+  () => drafts.value.length,
+  (count) => (draftCount.value = count)
+);
+
+const loadMyRequests = async () => {
+  if (!requiresApproval.value) return;
+  try {
+    myRequests.value = await vacationRequestService.getMine();
+  } catch {
+    // The list is extra context; the calendar and balances still work without it.
+  }
+};
 
 // ─── Admin: manage on behalf of an employee ──────────────────────────────────
 
@@ -225,6 +268,35 @@ const vacationsByDate = computed(() => {
   return map;
 });
 
+// Days covered by a draft or pending request, as they'd be booked: no weekends or public holidays off.
+const pendingByDate = computed(() => {
+  const map = new Map<string, VacationRequest[]>();
+  for (const r of openRequests.value) {
+    const d = new Date(r.startDate + "T00:00:00");
+    const end = new Date(r.endDate + "T00:00:00");
+    while (d <= end) {
+      const iso = toIso(d);
+      const dow = d.getDay();
+      const holiday = holidaysByDate.value.get(iso);
+      if (dow !== 0 && dow !== 6 && (!holiday || holiday.isWorkingDay)) {
+        if (!map.has(iso)) map.set(iso, []);
+        map.get(iso)!.push(r);
+      }
+      d.setDate(d.getDate() + 1);
+    }
+  }
+  return map;
+});
+
+const isBookableCell = (cell: CalDay) =>
+  !cell.isWeekend &&
+  bookableBalances.value.length > 0 &&
+  !(holidaysByDate.value.has(cell.iso) && !holidaysByDate.value.get(cell.iso)!.isWorkingDay);
+
+const isCellInteractive = (cell: CalDay) =>
+  cell.isCurrentMonth &&
+  (vacationsByDate.value.has(cell.iso) || pendingByDate.value.has(cell.iso) || isBookableCell(cell));
+
 const upcomingVacationDays = computed(() =>
   vacationDays.value.filter((d) => d.date >= todayIso).sort((a, b) => a.date.localeCompare(b.date))
 );
@@ -241,6 +313,9 @@ const isPopoverEditMode = computed(() => popoverEditingId.value !== null);
 
 const popoverDayEntries = computed(() =>
   openPopoverIso.value ? (vacationsByDate.value.get(openPopoverIso.value) ?? []) : []
+);
+const popoverPendingRequests = computed(() =>
+  openPopoverIso.value ? (pendingByDate.value.get(openPopoverIso.value) ?? []) : []
 );
 const popoverDayTotal = computed(() =>
   popoverDayEntries.value.reduce((sum, e) => sum + e.amount, 0)
@@ -295,7 +370,9 @@ const popoverLiveRemaining = computed(() => {
     return base - parseFloat(popoverForm.value.amount || "1");
   }
   const cost = workingDaysInRange.value * parseFloat(popoverForm.value.amount || "1");
-  return balance.remainingDays - cost;
+  // Days in drafts and pending requests are already spoken for.
+  const held = requiresApproval.value ? balance.pendingDays + balance.draftDays : 0;
+  return balance.remainingDays - held - cost;
 });
 
 const canPopoverSubmit = computed(() => {
@@ -339,6 +416,12 @@ const popoverEntryLocked = computed(() => {
   const entry = vacationDays.value.find((d) => d.id === popoverEditingId.value);
   return !!entry && isLockedDay(entry);
 });
+
+// An employee looking at an approved day: they can give it back, but changing it needs a new request.
+const popoverEntryReadOnly = computed(() => requiresApproval.value && isPopoverEditMode.value);
+const popoverEntry = computed(() =>
+  vacationDays.value.find((d) => d.id === popoverEditingId.value)
+);
 
 const popoverTouchesSettledMonth = computed(() => {
   if (settledMonths.value.size === 0) return false;
@@ -399,7 +482,20 @@ const savePopover = async () => {
   try {
     const { vacationTypeId, startDate, endDate, amount, note } = popoverForm.value;
 
-    if (isPopoverEditMode.value) {
+    if (requiresApproval.value) {
+      if (isPopoverEditMode.value) return;
+      const request = await vacationRequestService.create({
+        vacationTypeId: parseInt(vacationTypeId),
+        startDate,
+        endDate: endDate || startDate,
+        amount: parseFloat(amount),
+        note: note.trim() || undefined,
+      });
+      myRequests.value = [request, ...myRequests.value];
+      toast.success(
+        `${request.totalDays} day(s) planned. Submit your request when you're done planning.`
+      );
+    } else if (isPopoverEditMode.value) {
       const updated = await vacationService.update(
         popoverEditingId.value!,
         {
@@ -459,6 +555,113 @@ const deletePopoverEntry = () => {
   deleteDay(day);
 };
 
+// ─── Drafts: remove one, or submit them all ──────────────────────────────────
+
+const fmtPeriod = (r: VacationRequest) =>
+  r.startDate === r.endDate
+    ? displayDate(r.startDate)
+    : `${displayDate(r.startDate)} – ${displayDate(r.endDate)}`;
+
+const removeDraft = async (request: VacationRequest) => {
+  cancellingRequestId.value = request.id;
+  try {
+    await vacationRequestService.deleteDraft(request.id);
+    myRequests.value = myRequests.value.filter((r) => r.id !== request.id);
+    balances.value = await vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value);
+    toast.success("Planned days removed");
+  } catch (err: unknown) {
+    toast.error(extractApiError(err, "Failed to remove planned days"));
+    loadMyRequests();
+  } finally {
+    cancellingRequestId.value = null;
+  }
+};
+
+const submitDrafts = async () => {
+  submitting.value = true;
+  try {
+    const submitted = await vacationRequestService.submit();
+    const sentIds = new Set(submitted.map((r) => r.id));
+    myRequests.value = [
+      ...submitted,
+      ...myRequests.value.filter((r) => !sentIds.has(r.id)),
+    ];
+    balances.value = await vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value);
+    toast.success("Request sent. You'll get an email once your admin has reviewed it.");
+    return true;
+  } catch (err: unknown) {
+    toast.error(extractApiError(err, "Failed to send your request"));
+    loadMyRequests();
+    return false;
+  } finally {
+    submitting.value = false;
+  }
+};
+
+const draftSummary = () =>
+  `${drafts.value.map(fmtPeriod).join(", ")} (${draftTotalDays.value} day${draftTotalDays.value === 1 ? "" : "s"} in total)`;
+
+const confirmSubmit = () => {
+  confirm({
+    title: "Send vacation request",
+    message: `Send ${draftSummary()} to your admin for approval? You can still cancel a request until it's reviewed.`,
+    confirmLabel: "Send request",
+    cancelLabel: "Keep planning",
+    onConfirm: async () => {
+      await submitDrafts();
+    },
+  });
+};
+
+// Leaving with unsent drafts: remind once per visit. Nothing is lost either way (drafts are saved),
+// so "Keep as draft" just carries on to where the employee was going.
+let remindedAboutDrafts = false;
+onBeforeRouteLeave((to) => {
+  if (!requiresApproval.value || drafts.value.length === 0 || remindedAboutDrafts) return true;
+  remindedAboutDrafts = true;
+  confirm({
+    title: "Your request hasn't been sent",
+    message: `You planned ${draftSummary()}, but your admin hasn't been asked yet. Send it now?`,
+    confirmLabel: "Send request",
+    cancelLabel: "Keep as draft",
+    onConfirm: async () => {
+      if (await submitDrafts()) router.push(to.fullPath);
+    },
+    onCancel: () => {
+      router.push(to.fullPath);
+    },
+  });
+  return false;
+});
+
+// ─── Cancel a pending request ────────────────────────────────────────────────
+
+const cancelRequest = (request: VacationRequest) => {
+  const period = fmtPeriod(request);
+  confirm({
+    title: "Cancel vacation request",
+    message: `Withdraw your ${request.vacationTypeName} request for ${period}? Your admin won't need to review it any more.`,
+    confirmLabel: "Cancel request",
+    cancelLabel: "Keep it",
+    variant: "destructive",
+    onConfirm: async () => {
+      cancellingRequestId.value = request.id;
+      try {
+        await vacationRequestService.cancel(request.id);
+        closePopover();
+        await loadMyRequests();
+        balances.value = await vacationService.getBalances(new Date().getFullYear(), actingEmployeeId.value);
+        toast.success("Request cancelled");
+      } catch (err: unknown) {
+        toast.error(extractApiError(err, "Failed to cancel request"));
+        loadMyRequests();
+      } finally {
+        cancellingRequestId.value = null;
+      }
+    },
+  });
+};
+
 // ─── Delete ───────────────────────────────────────────────────────────────────
 
 const displayDate = (iso: string) =>
@@ -503,6 +706,7 @@ onMounted(async () => {
     holidays.value = h;
     employees.value = emps;
     loadSettledMonths();
+    loadMyRequests();
   } catch {
     toast.error("Failed to load vacation data");
   } finally {
@@ -524,7 +728,9 @@ onMounted(async () => {
             {{
               actingEmployeeName
                 ? `Manage vacation on behalf of ${actingEmployeeName}`
-                : "Plan your vacation days"
+                : requiresApproval
+                  ? "Plan your days, then send them to your admin for approval."
+                  : "Plan your vacation days"
             }}
           </p>
         </div>
@@ -593,7 +799,7 @@ onMounted(async () => {
                 :open="openPopoverIso === cell.iso"
                 @update:open="
                   (v) => {
-                    if (v && cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && bookableBalances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay))))
+                    if (v && isCellInteractive(cell))
                       openPopover(cell.iso);
                     else if (!v) closePopover();
                   }
@@ -601,6 +807,7 @@ onMounted(async () => {
               >
                 <PopoverTrigger as-child>
                   <div
+                    :data-date="cell.iso"
                     :class="[
                       'border-b border-r border-slate-100 dark:border-slate-800/60 min-h-20 p-1.5 transition-colors select-none',
                       !cell.isCurrentMonth && 'opacity-40',
@@ -608,7 +815,7 @@ onMounted(async () => {
                       cell.isWeekend && 'bg-slate-50/80 dark:bg-slate-900/60',
                       openPopoverIso === cell.iso ? 'ring-2 ring-inset ring-primary' : '',
                       highlightedRange.has(cell.iso) && openPopoverIso !== cell.iso ? 'bg-primary/10' : '',
-                      cell.isCurrentMonth && (vacationsByDate.has(cell.iso) || (!cell.isWeekend && bookableBalances.length > 0 && !(holidaysByDate.has(cell.iso) && !holidaysByDate.get(cell.iso)!.isWorkingDay)))
+                      isCellInteractive(cell)
                         ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
                         : 'cursor-default pointer-events-none',
                     ]"
@@ -658,6 +865,23 @@ onMounted(async () => {
                         +{{ vacationsByDate.get(cell.iso)!.length - MAX_VISIBLE }} more
                       </div>
                     </template>
+
+                    <!-- Planned (draft) or requested, awaiting approval -->
+                    <div
+                      v-for="r in pendingByDate.get(cell.iso) ?? []"
+                      :key="`open-${r.id}`"
+                      :style="{ borderColor: r.vacationTypeColor ?? '#6366f1' }"
+                      :class="[
+                        'text-[10px] leading-tight truncate rounded px-1 py-0.5 mb-0.5 border border-dashed',
+                        r.status === 'Draft'
+                          ? 'text-primary bg-primary/5'
+                          : 'text-slate-500 dark:text-slate-400',
+                      ]"
+                      :title="r.status === 'Draft' ? `${r.vacationTypeName}: planned, not sent yet` : `${r.vacationTypeName}: awaiting approval`"
+                    >
+                      {{ r.vacationTypeName }}<span v-if="r.amount === 0.5" class="opacity-50"> ½</span>
+                      <span class="opacity-60">· {{ r.status === "Draft" ? "draft" : "pending" }}</span>
+                    </div>
                   </div>
                 </PopoverTrigger>
 
@@ -688,6 +912,32 @@ onMounted(async () => {
                     <span class="text-xs text-amber-700 dark:text-amber-300 font-medium">
                       🎉 {{ holidaysByDate.get(cell.iso)!.name }}
                     </span>
+                  </div>
+
+                  <!-- Pending requests covering this day -->
+                  <div
+                    v-for="r in popoverPendingRequests"
+                    :key="`popover-pending-${r.id}`"
+                    class="flex items-start gap-2 px-4 py-2.5 bg-amber-50/70 dark:bg-amber-950/20 border-b border-amber-100 dark:border-amber-900/60"
+                  >
+                    <PencilLineIcon v-if="r.status === 'Draft'" class="size-3.5 mt-0.5 shrink-0 text-primary" />
+                    <HourglassIcon v-else class="size-3.5 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <div class="flex-1 min-w-0 text-xs">
+                      <p class="font-medium text-slate-800 dark:text-slate-200">
+                        {{ r.vacationTypeName }} {{ r.status === "Draft" ? "planned" : "requested" }}
+                      </p>
+                      <p class="text-slate-500 dark:text-slate-400">
+                        {{ fmtPeriod(r) }} · {{ r.status === "Draft" ? "not sent yet" : "awaiting approval" }}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="text-xs font-medium text-slate-500 hover:text-red-600 dark:hover:text-red-400 shrink-0 cursor-pointer"
+                      :disabled="cancellingRequestId === r.id"
+                      @click="r.status === 'Draft' ? removeDraft(r) : cancelRequest(r)"
+                    >
+                      {{ r.status === "Draft" ? "Remove" : "Cancel" }}
+                    </button>
                   </div>
 
                   <!-- Entry switcher (multiple entries on same day) -->
@@ -733,7 +983,15 @@ onMounted(async () => {
                   <!-- Create / Edit form -->
                   <div class="p-4 space-y-3">
                     <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                      {{ popoverEntryLocked ? "Registered by your admin" : isPopoverEditMode ? "Edit vacation" : "Plan vacation" }}
+                      {{
+                        popoverEntryLocked
+                          ? "Registered by your admin"
+                          : popoverEntryReadOnly
+                            ? "Approved vacation"
+                            : isPopoverEditMode
+                              ? "Edit vacation"
+                              : "Plan vacation"
+                      }}
                     </p>
 
                     <div
@@ -743,6 +1001,27 @@ onMounted(async () => {
                       <LockIcon class="size-3.5 shrink-0 mt-px" />
                       Only an admin can change or remove this day. Ask your admin if something isn't right.
                     </div>
+
+                    <template v-else-if="popoverEntryReadOnly && popoverEntry">
+                      <div class="text-sm text-slate-700 dark:text-slate-300 space-y-0.5">
+                        <p class="font-medium">
+                          {{ popoverEntry.vacationTypeName }}
+                          <span class="font-normal text-slate-500 dark:text-slate-400">
+                            · {{ popoverEntry.amount === 1 ? "Full day" : "Half day" }}
+                          </span>
+                        </p>
+                        <p v-if="popoverEntry.note" class="text-xs text-slate-500 dark:text-slate-400">
+                          {{ popoverEntry.note }}
+                        </p>
+                      </div>
+                      <p class="text-xs text-slate-500 dark:text-slate-400">
+                        To change this day, remove it and send a new request.
+                      </p>
+                      <Button class="w-full" size="sm" variant="ghost" @click="deletePopoverEntry">
+                        <Trash2Icon class="size-3.5" />
+                        Remove day
+                      </Button>
+                    </template>
 
                     <template v-else>
                     <div
@@ -856,6 +1135,15 @@ onMounted(async () => {
           </div>
         </section>
 
+        <!-- Employee's own requests -->
+        <MyVacationRequestsList
+          v-if="requiresApproval"
+          :requests="myRequests"
+          :cancelling-id="cancellingRequestId"
+          @cancel="cancelRequest"
+          @remove="removeDraft"
+        />
+
         <!-- Upcoming -->
         <VacationDaysList
           :vacation-days="upcomingVacationDays"
@@ -863,6 +1151,27 @@ onMounted(async () => {
           :is-locked="isLockedDay"
           @delete="deleteDay"
         />
+
+        <!-- Unsent drafts: stays in view until the request is sent -->
+        <div
+          v-if="requiresApproval && drafts.length > 0"
+          class="sticky bottom-4 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-background/95 px-4 py-3 shadow-lg backdrop-blur"
+        >
+          <div class="min-w-0 text-sm">
+            <p class="font-medium text-slate-900 dark:text-slate-100">
+              {{ drafts.length }} period{{ drafts.length === 1 ? "" : "s" }} planned
+              · {{ draftTotalDays }} day{{ draftTotalDays === 1 ? "" : "s" }}
+            </p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              Not sent yet. Your admin is asked once you submit.
+            </p>
+          </div>
+          <Button :disabled="submitting" @click="confirmSubmit">
+            <Loader2Icon v-if="submitting" class="size-4 animate-spin" />
+            <SendIcon v-else class="size-4" />
+            Submit request
+          </Button>
+        </div>
       </div>
     </div>
   </div>

@@ -29,6 +29,7 @@ public class AppConfigurationDto
     public bool EnableAdjustmentRequestEmails { get; set; }
     public bool EnableMissedClockInEmails { get; set; }
     public bool EnableSettlementEmails { get; set; }
+    public bool EnableVacationRequestEmails { get; set; }
     public int? MinimumBreakMinutes { get; set; }
 }
 
@@ -43,6 +44,8 @@ public class SetNotificationTogglesDto
     public bool EnableMissedClockInEmails { get; set; }
     /// <summary>Null leaves the current value untouched, so clients that don't know this toggle can't switch it off.</summary>
     public bool? EnableSettlementEmails { get; set; }
+    /// <summary>Null leaves the current value untouched.</summary>
+    public bool? EnableVacationRequestEmails { get; set; }
 }
 
 /// <summary>One entry in a Mon–Sun workday target schedule.</summary>
