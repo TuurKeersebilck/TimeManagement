@@ -20,6 +20,7 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
     public DbSet<VacationType> VacationTypes => Set<VacationType>();
     public DbSet<EmployeeVacationBalance> EmployeeVacationBalances => Set<EmployeeVacationBalance>();
     public DbSet<VacationDay> VacationDays => Set<VacationDay>();
+    public DbSet<VacationRequest> VacationRequests => Set<VacationRequest>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<EmployeeInvite> EmployeeInvites => Set<EmployeeInvite>();
     public DbSet<PublicHoliday> PublicHolidays => Set<PublicHoliday>();
@@ -77,6 +78,7 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
         builder.Entity<AppConfiguration>(entity =>
         {
             entity.Property(e => e.MaxSessionHours).HasDefaultValue(13m);
+            entity.Property(e => e.EnableVacationRequestEmails).HasDefaultValue(true);
         });
 
         builder.Entity<WorkdayTarget>(entity =>
@@ -151,6 +153,27 @@ public class AppDbContext : IdentityUserContext<User>, IDataProtectionKeyContext
             entity.Property(e => e.Amount).HasColumnType("numeric(3,1)");
             entity.HasIndex(d => new { d.UserId, d.Date });
             entity.HasIndex(d => d.VacationTypeId);
+        });
+
+        builder.Entity<VacationRequest>(entity =>
+        {
+            entity.HasIndex(r => new { r.UserId, r.Status });
+            entity.HasIndex(r => r.Status);
+
+            entity.HasOne(r => r.User)
+                .WithMany()
+                .HasForeignKey(r => r.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.ReviewedByUser)
+                .WithMany()
+                .HasForeignKey(r => r.ReviewedByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(r => r.VacationType)
+                .WithMany()
+                .HasForeignKey(r => r.VacationTypeId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<PublicHoliday>(entity =>

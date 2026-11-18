@@ -56,7 +56,11 @@ public class VacationsController(
         return Ok(days);
     }
 
+    // Booking, changing or extending leave directly is for admins (their own days included).
+    // Employees ask through VacationRequestsController, and an approval books the days.
+
     [HttpPost]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<VacationDayDto>> CreateVacationDay([FromBody] CreateVacationDayDto dto, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
@@ -65,7 +69,7 @@ public class VacationsController(
         if (await _service.ExistsForDateAndTypeAsync(user.Id, dto.Date, dto.VacationTypeId, ct))
             return Conflict(new ErrorResponseDto { Message = "A vacation day of this type already exists for this date", Code = "DUPLICATE_DATE" });
 
-        var created = await _service.CreateVacationDayAsync(user.Id, dto, User.IsInRole("Admin"), ct);
+        var created = await _service.CreateVacationDayAsync(user.Id, dto, asAdmin: true, ct);
 
         var dateLabel = dto.Date.ToString("d MMM yyyy");
         await _notificationService.NotifyAdminsAsync(
@@ -75,22 +79,24 @@ public class VacationsController(
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<VacationDayDto>> UpdateVacationDay(int id, [FromBody] CreateVacationDayDto dto, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var updated = await _service.UpdateVacationDayAsync(user.Id, id, dto, User.IsInRole("Admin"), ct);
+        var updated = await _service.UpdateVacationDayAsync(user.Id, id, dto, asAdmin: true, ct);
         return Ok(updated);
     }
 
     [HttpPost("range")]
+    [Authorize(Roles = "Admin")]
     public async Task<ActionResult<VacationRangeResultDto>> CreateVacationRange([FromBody] CreateVacationRangeDto dto, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        var result = await _service.CreateVacationRangeAsync(user.Id, dto, User.IsInRole("Admin"), ct);
+        var result = await _service.CreateVacationRangeAsync(user.Id, dto, asAdmin: true, ct);
 
         if (result.Created.Any())
         {
@@ -105,13 +111,27 @@ public class VacationsController(
         return Ok(result);
     }
 
+    /// <summary>Anyone can give back a day they have; the admins are told, since they approved it.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteVacationDay(int id, CancellationToken ct)
     {
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
 
-        await _service.DeleteVacationDayAsync(user.Id, id, User.IsInRole("Admin"), ct);
+        var isAdmin = User.IsInRole("Admin");
+        var existing = isAdmin
+            ? null
+            : (await _service.GetMyVacationDaysAsync(user.Id, ct: ct)).FirstOrDefault(d => d.Id == id);
+
+        await _service.DeleteVacationDayAsync(user.Id, id, isAdmin, ct);
+
+        if (existing != null)
+        {
+            await _notificationService.NotifyAdminsAsync(
+                $"{user.FullName} removed their {existing.VacationTypeName} on {existing.Date:d MMM yyyy}",
+                NotificationType.Vacation, ct);
+        }
+
         return NoContent();
     }
 
@@ -122,7 +142,8 @@ public class VacationsController(
     public async Task<ActionResult<IEnumerable<VacationBalanceDto>>> GetEmployeeBalances(
         string userId, [FromQuery] int? year, CancellationToken ct)
     {
-        var balances = await _service.GetMyBalancesAsync(userId, year, ct);
+        // As before vacation requests existed: no pending or draft counts in the admin's view.
+        var balances = await _service.GetMyBalancesAsync(userId, year, ct, includeRequests: false);
         return Ok(balances);
     }
 

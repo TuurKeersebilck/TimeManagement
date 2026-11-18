@@ -85,6 +85,7 @@ try
     builder.Services.AddScoped<ITimeAdjustmentRequestService, TimeAdjustmentRequestService>();
     builder.Services.AddScoped<IAdminService, AdminService>();
     builder.Services.AddScoped<IVacationService, VacationService>();
+    builder.Services.AddScoped<IVacationRequestService, VacationRequestService>();
     builder.Services.AddScoped<ICalendarService, CalendarService>();
     builder.Services.AddScoped<INotificationService, NotificationService>();
     builder.Services.AddHttpClient<IPublicHolidayService, PublicHolidayService>();

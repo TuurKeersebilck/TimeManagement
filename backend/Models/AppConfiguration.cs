@@ -21,6 +21,9 @@ public class AppConfiguration
     /// <summary>When false, no email is sent to NotificationEmail when monthly settlements are ready or still awaiting review.</summary>
     public bool EnableSettlementEmails { get; set; } = true;
 
+    /// <summary>When false, no email is sent to NotificationEmail when an employee requests leave.</summary>
+    public bool EnableVacationRequestEmails { get; set; } = true;
+
     /// <summary>Global minimum break duration in minutes. Null = no minimum enforced.</summary>
     public int? MinimumBreakMinutes { get; set; }
 

@@ -8,10 +8,18 @@ const props = defineProps<{
   loading: boolean;
 }>();
 
-// Unlimited types (e.g. sick leave) apply to everyone, so only show them once a day was taken.
+// Unlimited types (e.g. sick leave) apply to everyone, so only show them once a day was taken
+// or requested.
 const visibleBalances = computed(() =>
-  props.balances.filter((b) => !b.isUnlimited || b.usedDays > 0),
+  props.balances.filter((b) => !b.isUnlimited || b.usedDays > 0 || b.pendingDays > 0),
 );
+
+const pendingWidth = (balance: VacationBalance) => {
+  if (!balance.yearlyBalance || !balance.pendingDays) return "0%";
+  const used = Math.min(balance.usedDays / balance.yearlyBalance, 1);
+  const pending = Math.min(balance.pendingDays / balance.yearlyBalance, 1 - used);
+  return `${pending * 100}%`;
+};
 
 const barWidth = (balance: VacationBalance) => {
   if (!balance.yearlyBalance) return "0%";
@@ -61,10 +69,15 @@ const barColor = (balance: VacationBalance) => {
         <p v-if="balance.isUnlimited" class="text-xs text-slate-500 dark:text-slate-400">
           {{ balance.usedDays }} day{{ balance.usedDays !== 1 ? "s" : "" }} this year · no limit
         </p>
-        <div v-else class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2">
+        <div v-else class="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-2 flex overflow-hidden">
           <div
-            :class="['h-1.5 rounded-full transition-all duration-300', barColor(balance)]"
+            :class="['h-1.5 transition-all duration-300', barColor(balance)]"
             :style="{ width: barWidth(balance) }"
+          />
+          <div
+            class="h-1.5 bg-amber-300/70 dark:bg-amber-500/50 transition-all duration-300"
+            :style="{ width: pendingWidth(balance) }"
+            :title="`${balance.pendingDays} day(s) requested, awaiting approval`"
           />
         </div>
         <div v-if="!balance.isUnlimited" class="flex justify-between text-xs text-slate-500 dark:text-slate-400">
@@ -77,6 +90,9 @@ const barColor = (balance: VacationBalance) => {
             "
           >{{ balance.remainingDays }} remaining</span>
         </div>
+        <p v-if="balance.pendingDays > 0" class="mt-1 text-xs text-amber-700 dark:text-amber-300">
+          {{ balance.pendingDays }} day{{ balance.pendingDays !== 1 ? "s" : "" }} awaiting approval
+        </p>
       </div>
     </div>
   </section>

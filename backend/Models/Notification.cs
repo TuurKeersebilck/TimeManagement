@@ -9,6 +9,9 @@ public enum NotificationType
     SessionInvalidated,
     MonthlySettlement,
     AdminHoursAdjusted,
+    VacationRequest,
+    VacationApproved,
+    VacationRejected,
 }
 
 public class Notification

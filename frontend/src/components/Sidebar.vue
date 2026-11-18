@@ -7,6 +7,8 @@ import { useRoute } from "vue-router";
 import { useAuth } from "../composables/useAuth";
 import { useChangelogStore } from "../composables/useChangelogStore";
 import { usePendingAdjustments } from "../composables/usePendingAdjustments";
+import { usePendingVacationRequests } from "../composables/usePendingVacationRequests";
+import { useDraftRequests } from "../composables/useDraftRequests";
 import { useAutoRefresh } from "../composables/useAutoRefresh";
 import NotificationBell from "./NotificationBell.vue";
 import ChangelogModal from "./ChangelogModal.vue";
@@ -36,9 +38,10 @@ interface NavItem {
   to: string;
 }
 
+const VACATIONS_PATH = "/vacations";
 const employeeNav: NavItem[] = [
   { name: "Clock In/Out", to: "/" },
-  { name: "My Vacations", to: "/vacations" },
+  { name: "My Vacations", to: VACATIONS_PATH },
   { name: "Team Calendar", to: "/team-calendar" },
   { name: "Account", to: "/account" },
   { name: "Help", to: "/help" },
@@ -52,7 +55,9 @@ const adminPersonalNav: NavItem[] = [
   { name: "Help", to: "/help" },
 ];
 
+const VACATION_REQUESTS_PATH = "/admin/vacation-requests";
 const adminSectionNav: NavItem[] = [
+  { name: "Vacation Requests", to: VACATION_REQUESTS_PATH },
   { name: "All Time Logs", to: "/admin/time-logs" },
   { name: "Settlements", to: "/admin/settlements" },
   { name: "Payroll Export", to: "/admin/export" },
@@ -92,6 +97,23 @@ watch(
 );
 useAutoRefresh(async () => {
   if (isAdmin.value) await refreshPendingCount();
+}, 120_000);
+
+// Vacation requests waiting for review (admins), and planned days not sent yet (employees).
+const { pendingVacationCount, refreshPendingVacationCount } = usePendingVacationRequests();
+const { draftCount, refreshDraftCount } = useDraftRequests();
+watch(
+  [isAdmin, isLoadingUser],
+  ([admin, loadingUser]) => {
+    if (loadingUser) return;
+    if (admin) refreshPendingVacationCount();
+    else refreshDraftCount();
+  },
+  { immediate: true }
+);
+useAutoRefresh(async () => {
+  if (isAdmin.value) await refreshPendingVacationCount();
+  else await refreshDraftCount();
 }, 120_000);
 
 const handleNavClick = () => {
@@ -153,7 +175,15 @@ onMounted(() => {
             @click="handleNavClick"
             :class="['sidebar-nav-link', isActive(item.to) && 'sidebar-nav-link-active']"
           >
-            {{ item.name }}
+            <span class="flex items-center justify-between gap-2">
+              <span class="truncate">{{ item.name }}</span>
+              <span
+                v-if="!isAdmin && item.to === VACATIONS_PATH && draftCount > 0"
+                class="sidebar-badge sidebar-badge-draft"
+                :title="`${draftCount} planned period(s) not sent to your admin yet`"
+                >{{ draftCount }}</span
+              >
+            </span>
           </router-link>
         </li>
       </ul>
@@ -183,7 +213,15 @@ onMounted(() => {
                 @click="handleNavClick"
                 :class="['sidebar-nav-link', isActive(item.to) && 'sidebar-nav-link-active']"
               >
-                {{ item.name }}
+                <span class="flex items-center justify-between gap-2">
+                  <span class="truncate">{{ item.name }}</span>
+                  <span
+                    v-if="item.to === VACATION_REQUESTS_PATH && pendingVacationCount > 0"
+                    class="sidebar-badge"
+                    :title="`${pendingVacationCount} vacation request(s) waiting for review`"
+                    >{{ pendingVacationCount }}</span
+                  >
+                </span>
               </router-link>
             </li>
           </ul>
@@ -356,5 +394,12 @@ onMounted(() => {
   font-size: 0.6875rem;
   font-weight: 600;
   line-height: 1;
+}
+
+/* Unsent drafts: outlined, so it reads as "to do" rather than as something waiting on someone else. */
+.sidebar-badge-draft {
+  background: transparent;
+  color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 </style>

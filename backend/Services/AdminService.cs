@@ -266,6 +266,7 @@ public class AdminService(
         await _context.TimeAdjustmentRequests.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.EmployeeVacationBalances.Where(b => b.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.VacationDays.Where(d => d.UserId == userId).ExecuteDeleteAsync(ct);
+        await _context.VacationRequests.Where(r => r.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.EmployeeTargets.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
         await _context.Notifications.Where(n => n.RecipientUserId == userId).ExecuteDeleteAsync(ct);
         await _context.PasswordResetTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
@@ -331,6 +332,22 @@ public class AdminService(
 
         entity.IsDeleted = true;
         entity.DeletedAt = DateTimeOffset.UtcNow;
+
+        // Pending requests for a removed type can't be approved any more; close them so they
+        // don't sit in the review list (the employee can request again with another type).
+        var now = DateTimeOffset.UtcNow;
+        await _context.VacationRequests
+            .Where(r => r.VacationTypeId == id && r.Status == VacationRequestStatus.Pending)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(r => r.Status, VacationRequestStatus.Rejected)
+                .SetProperty(r => r.ReviewedAt, now)
+                .SetProperty(r => r.ReviewNote, "This leave type was removed."), ct);
+
+        // Unsent drafts of the type would only block the employee's next submit.
+        await _context.VacationRequests
+            .Where(r => r.VacationTypeId == id && r.Status == VacationRequestStatus.Draft)
+            .ExecuteDeleteAsync(ct);
+
         await _context.SaveChangesAsync(ct);
     }
 
