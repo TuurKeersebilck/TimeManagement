@@ -44,6 +44,24 @@ describe("settlementService", () => {
       .resolves.toBeUndefined();
   });
 
+  it("recalculates a pending settlement and returns the refreshed row", async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { id: 12, netBalanceHours: -168 } });
+
+    const result = await settlementService.recalculate(12);
+
+    expect(api.post).toHaveBeenCalledWith("/settlements/12/recalculate");
+    expect(result).toEqual({ id: 12, netBalanceHours: -168 });
+  });
+
+  it("reopens a confirmed settlement and returns the recalculated row", async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({ data: { id: 12, status: "PendingReview" } });
+
+    const result = await settlementService.reopen(12);
+
+    expect(api.post).toHaveBeenCalledWith("/settlements/12/reopen");
+    expect(result).toEqual({ id: 12, status: "PendingReview" });
+  });
+
   it("reads one employee's settlement history", async () => {
     await settlementService.getEmployeeHistory("u1");
 

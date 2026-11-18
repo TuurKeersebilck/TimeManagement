@@ -52,6 +52,14 @@ public class SettlementsController(
         return NoContent();
     }
 
+    [HttpPost("{id:int}/recalculate")]
+    public async Task<ActionResult<MonthlySettlementDto>> Recalculate(int id, CancellationToken ct)
+        => Ok(await settlementService.RecalculateAsync(id, ct));
+
+    [HttpPost("{id:int}/reopen")]
+    public async Task<ActionResult<MonthlySettlementDto>> Reopen(int id, CancellationToken ct)
+        => Ok(await settlementService.ReopenAsync(id, ct));
+
     [HttpGet("employee/{userId}")]
     public async Task<ActionResult<IEnumerable<MonthlySettlementDto>>> GetEmployeeHistory(
         string userId, CancellationToken ct)

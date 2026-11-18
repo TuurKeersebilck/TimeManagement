@@ -12,8 +12,8 @@ namespace TimeManagementBackend.Tests.Services;
 
 /// <summary>
 /// Confirming a settlement is the point where a flex balance turns into money paid and into the
-/// opening balance of the next month, and it is irreversible — Settled rows are read-only. These
-/// tests cover both what it writes and what it refuses to write.
+/// opening balance of the next month. Settled rows are read-only until an admin reopens them.
+/// These tests cover what confirming and reopening write, and what they refuse to write.
 /// </summary>
 [Collection(DatabaseCollection.Name)]
 public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixture)
@@ -475,6 +475,140 @@ public class SettlementServiceTests(PostgresFixture fixture) : DatabaseTestBase(
             new ConfirmSettlementDto { PaidOutHours = 1m }, admin.Id);
 
         Assert.Equal(SettlementStatus.Settled, (await NewContext().MonthlySettlements.SingleAsync()).Status);
+    }
+
+    // ── Recalculating and reopening ───────────────────────────────────────────
+    // A sick day registered after the month closed must reach the settlement without the admin
+    // having to work out manual corrections.
+
+    [Fact]
+    public async Task Generate_RefreshesAPendingSettlementWithLaterChanges()
+    {
+        var settlement = await ArrangePendingSettlementAsync(netBalanceHours: 12m);
+        Db.AddAdjustment(settlement.UserId, new DateOnly(2026, 3, 10), 3m);
+        await Db.SaveChangesAsync();
+
+        await NewService().GenerateForAllEmployeesAsync(2026, 3);
+
+        var refreshed = Assert.Single(await NewContext().MonthlySettlements.ToListAsync());
+        Assert.Equal(settlement.Id, refreshed.Id);
+        Assert.Equal(3m, refreshed.NetBalanceHours);
+        Assert.Equal(3m, refreshed.OvertimeHours);
+        Assert.Equal(SettlementStatus.PendingReview, refreshed.Status);
+    }
+
+    [Fact]
+    public async Task Recalculate_RefreshesAPendingSettlement()
+    {
+        var settlement = await ArrangePendingSettlementAsync(netBalanceHours: 12m);
+        Db.AddAdjustment(settlement.UserId, new DateOnly(2026, 3, 10), -2m);
+        await Db.SaveChangesAsync();
+
+        var result = await NewService().RecalculateAsync(settlement.Id);
+
+        Assert.Equal(-2m, result.NetBalanceHours);
+        Assert.Equal(2m, result.DeficitHours);
+    }
+
+    [Fact]
+    public async Task Recalculate_LeavesAConfirmedSettlementAlone()
+    {
+        var employee = Db.AddUser();
+        await Db.SaveChangesAsync();
+        var settlement = Db.AddSettlement(employee.Id, 2026, 3, SettlementStatus.Settled, netBalanceHours: 12m);
+        Db.AddAdjustment(employee.Id, new DateOnly(2026, 3, 10), 3m);
+        await Db.SaveChangesAsync();
+
+        var result = await NewService().RecalculateAsync(settlement.Id);
+
+        Assert.Equal(12m, result.NetBalanceHours);
+    }
+
+    private async Task<(MonthlySettlement Settlement, User Admin)> ArrangeConfirmedSettlementAsync()
+    {
+        var settlement = await ArrangePendingSettlementAsync();
+        Db.AddAdjustment(settlement.UserId, new DateOnly(2026, 3, 10), 6m);
+        var admin = Db.AddUser("Adam Admin", UserRole.Admin);
+        await Db.SaveChangesAsync();
+        await NewService().ConfirmAsync(settlement.Id,
+            new ConfirmSettlementDto { PaidOutHours = 4m, CarryForwardHours = 2m, Notes = "First pass" }, admin.Id);
+        return (settlement, admin);
+    }
+
+    [Fact]
+    public async Task Reopen_UndoesTheConfirmationAndRecalculates()
+    {
+        var (settlement, _) = await ArrangeConfirmedSettlementAsync();
+        // The correction that was missing when the month was confirmed.
+        Db.AddAdjustment(settlement.UserId, new DateOnly(2026, 3, 12), 8m);
+        await Db.SaveChangesAsync();
+
+        var result = await NewService().ReopenAsync(settlement.Id);
+
+        Assert.Equal(SettlementStatus.PendingReview, result.Status);
+        Assert.Equal(14m, result.NetBalanceHours);
+        Assert.Null(result.PaidOutHours);
+        Assert.Null(result.CarriedForwardHours);
+        Assert.Null(result.Outcome);
+        Assert.Null(result.ReviewedByUserId);
+        Assert.Equal("First pass", result.Notes); // kept so the admin doesn't retype it
+        // The carry-over into April is gone; only the two manual March adjustments remain.
+        var adjustments = await NewContext().TimeBankAdjustments.ToListAsync();
+        Assert.All(adjustments, a => Assert.Null(a.SourceSettlementId));
+        Assert.Equal(2, adjustments.Count);
+    }
+
+    [Fact]
+    public async Task Reopen_ThenConfirmAgain_CreatesOneFreshCarryOver()
+    {
+        var (settlement, admin) = await ArrangeConfirmedSettlementAsync();
+
+        await NewService().ReopenAsync(settlement.Id);
+        await NewService().ConfirmAsync(settlement.Id,
+            new ConfirmSettlementDto { PaidOutHours = 0m, CarryForwardHours = 6m }, admin.Id);
+
+        var carry = Assert.Single(await NewContext().TimeBankAdjustments
+            .Where(a => a.SourceSettlementId != null).ToListAsync());
+        Assert.Equal(6m, carry.Hours);
+        Assert.Equal(new DateOnly(2026, 4, 1), carry.EffectiveDate);
+    }
+
+    [Fact]
+    public async Task Reopen_RefreshesNextMonthsPendingSettlement()
+    {
+        var (settlement, admin) = await ArrangeConfirmedSettlementAsync();
+        // April was generated after March's confirmation, so it opens with the 2h carry-over.
+        await NewService().GenerateForAllEmployeesAsync(2026, 4);
+        Assert.Equal(2m, (await NewContext().MonthlySettlements.SingleAsync(s => s.Month == 4)).NetBalanceHours);
+
+        await NewService().ReopenAsync(settlement.Id);
+        Assert.Equal(0m, (await NewContext().MonthlySettlements.SingleAsync(s => s.Month == 4)).NetBalanceHours);
+
+        await NewService().ConfirmAsync(settlement.Id,
+            new ConfirmSettlementDto { PaidOutHours = 0m, CarryForwardHours = 5m }, admin.Id);
+        Assert.Equal(5m, (await NewContext().MonthlySettlements.SingleAsync(s => s.Month == 4)).NetBalanceHours);
+    }
+
+    [Fact]
+    public async Task Reopen_IsRefusedWhileNextMonthIsConfirmed()
+    {
+        var (settlement, _) = await ArrangeConfirmedSettlementAsync();
+        Db.AddSettlement(settlement.UserId, 2026, 4, SettlementStatus.Settled);
+        await Db.SaveChangesAsync();
+
+        var ex = await Assert.ThrowsAsync<ValidationException>(() => NewService().ReopenAsync(settlement.Id));
+
+        Assert.Contains("2026-04", ex.Message);
+        Assert.Equal(SettlementStatus.Settled, (await NewContext().MonthlySettlements.FindAsync(settlement.Id))!.Status);
+        Assert.Single(await NewContext().TimeBankAdjustments.Where(a => a.SourceSettlementId != null).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Reopen_RejectsASettlementThatIsStillPending()
+    {
+        var settlement = await ArrangePendingSettlementAsync();
+
+        await Assert.ThrowsAsync<ValidationException>(() => NewService().ReopenAsync(settlement.Id));
     }
 
     // ── Reads ─────────────────────────────────────────────────────────────────
