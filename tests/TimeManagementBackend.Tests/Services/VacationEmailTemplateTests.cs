@@ -15,7 +15,7 @@ public class VacationEmailTemplateTests
     private static readonly DateOnly Mon21Dec = new(2026, 12, 21);
     private const string Link = "https://logr.example.test/admin/vacation-requests";
 
-    private static string Html(MimeMessage message) => ((TextPart)message.Body).Text;
+    private static string Html(MimeMessage message) => Assert.IsType<TextPart>(message.Body).Text;
 
     // ── To the admin ──────────────────────────────────────────────────────────
 
