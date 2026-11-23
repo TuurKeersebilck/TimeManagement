@@ -1,5 +1,35 @@
 # Changelog
 
+## [v0.8.0] - 2026-11-23
+
+### New Features
+
+- Vacation now needs your admin's approval. Employees plan their days on the Vacations page as before, but they're saved as a draft first: only the employee sees them, they show as dashed "draft" days on the calendar, and they can be removed and planned again as often as needed. When the planning is done, **Submit request** sends everything at once, after a summary of every period and the total number of days. A bar at the bottom of the page, a badge on My Vacations and a reminder when leaving the page make sure drafts aren't forgotten. Drafts and requests waiting for review already count against the balance, so nobody can ask for more days than they have.
+- Admins review requests on the new **Vacation Requests** page, with a badge in the menu for the number waiting. Each request shows the dates, the number of days, the employee's note, the balance left after approval and who else is off (or asking to be off) on those days. **Approve** books the days; **Deny** lets you add a reason. Either way the employee gets a notification and an email. Each submit sends the admin one email listing every period, with a button that opens the review page. It can be switched off under App Settings → Email types → Vacation request emails.
+- Employees can cancel a request until it's reviewed. Approved days can still be removed (the admin gets a notification), but not changed: to move them, remove them and request the new dates. Admins still book leave directly, for themselves or on behalf of an employee, without a request.
+- Leave types can now be set to **No balance limit** and **Only admins can register**, under Settings → Vacation Types. Together they make a sick leave type: available to everyone without assigning a balance, and only an admin can enter, change or remove those days. Employees see them in their overview, marked "Set by admin". On an employee's page, unlimited types show how many days were taken this year, and **Plan leave / sick days** opens the planner for that employee. Overtime and the payroll export treat them like any other leave.
+- Settlements stay up to date when something changes afterwards, such as a sick day registered late. An unconfirmed settlement is recalculated whenever it's opened or generated again. A confirmed one can be **reopened**: its carry-over to next month is removed, the month is recalculated and you confirm it again (next month has to be reopened first if it's already confirmed). The settlement also lists the manual flex adjustments from that month on, each with a remove button, so a correction made by hand for a day that's now registered doesn't count twice.
+- The notification panel has a new design: an icon and short title per type (green for approved, red for denied, amber for things that need attention), the message below it and a short time such as "5 min ago" or "Yesterday", with the full date on hover. Notifications are grouped into Today and Earlier, with an **All / Unread** filter. Each one can be marked as read or removed without opening it (on hover, or always on a phone), and **Mark all as read** clears the badge. Notifications are removed automatically after 90 days.
+
+### Improvements
+
+- Leave types without a balance limit (such as sick leave) no longer show a "0 days" card on everyone's Vacations page; the card appears once a day of that type was taken.
+- After your session expires, logging in again takes you back to the page you were on, such as the review page opened from an email, instead of the dashboard.
+- On a phone, the notification panel opens downward and stays on the screen, also when opened from the side menu.
+
+### Bug Fixes
+
+- New notifications didn't appear until the page was reloaded. The bell now checks every minute while the app is open, and right away when you come back to the tab.
+- Clicking a notification about an auto-closed session or a confirmed settlement did nothing; it now opens the right page.
+- Confirming a settlement left next month's unconfirmed settlement on its old balance. It's now recalculated with the new carry-over.
+- In the settlement window, confirmation prompts opened behind the window and couldn't be clicked. They're now shown inside it.
+
+### Maintenance
+
+- Updated all dependencies and resolved every open security alert. Backend: Entity Framework Core and Identity 10, the PostgreSQL driver 10, AutoMapper 17, MailKit 5, Swashbuckle 11 and Serilog 11; the backend stays on .NET 10. Frontend: Vue 3.5, Vue Router 5, VueUse 15, Vite 8.3, Vitest 5 and happy-dom 21, among others.
+- The frontend is now built with Node 24; Node 20 is no longer supported.
+- Removed packages that weren't used (SQLite, an extra OpenAPI package and a table library).
+
 ## [v0.7.3] - 2026-10-27
 
 ### Improvements
