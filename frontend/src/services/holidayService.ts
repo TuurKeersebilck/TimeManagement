@@ -16,6 +16,7 @@ export interface AppConfiguration {
   enableAdjustmentRequestEmails: boolean;
   enableMissedClockInEmails: boolean;
   enableSettlementEmails: boolean;
+  enableVacationRequestEmails: boolean;
   minimumBreakMinutes?: number | null;
 }
 
@@ -104,12 +105,14 @@ export const holidayService = {
   async setNotificationToggles(
     enableAdjustmentRequestEmails: boolean,
     enableMissedClockInEmails: boolean,
-    enableSettlementEmails: boolean
+    enableSettlementEmails: boolean,
+    enableVacationRequestEmails: boolean
   ): Promise<AppConfiguration> {
     const res = await apiClient.put<AppConfiguration>("/admin/settings/notification-toggles", {
       enableAdjustmentRequestEmails,
       enableMissedClockInEmails,
       enableSettlementEmails,
+      enableVacationRequestEmails,
     });
     return res.data;
   },

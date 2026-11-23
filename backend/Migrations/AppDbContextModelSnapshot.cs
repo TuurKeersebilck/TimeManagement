@@ -133,6 +133,11 @@ namespace TimeManagementBackend.Migrations
                     b.Property<bool>("EnableSettlementEmails")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("EnableVacationRequestEmails")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<decimal>("MaxSessionHours")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("numeric")
@@ -659,6 +664,66 @@ namespace TimeManagementBackend.Migrations
                     b.ToTable("VacationDays");
                 });
 
+            modelBuilder.Entity("TimeManagementBackend.Models.VacationRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric(3,1)");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReviewedByUserId")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("TotalDays")
+                        .HasColumnType("numeric(5,1)");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("VacationTypeId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReviewedByUserId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("VacationTypeId");
+
+                    b.HasIndex("UserId", "Status");
+
+                    b.ToTable("VacationRequests");
+                });
+
             modelBuilder.Entity("TimeManagementBackend.Models.VacationType", b =>
                 {
                     b.Property<int>("Id")
@@ -1020,6 +1085,32 @@ namespace TimeManagementBackend.Migrations
                         .HasForeignKey("VacationTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("User");
+
+                    b.Navigation("VacationType");
+                });
+
+            modelBuilder.Entity("TimeManagementBackend.Models.VacationRequest", b =>
+                {
+                    b.HasOne("TimeManagementBackend.Models.User", "ReviewedByUser")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("TimeManagementBackend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TimeManagementBackend.Models.VacationType", "VacationType")
+                        .WithMany()
+                        .HasForeignKey("VacationTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ReviewedByUser");
 
                     b.Navigation("User");
 

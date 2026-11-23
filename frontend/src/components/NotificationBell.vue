@@ -10,11 +10,17 @@ const router = useRouter();
 const open = ref(false);
 const { notifications, unreadCount, loading, fetchUnreadCount, fetchNotifications, markAsRead, markAllAsRead } = useNotifications();
 
-const routeForType: Record<NotificationType, string> = {
-  Vacation: "team-calendar",
-  AdjustmentRequest: "admin-adjustment-requests",
-  AdjustmentApproved: "time-tracking",
-  AdjustmentRejected: "time-tracking",
+const routeForType: Record<NotificationType, { name: string; query?: Record<string, string> }> = {
+  Vacation: { name: "team-calendar" },
+  AdjustmentRequest: { name: "admin-adjustment-requests" },
+  AdjustmentApproved: { name: "time-tracking" },
+  AdjustmentRejected: { name: "time-tracking" },
+  SessionInvalidated: { name: "time-tracking" },
+  MonthlySettlement: { name: "time-tracking" },
+  AdminHoursAdjusted: { name: "time-tracking" },
+  VacationRequest: { name: "admin-vacation-requests" },
+  VacationApproved: { name: "vacations" },
+  VacationRejected: { name: "vacations" },
 };
 
 const onOpen = async (isOpen: boolean) => {
@@ -27,7 +33,8 @@ const onOpen = async (isOpen: boolean) => {
 const handleMarkAsRead = async (n: Parameters<typeof markAsRead>[0]) => {
   await markAsRead(n);
   open.value = false;
-  router.push({ name: routeForType[n.type] });
+  const target = routeForType[n.type];
+  if (target) router.push(target);
 };
 
 const formatDate = (iso: string) =>

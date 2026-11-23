@@ -14,7 +14,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
     private readonly AppDbContext _db = db;
     private readonly IMapper _mapper = mapper;
 
-    public async Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, int? year = null, CancellationToken ct = default)
+    public async Task<IEnumerable<VacationBalanceDto>> GetMyBalancesAsync(string userId, int? year = null, CancellationToken ct = default, bool includeRequests = true)
     {
         // Use the caller-supplied year (the user's local year from the frontend) so that
         // users in UTC+13/UTC-12 don't see wrong balances around the Jan 1 boundary.
@@ -55,6 +55,17 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
             .Select(g => new { TypeId = g.Key, Used = g.Sum(d => d.Amount) })
             .ToDictionaryAsync(x => x.TypeId, x => x.Used, ct);
 
+        // Requested (or drafted) but not yet reviewed; counted in the year the request starts, like bookings.
+        var heldByType = !includeRequests ? [] : await _db.VacationRequests
+            .Where(r => r.UserId == userId && r.StartDate.Year == currentYear &&
+                        (r.Status == VacationRequestStatus.Pending || r.Status == VacationRequestStatus.Draft))
+            .GroupBy(r => new { r.VacationTypeId, r.Status })
+            .Select(g => new { g.Key.VacationTypeId, g.Key.Status, Days = g.Sum(r => r.TotalDays) })
+            .ToListAsync(ct);
+
+        decimal Held(int typeId, VacationRequestStatus status) =>
+            heldByType.Where(h => h.VacationTypeId == typeId && h.Status == status).Sum(h => h.Days);
+
         return balances.Select(b =>
         {
             var used = usedByType.GetValueOrDefault(b.VacationTypeId, 0m);
@@ -67,6 +78,8 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
                 IsAdminOnly = b.IsAdminOnly,
                 YearlyBalance = b.YearlyBalance,
                 UsedDays = used,
+                PendingDays = Held(b.VacationTypeId, VacationRequestStatus.Pending),
+                DraftDays = Held(b.VacationTypeId, VacationRequestStatus.Draft),
                 RemainingDays = b.YearlyBalance - used,
             };
         }).OrderBy(b => b.VacationTypeName);
@@ -205,34 +218,11 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
 
         var yearlyBalance = await GetYearlyBalanceAsync(userId, dto.VacationTypeId, asAdmin, ct);
 
-        // Enumerate all calendar days in the range
-        var allDays = new List<DateOnly>();
-        for (var d = dto.StartDate; d <= dto.EndDate; d = d.AddDays(1))
-            allDays.Add(d);
-
-        // Fetch public holidays that fall within the range and are actual days off for the company
-        var holidayDates = (await _db.PublicHolidays
-            .Where(h => h.Date >= dto.StartDate && h.Date <= dto.EndDate && !h.IsWorkingDay)
-            .Select(h => h.Date)
-            .ToListAsync(ct))
-            .ToHashSet();
-
-        var workingDays = allDays
-            .Where(d => !TimeCalculationHelper.IsWeekend(d) && !holidayDates.Contains(d))
-            .ToList();
-
-        int skippedWeekends = allDays.Count(TimeCalculationHelper.IsWeekend);
-        int skippedHolidays = allDays.Count(d => holidayDates.Contains(d) && !TimeCalculationHelper.IsWeekend(d));
-
-        // Filter out dates that already have an entry for this type
-        var existingDates = await _db.VacationDays
-            .Where(d => d.UserId == userId && d.VacationTypeId == dto.VacationTypeId
-                        && d.Date >= dto.StartDate && d.Date <= dto.EndDate)
-            .Select(d => d.Date)
-            .ToListAsync(ct);
-
-        var newDays = workingDays.Where(d => !existingDates.Contains(d)).ToList();
-        int skippedExisting = workingDays.Count - newDays.Count;
+        var plan = await PlanRangeAsync(userId, dto.VacationTypeId, dto.StartDate, dto.EndDate, ct);
+        var newDays = plan.NewDays;
+        int skippedWeekends = plan.SkippedWeekends;
+        int skippedHolidays = plan.SkippedHolidays;
+        int skippedExisting = plan.SkippedExisting;
 
         if (newDays.Count == 0)
             return new VacationRangeResultDto
@@ -287,12 +277,46 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         };
     }
 
+    public async Task<VacationRangePlan> PlanRangeAsync(
+        string userId, int vacationTypeId, DateOnly startDate, DateOnly endDate, CancellationToken ct = default)
+    {
+        var allDays = new List<DateOnly>();
+        for (var d = startDate; d <= endDate; d = d.AddDays(1))
+            allDays.Add(d);
+
+        // Public holidays in the range that are actual days off for the company
+        var holidayDates = (await _db.PublicHolidays
+            .Where(h => h.Date >= startDate && h.Date <= endDate && !h.IsWorkingDay)
+            .Select(h => h.Date)
+            .ToListAsync(ct))
+            .ToHashSet();
+
+        var workingDays = allDays
+            .Where(d => !TimeCalculationHelper.IsWeekend(d) && !holidayDates.Contains(d))
+            .ToList();
+
+        var existingDates = (await _db.VacationDays
+            .Where(d => d.UserId == userId && d.VacationTypeId == vacationTypeId
+                        && d.Date >= startDate && d.Date <= endDate)
+            .Select(d => d.Date)
+            .ToListAsync(ct))
+            .ToHashSet();
+
+        var newDays = workingDays.Where(d => !existingDates.Contains(d)).ToList();
+
+        return new VacationRangePlan(
+            newDays,
+            SkippedWeekends: allDays.Count(TimeCalculationHelper.IsWeekend),
+            SkippedHolidays: allDays.Count(d => holidayDates.Contains(d) && !TimeCalculationHelper.IsWeekend(d)),
+            SkippedExisting: workingDays.Count - newDays.Count);
+    }
+
     /// <summary>
     /// The employee's yearly balance for a type, or null when the type is unlimited.
     /// Throws when a limited type isn't assigned to the employee, or when an employee
     /// books an admin-only type.
     /// </summary>
-    private async Task<decimal?> GetYearlyBalanceAsync(string userId, int vacationTypeId, bool asAdmin, CancellationToken ct)
+    public async Task<decimal?> GetYearlyBalanceAsync(string userId, int vacationTypeId, bool asAdmin, CancellationToken ct = default)
     {
         var type = await _db.VacationTypes
             .Where(t => t.Id == vacationTypeId)
@@ -307,7 +331,7 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
         return balance.YearlyBalance;
     }
 
-    private Task<decimal> GetUsedVacationDaysAsync(
+    public Task<decimal> GetUsedVacationDaysAsync(
         string userId, int vacationTypeId, int year, int? excludeId = null, CancellationToken ct = default)
     {
         var query = _db.VacationDays
@@ -322,13 +346,13 @@ public class VacationService(AppDbContext db, IMapper mapper) : IVacationService
     private static ValidationException AdminOnly(string typeName) =>
         new($"Only an admin can register or change \"{typeName}\" days.");
 
-    private static void ValidateAmount(decimal amount)
+    public static void ValidateAmount(decimal amount)
     {
         if (amount != 0.5m && amount != 1.0m)
             throw new InvalidVacationAmountException("Amount must be 0.5 (half day) or 1.0 (full day).");
     }
 
     /// <summary>Days with a dot and no trailing zeros (0.5, 10), independent of the server's culture.</summary>
-    private static string FormatDays(decimal days) =>
+    public static string FormatDays(decimal days) =>
         days.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 }

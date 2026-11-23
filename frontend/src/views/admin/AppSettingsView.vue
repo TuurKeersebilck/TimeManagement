@@ -78,6 +78,7 @@ const savingEmail = ref(false);
 const enableAdjustmentRequestEmails = ref(true);
 const enableMissedClockInEmails = ref(true);
 const enableSettlementEmails = ref(true);
+const enableVacationRequestEmails = ref(true);
 const savingToggles = ref(false);
 
 const loadingCountries = ref(false);
@@ -112,6 +113,7 @@ onMounted(async () => {
     enableAdjustmentRequestEmails.value = config.enableAdjustmentRequestEmails;
     enableMissedClockInEmails.value = config.enableMissedClockInEmails;
     enableSettlementEmails.value = config.enableSettlementEmails;
+    enableVacationRequestEmails.value = config.enableVacationRequestEmails;
     for (const t of workdayTargets) globalTargets.value[t.dayOfWeek] = String(t.hours);
   } catch {
     toast.error("Failed to load settings");
@@ -248,6 +250,7 @@ const saveNotificationToggles = async () => {
       enableAdjustmentRequestEmails.value,
       enableMissedClockInEmails.value,
       enableSettlementEmails.value,
+      enableVacationRequestEmails.value,
     );
     toast.success("Notification preferences saved");
   } catch {
@@ -598,6 +601,17 @@ const formatDate = (iso: string) =>
                 </p>
               </div>
               <Switch v-model="enableAdjustmentRequestEmails" />
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Vacation request emails</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Email when an employee requests vacation, with a link to review it. Employees are
+                  always emailed the outcome.
+                </p>
+              </div>
+              <Switch v-model="enableVacationRequestEmails" />
             </div>
 
             <div class="flex items-center justify-between">
