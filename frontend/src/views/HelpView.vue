@@ -206,7 +206,7 @@ function toggle(section: string) {
           </button>
 
           <div v-show="open.notifications" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
-            <p class="text-sm text-slate-600 dark:text-slate-400">The bell icon in the top-right of the sidebar shows unread notifications. You receive one when:</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">The bell next to the app name (top-right on a phone) shows how many notifications you haven't read. You receive one when:</p>
             <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">approves</span> your time adjustment request</li>
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">rejects</span> your time adjustment request</li>
@@ -216,7 +216,7 @@ function toggle(section: string) {
               <li>Your <span class="font-medium text-slate-700 dark:text-slate-300">monthly settlement</span> is confirmed</li>
             </ul>
             <p class="text-sm text-slate-600 dark:text-slate-400">Admins get one when an employee submits or cancels a vacation request, removes an approved day, or sends a time adjustment request.</p>
-            <p class="text-sm text-slate-600 dark:text-slate-400">Notifications are not pushed in real time — the app polls periodically. Mark them read individually or all at once via the bell dropdown.</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">The app checks for new ones every minute while it's open, and right away when you come back to the tab. In the list, newest first and split into <span class="font-medium text-slate-700 dark:text-slate-300">Today</span> and <span class="font-medium text-slate-700 dark:text-slate-300">Earlier</span>, click a notification to go to the related page; it's marked as read. Hover over one (on a phone, the buttons are always there) to <span class="font-medium text-slate-700 dark:text-slate-300">mark it as read</span> or <span class="font-medium text-slate-700 dark:text-slate-300">remove</span> it without opening it, switch to <span class="font-medium text-slate-700 dark:text-slate-300">Unread</span> to see only what's new, or use <span class="font-medium text-slate-700 dark:text-slate-300">Mark all as read</span>. Notifications are removed automatically after 90 days.</p>
           </div>
         </div>
 
