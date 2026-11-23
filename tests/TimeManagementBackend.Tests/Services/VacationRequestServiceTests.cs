@@ -97,7 +97,7 @@ public class VacationRequestServiceTests(PostgresFixture fixture) : DatabaseTest
             "admin@example.test", "Emma Employee",
             Arg.Is<IReadOnlyList<VacationRequestEmailItem>>(items =>
                 items.Count == 2 && items[0].StartDate == Monday && items[0].TotalDays == 5m),
-            "https://logr.example.test/admin/requests");
+            "https://logr.example.test/admin/vacation-requests");
         await _notifications.Received(1).NotifyAdminsAsync(
             Arg.Is<string>(m => m.Contains("Emma Employee") && m.Contains("2 vacation periods")),
             NotificationType.VacationRequest, Arg.Any<CancellationToken>());

@@ -190,6 +190,18 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         IReadOnlyList<VacationRequestEmailItem> requests,
         string reviewLink)
     {
+        var message = BuildVacationRequestMessage(config.From, toEmail, requesterName, requests, reviewLink);
+        await SendMessageAsync(message, $"vacation-request ({requests.Count}) to {toEmail}");
+    }
+
+    /// <summary>The admin's vacation request email, built without sending it (also used by tests).</summary>
+    public static MimeMessage BuildVacationRequestMessage(
+        string from,
+        string toEmail,
+        string requesterName,
+        IReadOnlyList<VacationRequestEmailItem> requests,
+        string reviewLink)
+    {
         var name = System.Net.WebUtility.HtmlEncode(requesterName);
         var rows = string.Join("", requests.Select(r =>
         {
@@ -210,7 +222,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
             : $"Vacation request from {requesterName}: {requests.Count} periods, {FormatDayCount(total)}";
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("Logr", config.From));
+        message.From.Add(new MailboxAddress("Logr", from));
         message.To.Add(new MailboxAddress("Admin", toEmail));
         message.Subject = subject;
 
@@ -234,10 +246,26 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
-        await SendMessageAsync(message, $"vacation-request ({requests.Count}) to {toEmail}");
+        return message;
     }
 
     public async Task SendVacationRequestOutcomeEmailAsync(
+        string toEmail,
+        string toName,
+        string vacationTypeName,
+        DateOnly startDate,
+        DateOnly endDate,
+        bool approved,
+        string? reviewNote)
+    {
+        var message = BuildVacationRequestOutcomeMessage(
+            config.From, toEmail, toName, vacationTypeName, startDate, endDate, approved, reviewNote);
+        await SendMessageAsync(message, $"vacation-outcome ({(approved ? "approved" : "denied")}) to {toEmail}");
+    }
+
+    /// <summary>The employee's outcome email, built without sending it (also used by tests).</summary>
+    public static MimeMessage BuildVacationRequestOutcomeMessage(
+        string from,
         string toEmail,
         string toName,
         string vacationTypeName,
@@ -255,7 +283,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
             : $"""<p style="color:#475569"><strong>Note from your admin:</strong> {System.Net.WebUtility.HtmlEncode(reviewNote)}</p>""";
 
         var message = new MimeMessage();
-        message.From.Add(new MailboxAddress("Logr", config.From));
+        message.From.Add(new MailboxAddress("Logr", from));
         message.To.Add(new MailboxAddress(toName, toEmail));
         message.Subject = $"Your vacation request for {FormatPeriodShort(startDate, endDate)} has been {statusWord}";
 
@@ -275,7 +303,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
                 """
         };
 
-        await SendMessageAsync(message, $"vacation-outcome ({statusWord}) to {toEmail}");
+        return message;
     }
 
     private static readonly System.Globalization.CultureInfo EmailCulture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");

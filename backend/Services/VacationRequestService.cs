@@ -15,6 +15,9 @@ public class VacationRequestService(
     IConfiguration configuration,
     ILogger<VacationRequestService> logger) : IVacationRequestService
 {
+    /// <summary>The admin review page in the frontend, linked from the request email.</summary>
+    public const string ReviewPagePath = "/admin/vacation-requests";
+
     /// <summary>Longer ranges are almost certainly a typo in the year.</summary>
     private const int MaxRangeDays = 366;
 
@@ -415,11 +418,12 @@ public class VacationRequestService(
             return;
 
         var appUrl = (configuration["AppUrl"] ?? "http://localhost:5173").TrimEnd('/');
+        // Must match the frontend route of the review page (router: "admin-vacation-requests").
         var items = requests
             .Select(r => new VacationRequestEmailItem(r.VacationTypeName, r.StartDate, r.EndDate, r.TotalDays, r.Note))
             .ToList();
         await TryAsync(() => emailService.SendVacationRequestEmailAsync(
-            config.NotificationEmail, first.EmployeeName, items, $"{appUrl}/admin/requests"), "admin email", first.Id);
+            config.NotificationEmail, first.EmployeeName, items, $"{appUrl}{ReviewPagePath}"), "admin email", first.Id);
     }
 
     private async Task NotifyEmployeeOfOutcomeAsync(VacationRequest request, bool approved, string? reviewNote, CancellationToken ct)
