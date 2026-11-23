@@ -34,7 +34,8 @@ public class AdminSettingsController(IPublicHolidayService service) : Controller
     [HttpPut("notification-toggles")]
     public async Task<ActionResult<AppConfigurationDto>> SetNotificationToggles([FromBody] SetNotificationTogglesDto dto, CancellationToken ct)
         => Ok(await service.SetNotificationTogglesAsync(
-            dto.EnableAdjustmentRequestEmails, dto.EnableMissedClockInEmails, dto.EnableSettlementEmails, ct));
+            dto.EnableAdjustmentRequestEmails, dto.EnableMissedClockInEmails, dto.EnableSettlementEmails,
+            dto.EnableVacationRequestEmails, ct));
 
     [HttpPut("min-break")]
     public async Task<ActionResult<AppConfigurationDto>> SetMinimumBreakMinutes([FromBody] SetMinimumBreakMinutesDto dto, CancellationToken ct)

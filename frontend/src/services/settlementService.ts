@@ -64,6 +64,16 @@ export const settlementService = {
     return api.post(`/settlements/${id}/confirm`, payload).then(() => undefined);
   },
 
+  /** Refreshes a pending settlement with the month's current numbers; a confirmed one comes back unchanged. */
+  recalculate(id: number): Promise<MonthlySettlementDto> {
+    return api.post(`/settlements/${id}/recalculate`).then((r) => r.data);
+  },
+
+  /** Undoes a confirmation (removes its carry-over) and recalculates, so it can be confirmed again. */
+  reopen(id: number): Promise<MonthlySettlementDto> {
+    return api.post(`/settlements/${id}/reopen`).then((r) => r.data);
+  },
+
   getEmployeeHistory(userId: string): Promise<MonthlySettlementDto[]> {
     return api.get(`/settlements/employee/${userId}`).then((r) => r.data);
   },

@@ -124,18 +124,18 @@ function toggle(section: string) {
 
           <div v-show="open.vacations" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
             <div class="space-y-1.5">
-              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Select a single day or a date range, choose a vacation type (e.g. Annual), and optionally add a note. Half days use an amount of <span class="font-medium text-slate-700 dark:text-slate-300">0.5</span>. There's no approval step: the leave is planned right away and your admin gets a notification. Weekends and public holidays in a range are skipped. Some types, such as sick leave, can only be registered by your admin: you see those days, but can't add, change or remove them yourself.</p>
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Requesting leave</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Select a single day or a date range, choose a vacation type (e.g. Annual), and optionally add a note. Half days use an amount of <span class="font-medium text-slate-700 dark:text-slate-300">0.5</span>. Weekends and public holidays in a range are skipped. Planned days are a <span class="font-medium text-slate-700 dark:text-slate-300">draft</span> at first: only you see them, and you can remove them and plan again as often as you like. When you're done, press <span class="font-medium text-slate-700 dark:text-slate-300">Submit request</span> to send everything you planned to your admin in one go. A badge on My Vacations reminds you of drafts you haven't sent. After submitting, each period shows as <span class="font-medium text-slate-700 dark:text-slate-300">pending</span> until your admin <span class="font-medium text-slate-700 dark:text-slate-300">approves</span> or denies it, and you get a notification and an email with the outcome (and the admin's reason, if they gave one). Drafts and pending requests are held against your balance. Changed your mind? Cancel a pending request from My requests or by clicking one of its days. Some types, such as sick leave, can only be registered by your admin: you see those days, but can't add, change or remove them yourself.</p>
             </div>
 
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Balance</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Your yearly allowance, days used, and days remaining are shown per vacation type at the top of the Vacations page. Balances are set by your admin. Types without a limit, such as sick leave, just show how many days you've used this year.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">Your yearly allowance, days used, and days remaining are shown per vacation type at the top of the Vacations page, along with any days still awaiting approval. Balances are set by your admin. Types without a limit, such as sick leave, just show how many days you've used this year.</p>
             </div>
 
             <div class="space-y-1.5">
               <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Changing or removing leave</p>
-              <p class="text-sm text-slate-600 dark:text-slate-400">Click a day in the calendar to change or delete its leave, or use the delete button in the list of upcoming days.</p>
+              <p class="text-sm text-slate-600 dark:text-slate-400">You can remove an approved day by clicking it in the calendar, or with the delete button in the list of upcoming days; your admin is notified. To move leave to other dates, remove the days and send a new request.</p>
             </div>
 
             <div class="space-y-1.5">
@@ -206,16 +206,17 @@ function toggle(section: string) {
           </button>
 
           <div v-show="open.notifications" class="px-5 pb-5 space-y-4 border-t border-border pt-4">
-            <p class="text-sm text-slate-600 dark:text-slate-400">The bell icon in the top-right of the sidebar shows unread notifications. You receive one when:</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">The bell next to the app name (top-right on a phone) shows how many notifications you haven't read. You receive one when:</p>
             <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">approves</span> your time adjustment request</li>
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">rejects</span> your time adjustment request</li>
               <li>A session you forgot to clock out of was <span class="font-medium text-slate-700 dark:text-slate-300">auto-closed</span></li>
+              <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">approves or denies</span> your vacation request</li>
               <li>An admin <span class="font-medium text-slate-700 dark:text-slate-300">plans, changes or removes</span> leave for you</li>
               <li>Your <span class="font-medium text-slate-700 dark:text-slate-300">monthly settlement</span> is confirmed</li>
             </ul>
-            <p class="text-sm text-slate-600 dark:text-slate-400">Admins get one when an employee plans leave or sends a time adjustment request.</p>
-            <p class="text-sm text-slate-600 dark:text-slate-400">Notifications are not pushed in real time — the app polls periodically. Mark them read individually or all at once via the bell dropdown.</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">Admins get one when an employee submits or cancels a vacation request, removes an approved day, or sends a time adjustment request.</p>
+            <p class="text-sm text-slate-600 dark:text-slate-400">The app checks for new ones every minute while it's open, and right away when you come back to the tab. In the list, newest first and split into <span class="font-medium text-slate-700 dark:text-slate-300">Today</span> and <span class="font-medium text-slate-700 dark:text-slate-300">Earlier</span>, click a notification to go to the related page; it's marked as read. Hover over one (on a phone, the buttons are always there) to <span class="font-medium text-slate-700 dark:text-slate-300">mark it as read</span> or <span class="font-medium text-slate-700 dark:text-slate-300">remove</span> it without opening it, switch to <span class="font-medium text-slate-700 dark:text-slate-300">Unread</span> to see only what's new, or use <span class="font-medium text-slate-700 dark:text-slate-300">Mark all as read</span>. Notifications are removed automatically after 90 days.</p>
           </div>
         </div>
 
@@ -239,6 +240,13 @@ function toggle(section: string) {
               <div class="space-y-0.5">
                 <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Password reset</p>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Sent when you request a reset via the login page. The link expires in <span class="font-medium text-slate-600 dark:text-slate-300">1 hour</span> and can only be used once.</p>
+              </div>
+
+              <div class="border-t border-border" />
+
+              <div class="space-y-0.5">
+                <p class="text-sm font-medium text-slate-700 dark:text-slate-300">Vacation request outcome</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Sent when an admin approves or denies your vacation request, with their reason if they gave one.</p>
               </div>
 
               <div class="border-t border-border" />
@@ -330,7 +338,7 @@ function toggle(section: string) {
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Plan work from home ahead</span> — use Add hours and pick a future date (or today, before the employee clocks in) and only the switch is shown. The employee's clock-in then starts with that setting; they can still change it.</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Auto-closed sessions</span> — a forgotten clock-out shows as "auto-closed"; fill in the clock-out time and the day counts again.</li>
                 </ul>
-                <p class="text-sm text-slate-600 dark:text-slate-400">A reason is optional. The employee isn't notified, but every change to hours is kept in the adjustment history marked <span class="font-medium text-slate-700 dark:text-slate-300">Admin edit</span> (who, when and why). A day can't be edited while the employee is still clocked in on it. In an already settled month you'll see a warning: the settlement keeps its confirmed numbers, so correct the balance with a flex adjustment if needed.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">A reason is optional. The employee isn't notified, but every change to hours is kept in the adjustment history marked <span class="font-medium text-slate-700 dark:text-slate-300">Admin edit</span> (who, when and why). A day can't be edited while the employee is still clocked in on it. In an already settled month you'll see a warning: reopen that month's settlement afterwards so it's recalculated with the change.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Adjustment requests from employees</p>
@@ -367,7 +375,7 @@ function toggle(section: string) {
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Settlements</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">On the 1st of each month a settlement is created automatically for every active employee for the previous month; you can also <span class="font-medium text-slate-700 dark:text-slate-300">Generate</span> them yourself for any completed month. To confirm one, split the month's balance into <span class="font-medium text-slate-700 dark:text-slate-300">pay out</span>, <span class="font-medium text-slate-700 dark:text-slate-300">carry over</span> to next month and/or <span class="font-medium text-slate-700 dark:text-slate-300">deduct from next month</span>, and add notes if you like. Carry-overs appear as flex adjustments in the next month. Open or auto-closed sessions and pending adjustment requests in that month must be resolved first. Confirmed settlements are locked.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On the 1st of each month a settlement is created automatically for every active employee for the previous month; you can also <span class="font-medium text-slate-700 dark:text-slate-300">Generate</span> them yourself for any completed month. To confirm one, split the month's balance into <span class="font-medium text-slate-700 dark:text-slate-300">pay out</span>, <span class="font-medium text-slate-700 dark:text-slate-300">carry over</span> to next month and/or <span class="font-medium text-slate-700 dark:text-slate-300">deduct from next month</span>, and add notes if you like. Carry-overs appear as flex adjustments in the next month. Open or auto-closed sessions and pending adjustment requests in that month must be resolved first. An unconfirmed settlement always shows the month as it is now, so a sick day added later is included. Confirmed settlements are locked; if something changes afterwards, such as a sick day registered late, click <span class="font-medium text-slate-700 dark:text-slate-300">Reopen</span>: the carry-over is removed, the month is recalculated and you confirm it again. Next month has to be reopened first if it's already confirmed. The settlement also lists the manual corrections from that month on, so you can remove one that would now count twice. If the payroll CSV was already sent, send the new export.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Reminders by email</p>
@@ -375,7 +383,7 @@ function toggle(section: string) {
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Manual flex adjustments</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">On an employee's page, add or deduct hours from their flex balance with a date and reason (e.g. a training evening that wasn't clocked). Not possible in a month that's already settled; carry-over adjustments created by a settlement can't be deleted.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On an employee's page, add or deduct hours from their flex balance with a date and reason (e.g. a training evening that wasn't clocked). Not possible in a month that's already settled (reopen the settlement first); carry-over adjustments created by a settlement can't be deleted.</p>
               </div>
             </div>
           </div>
@@ -445,8 +453,12 @@ function toggle(section: string) {
                 <p class="text-sm text-slate-600 dark:text-slate-400">Under <span class="font-medium text-slate-700 dark:text-slate-300">Settings → Vacation Types</span>: create types (name, color, description), then give employees a yearly balance per type on their employee page. Turn on <span class="font-medium text-slate-700 dark:text-slate-300">No balance limit</span> for a type like sick leave: it's available to everyone without a balance. Turn on <span class="font-medium text-slate-700 dark:text-slate-300">Only admins can register</span> so only you can enter those days, via Vacations with the employee selected.</p>
               </div>
               <div class="space-y-1.5">
+                <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Vacation requests</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Employees request leave; nothing is booked until you approve it under <span class="font-medium text-slate-700 dark:text-slate-300">Vacation Requests</span>; a badge in the menu shows how many are waiting. Each request shows the dates, the employee's note, their balance after approval and who else is off (or asking to be off) on those days. <span class="font-medium text-slate-700 dark:text-slate-300">Approve</span> books the days; <span class="font-medium text-slate-700 dark:text-slate-300">Deny</span> lets you add a reason for the employee. Either way they get a notification and an email. Requests waiting longest are listed first.</p>
+              </div>
+              <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Planning leave for someone</p>
-                <p class="text-sm text-slate-600 dark:text-slate-400">On <span class="font-medium text-slate-700 dark:text-slate-300">Vacations</span>, choose an employee at the top to plan or remove leave on their behalf; they get a notification. The Team Calendar shows everyone's leave.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">On <span class="font-medium text-slate-700 dark:text-slate-300">Vacations</span>, choose an employee at the top to plan or remove leave on their behalf, without a request; they get a notification. Your own leave is booked directly too. The Team Calendar shows everyone's leave.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Public holidays</p>
@@ -475,10 +487,11 @@ function toggle(section: string) {
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Emails the app sends</p>
                 <ul class="text-sm text-slate-600 dark:text-slate-400 space-y-1 list-disc list-inside">
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Adjustment request</span> — to the admin notification address when an employee submits one, with a one-click approve link</li>
+                  <li><span class="font-medium text-slate-700 dark:text-slate-300">Vacation request</span> — to the admin notification address when an employee submits a vacation request (one email per submit, listing every period), with a link to review it in the app</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Settlement reminders</span> — to the admin notification address when settlements are ready, and every Monday while any are pending</li>
                   <li><span class="font-medium text-slate-700 dark:text-slate-300">Missed clock-in</span> — to an employee the morning after a working day without any clock-in (not on full-day leave)</li>
                 </ul>
-                <p class="text-sm text-slate-600 dark:text-slate-400">Each can be switched off under App Settings → Email types; leaving the notification address empty stops the admin emails. These are always sent: invites, password resets, the outcome of an employee's adjustment request, and a warning to an employee one to two weeks before their calendar feed expires.</p>
+                <p class="text-sm text-slate-600 dark:text-slate-400">Each can be switched off under App Settings → Email types; leaving the notification address empty stops the admin emails. These are always sent: invites, password resets, the outcome of an employee's adjustment or vacation request, and a warning to an employee one to two weeks before their calendar feed expires.</p>
               </div>
               <div class="space-y-1.5">
                 <p class="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Automatic clean-up</p>

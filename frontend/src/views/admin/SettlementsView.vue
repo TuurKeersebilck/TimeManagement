@@ -8,7 +8,7 @@ import {
   STATUS_LABELS,
 } from "@/services/settlementService";
 import { workSessionService, type OvertimeResultDto } from "@/services/workSessionService";
-import { adminService } from "@/services/adminService";
+import { adminService, type TimeBankAdjustment } from "@/services/adminService";
 import { useAppToast } from "@/composables/useAppToast";
 import { extractApiError } from "@/utils/apiError";
 import {
@@ -47,6 +47,8 @@ import {
   Loader2Icon,
   RefreshCwIcon,
   InfoIcon,
+  RotateCcwIcon,
+  Trash2Icon,
 } from "lucide-vue-next";
 
 const toast = useAppToast();
@@ -149,7 +151,7 @@ async function generateSettlements() {
     const newCount = settlements.value.length - beforeCount;
     toast.success(
       newCount === 0
-        ? "Already up to date — no new settlements to generate"
+        ? "Settlements are up to date"
         : newCount === 1
           ? "Generated 1 new settlement"
           : `Generated ${newCount} new settlements`
@@ -161,16 +163,39 @@ async function generateSettlements() {
   }
 }
 
-async function openDetail(s: MonthlySettlementDto) {
-  selected.value = s;
-  // Sensible defaults: overtime months prefill a full pay-out, deficit months a full deduction —
-  // both freely editable
+// Sensible defaults: overtime months prefill a full pay-out, deficit months a full deduction —
+// both freely editable
+function prefillAllocation(s: MonthlySettlementDto) {
   payOutInput.value = s.netBalanceHours > 0 ? String(s.netBalanceHours) : "";
   carryOverInput.value = "";
   deductInput.value = s.netBalanceHours < 0 ? String(-s.netBalanceHours) : "";
+}
+
+// Keeps the table row in step with the dialog after a recalculation or reopen
+function replaceSettlement(updated: MonthlySettlementDto) {
+  selected.value = updated;
+  settlements.value = settlements.value.map((s) => (s.id === updated.id ? updated : s));
+}
+
+async function openDetail(s: MonthlySettlementDto) {
+  selected.value = s;
+  removingCorrectionId.value = null;
+  confirmingReopen.value = false;
   confirmNotes.value = s.notes ?? "";
   detailOpen.value = true;
+  await loadDetail(s);
+}
+
+async function loadDetail(s: MonthlySettlementDto) {
   loadingDetail.value = true;
+  try {
+    // A pending settlement always shows the month as it is now, e.g. with a sick day added later
+    if (s.status === "PendingReview") replaceSettlement(await settlementService.recalculate(s.id));
+  } catch {
+    // Keep the stored numbers; the breakdown below still loads
+  }
+  prefillAllocation(selected.value ?? s);
+  loadCorrections(s);
   try {
     // Fetch per-day breakdown for this user/month
     detailOvertime.value = await (async () => {
@@ -186,6 +211,71 @@ async function openDetail(s: MonthlySettlementDto) {
     detailOvertime.value = null;
   } finally {
     loadingDetail.value = false;
+  }
+}
+
+// ─── Manual corrections ───────────────────────────────────────────────────────
+// Manual flex adjustments from this month on. When a day is now registered properly (e.g. a sick
+// day added afterwards), a correction made by hand for it would count twice, so it can go here.
+
+const corrections = ref<TimeBankAdjustment[]>([]);
+
+async function loadCorrections(s: MonthlySettlementDto) {
+  const monthStart = `${s.year}-${String(s.month).padStart(2, "0")}-01`;
+  try {
+    const all = await adminService.getTimeBankAdjustments(s.userId);
+    corrections.value = all
+      .filter((a) => !a.sourceSettlementId && a.effectiveDate >= monthStart)
+      .sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+  } catch {
+    corrections.value = [];
+  }
+}
+
+function isInSettlementMonth(a: TimeBankAdjustment) {
+  return !!selected.value && a.effectiveDate.startsWith(
+    `${selected.value.year}-${String(selected.value.month).padStart(2, "0")}`
+  );
+}
+
+// Confirmed inline: the app-wide confirm dialog would open behind this modal dialog
+const removingCorrectionId = ref<number | null>(null);
+const busy = ref(false);
+
+async function removeCorrection(a: TimeBankAdjustment) {
+  const s = selected.value;
+  if (!s) return;
+  busy.value = true;
+  try {
+    await adminService.deleteTimeBankAdjustment(a.id);
+    toast.success("Correction removed");
+    removingCorrectionId.value = null;
+    await loadDetail(s);
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to remove correction"));
+  } finally {
+    busy.value = false;
+  }
+}
+
+// ─── Reopen ──────────────────────────────────────────────────────────────────
+
+const confirmingReopen = ref(false);
+
+async function reopenSettlement() {
+  const s = selected.value;
+  if (!s) return;
+  busy.value = true;
+  try {
+    const updated = await settlementService.reopen(s.id);
+    replaceSettlement(updated);
+    toast.success("Settlement reopened and recalculated");
+    confirmingReopen.value = false;
+    await loadDetail(updated);
+  } catch (err) {
+    toast.error(extractApiError(err, "Failed to reopen settlement"));
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -258,9 +348,11 @@ onMounted(load);
                   </p>
                   <p class="text-xs">
                     <span class="font-semibold">Generate</span> computes this for every employee
-                    and creates a "Pending Review" record. <span class="font-semibold">Confirm</span>
+                    and creates a "Pending Review" record; unconfirmed ones are recalculated, so a
+                    sick day added later is included. <span class="font-semibold">Confirm</span>
                     locks in where the balance goes: paid out via payroll, carried over to next
-                    month's flex balance, or forfeited/forgiven.
+                    month's flex balance, or forfeited/forgiven. <span class="font-semibold">Reopen</span>
+                    a confirmed one to correct it.
                   </p>
                   <p class="text-xs">
                     <span class="font-semibold">Payroll export impact:</span> once generated, the
@@ -510,6 +602,47 @@ onMounted(load);
           </div>
         </div>
 
+        <!-- Manual corrections -->
+        <div v-if="corrections.length">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Manual corrections</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+            Added by hand from this month on. Remove one that's now registered properly
+            (e.g. a sick day), or it counts twice.
+          </p>
+          <div class="rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+            <div v-for="a in corrections" :key="a.id" class="flex items-center gap-3 px-3 py-2">
+              <span class="text-xs font-mono text-slate-600 dark:text-slate-400 shrink-0">{{ a.effectiveDate }}</span>
+              <span
+                class="text-xs font-mono font-semibold shrink-0"
+                :class="a.hours >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+              >{{ formatSignedHours(a.hours) }}</span>
+              <span class="text-xs text-slate-700 dark:text-slate-300 truncate min-w-0 flex-1" :title="a.reason">
+                {{ a.reason }}
+                <span v-if="!isInSettlementMonth(a)" class="text-slate-400">· counts in a later month</span>
+              </span>
+              <template v-if="selected.status !== 'Settled' || !isInSettlementMonth(a)">
+                <div v-if="removingCorrectionId === a.id" class="flex items-center gap-1 shrink-0">
+                  <Button size="sm" variant="ghost" :disabled="busy" @click="removingCorrectionId = null">Cancel</Button>
+                  <Button size="sm" variant="destructive" :disabled="busy" @click="removeCorrection(a)">
+                    <Loader2Icon v-if="busy" class="size-3.5 animate-spin" />
+                    Remove
+                  </Button>
+                </div>
+                <Button
+                  v-else
+                  size="icon-sm"
+                  variant="ghost"
+                  class="shrink-0 text-slate-400 hover:text-rose-600"
+                  aria-label="Remove correction"
+                  @click="removingCorrectionId = a.id"
+                >
+                  <Trash2Icon class="size-3.5" />
+                </Button>
+              </template>
+            </div>
+          </div>
+        </div>
+
         <!-- Already settled -->
         <div
           v-if="selected.status === 'Settled'"
@@ -534,6 +667,30 @@ onMounted(load);
           <p v-if="selected.notes" class="text-xs text-emerald-700 dark:text-emerald-300 mt-1 italic">
             "{{ selected.notes }}"
           </p>
+          <div v-if="!confirmingReopen" class="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800">
+            <p class="text-xs text-emerald-700 dark:text-emerald-300">
+              Something changed afterwards, like a sick day? Reopen to recalculate.
+            </p>
+            <Button size="sm" variant="outline" @click="confirmingReopen = true">
+              <RotateCcwIcon class="size-3.5" />
+              Reopen
+            </Button>
+          </div>
+          <div v-else class="mt-3 pt-3 border-t border-emerald-200 dark:border-emerald-800 space-y-2">
+            <p class="text-xs text-slate-700 dark:text-slate-300">
+              The month is recalculated with the current hours, leave and corrections<template
+                v-if="(selected.carriedForwardHours ?? 0) !== 0">, and its
+                {{ formatSignedHours(selected.carriedForwardHours!) }} carry-over to next month is removed</template>.
+              Confirm it again afterwards. If the payroll CSV was already sent, send the new export too.
+            </p>
+            <div class="flex justify-end gap-2">
+              <Button size="sm" variant="ghost" :disabled="busy" @click="confirmingReopen = false">Cancel</Button>
+              <Button size="sm" :disabled="busy" @click="reopenSettlement">
+                <Loader2Icon v-if="busy" class="size-3.5 animate-spin" />
+                Reopen settlement
+              </Button>
+            </div>
+          </div>
         </div>
 
         <!-- Confirm form (only for PendingReview) -->

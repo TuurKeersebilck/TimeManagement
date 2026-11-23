@@ -1,3 +1,4 @@
+using MailKit;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
@@ -182,6 +183,144 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
         };
 
         await SendMessageAsync(message, $"adjustment-outcome ({statusWord}) to {toEmail}");
+    }
+
+    public async Task SendVacationRequestEmailAsync(
+        string toEmail,
+        string requesterName,
+        IReadOnlyList<VacationRequestEmailItem> requests,
+        string reviewLink)
+    {
+        var message = BuildVacationRequestMessage(config.From, toEmail, requesterName, requests, reviewLink);
+        await SendMessageAsync(message, $"vacation-request ({requests.Count}) to {toEmail}");
+    }
+
+    /// <summary>The admin's vacation request email, built without sending it (also used by tests).</summary>
+    public static MimeMessage BuildVacationRequestMessage(
+        string from,
+        string toEmail,
+        string requesterName,
+        IReadOnlyList<VacationRequestEmailItem> requests,
+        string reviewLink)
+    {
+        var name = System.Net.WebUtility.HtmlEncode(requesterName);
+        var rows = string.Join("", requests.Select(r =>
+        {
+            var noteHtml = string.IsNullOrWhiteSpace(r.Note)
+                ? ""
+                : $"""<br /><span style="color:#64748b;font-style:italic">{System.Net.WebUtility.HtmlEncode(r.Note)}</span>""";
+            return $"""
+                <li style="margin:0 0 10px">
+                  <strong>{FormatPeriod(r.StartDate, r.EndDate)}</strong><br />
+                  <span style="color:#64748b">{System.Net.WebUtility.HtmlEncode(r.VacationTypeName)} · {FormatDayCount(r.TotalDays)}</span>{noteHtml}
+                </li>
+                """;
+        }));
+
+        var total = requests.Sum(r => r.TotalDays);
+        var subject = requests.Count == 1
+            ? $"Vacation request from {requesterName}: {FormatPeriodShort(requests[0].StartDate, requests[0].EndDate)}"
+            : $"Vacation request from {requesterName}: {requests.Count} periods, {FormatDayCount(total)}";
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Logr", from));
+        message.To.Add(new MailboxAddress("Admin", toEmail));
+        message.Subject = subject;
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:520px;margin:0 auto">
+                  <h2 style="color:#1e293b">Vacation Request</h2>
+                  <p style="color:#475569"><strong>{name}</strong> requested:</p>
+                  <ul style="list-style:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 12px 2px;font-size:14px;color:#334155">
+                    {rows}
+                  </ul>
+                  <a href="{reviewLink}"
+                     style="display:inline-block;margin:16px 0;padding:12px 28px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">
+                    Review request{(requests.Count == 1 ? "" : "s")}
+                  </a>
+                  <p style="color:#94a3b8;font-size:12px;margin-top:8px">
+                    Opens Logr, where you can see their balance and who else is off before approving or denying each period.
+                  </p>
+                </div>
+                """
+        };
+
+        return message;
+    }
+
+    public async Task SendVacationRequestOutcomeEmailAsync(
+        string toEmail,
+        string toName,
+        string vacationTypeName,
+        DateOnly startDate,
+        DateOnly endDate,
+        bool approved,
+        string? reviewNote)
+    {
+        var message = BuildVacationRequestOutcomeMessage(
+            config.From, toEmail, toName, vacationTypeName, startDate, endDate, approved, reviewNote);
+        await SendMessageAsync(message, $"vacation-outcome ({(approved ? "approved" : "denied")}) to {toEmail}");
+    }
+
+    /// <summary>The employee's outcome email, built without sending it (also used by tests).</summary>
+    public static MimeMessage BuildVacationRequestOutcomeMessage(
+        string from,
+        string toEmail,
+        string toName,
+        string vacationTypeName,
+        DateOnly startDate,
+        DateOnly endDate,
+        bool approved,
+        string? reviewNote)
+    {
+        var (statusWord, color, detail) = approved
+            ? ("approved", "#22c55e", "The days are now in your vacation overview.")
+            : ("denied", "#ef4444", "No days were booked. If you have questions, please contact your manager.");
+
+        var noteHtml = string.IsNullOrWhiteSpace(reviewNote)
+            ? ""
+            : $"""<p style="color:#475569"><strong>Note from your admin:</strong> {System.Net.WebUtility.HtmlEncode(reviewNote)}</p>""";
+
+        var message = new MimeMessage();
+        message.From.Add(new MailboxAddress("Logr", from));
+        message.To.Add(new MailboxAddress(toName, toEmail));
+        message.Subject = $"Your vacation request for {FormatPeriodShort(startDate, endDate)} has been {statusWord}";
+
+        message.Body = new TextPart("html")
+        {
+            Text = $"""
+                <div style="font-family:sans-serif;max-width:480px;margin:0 auto">
+                  <h2 style="color:#1e293b">Vacation Request {char.ToUpper(statusWord[0])}{statusWord[1..]}</h2>
+                  <p style="color:#475569">Hi {System.Net.WebUtility.HtmlEncode(toName)},</p>
+                  <p style="color:#475569">
+                    Your request for <strong>{System.Net.WebUtility.HtmlEncode(vacationTypeName)}</strong>, {FormatPeriod(startDate, endDate)},
+                    has been <strong style="color:{color}">{statusWord}</strong>.
+                  </p>
+                  {noteHtml}
+                  <p style="color:#475569">{detail}</p>
+                </div>
+                """
+        };
+
+        return message;
+    }
+
+    private static readonly System.Globalization.CultureInfo EmailCulture = System.Globalization.CultureInfo.GetCultureInfo("en-GB");
+
+    private static string FormatPeriod(DateOnly start, DateOnly end) => start == end
+        ? start.ToString("dddd d MMMM yyyy", EmailCulture)
+        : $"{start.ToString("dddd d MMMM", EmailCulture)} to {end.ToString("dddd d MMMM yyyy", EmailCulture)}";
+
+    private static string FormatPeriodShort(DateOnly start, DateOnly end) => start == end
+        ? start.ToString("d MMM yyyy", EmailCulture)
+        : $"{start.ToString("d MMM", EmailCulture)} – {end.ToString("d MMM yyyy", EmailCulture)}";
+
+    private static string FormatDayCount(decimal days)
+    {
+        var text = days.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+        return $"{text} day{(days == 1m ? "" : "s")}";
     }
 
     public async Task SendInviteEmailAsync(string toEmail, string inviteLink)

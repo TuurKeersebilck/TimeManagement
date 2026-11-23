@@ -1,6 +1,16 @@
 import apiClient from "./api";
 
-export type NotificationType = "Vacation" | "AdjustmentRequest" | "AdjustmentApproved" | "AdjustmentRejected";
+export type NotificationType =
+  | "Vacation"
+  | "AdjustmentRequest"
+  | "AdjustmentApproved"
+  | "AdjustmentRejected"
+  | "SessionInvalidated"
+  | "MonthlySettlement"
+  | "AdminHoursAdjusted"
+  | "VacationRequest"
+  | "VacationApproved"
+  | "VacationRejected";
 
 export interface Notification {
   id: number;
@@ -23,6 +33,10 @@ export const notificationService = {
 
   async markAsRead(id: number): Promise<void> {
     await apiClient.put(`/notifications/${id}/read`);
+  },
+
+  async remove(id: number): Promise<void> {
+    await apiClient.delete(`/notifications/${id}`);
   },
 
   async markAllAsRead(): Promise<void> {

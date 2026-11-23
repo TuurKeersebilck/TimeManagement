@@ -940,4 +940,54 @@ public class AdminServiceTests(PostgresFixture fixture) : DatabaseTestBase(fixtu
         // A past day nobody marked WFH stays office, whatever the default.
         Assert.False((await NewService().GetWorkFromHomeAsync(user.Id, yesterday)).WorkedFromHome);
     }
+
+    // ── Vacation requests when a type or employee is removed ─────────────────
+
+    private static VacationRequest NewRequest(string userId, VacationType type, VacationRequestStatus status) => new()
+    {
+        UserId = userId, VacationType = type, Status = status, Amount = 1m, TotalDays = 1m,
+        StartDate = new DateOnly(2026, 3, 2), EndDate = new DateOnly(2026, 3, 2),
+        RequestedAt = DateTimeOffset.UtcNow,
+    };
+
+    [Fact]
+    public async Task DeleteVacationType_ClosesItsOpenRequestsAndLeavesTheRestAlone()
+    {
+        var user = Db.AddUser();
+        var removed = Db.AddVacationType("Removed");
+        var kept = Db.AddVacationType("Kept");
+        Db.VacationRequests.AddRange(
+            NewRequest(user.Id, removed, VacationRequestStatus.Pending),
+            NewRequest(user.Id, removed, VacationRequestStatus.Draft),
+            NewRequest(user.Id, removed, VacationRequestStatus.Approved),
+            NewRequest(user.Id, kept, VacationRequestStatus.Pending));
+        await Db.SaveChangesAsync();
+
+        await NewService().DeleteVacationTypeAsync(removed.Id);
+
+        var left = await NewContext().VacationRequests.IgnoreQueryFilters()
+            .OrderBy(r => r.Id).Select(r => new { r.VacationTypeId, r.Status, r.ReviewNote }).ToListAsync();
+        Assert.Equal(3, left.Count); // the draft is gone
+        Assert.Contains(left, r => r.VacationTypeId == removed.Id && r.Status == VacationRequestStatus.Rejected
+                                   && r.ReviewNote == "This leave type was removed.");
+        Assert.Contains(left, r => r.VacationTypeId == removed.Id && r.Status == VacationRequestStatus.Approved);
+        Assert.Contains(left, r => r.VacationTypeId == kept.Id && r.Status == VacationRequestStatus.Pending);
+    }
+
+    [Fact]
+    public async Task DeleteEmployee_RemovesTheirVacationRequests()
+    {
+        var user = Db.AddUser(isDisabled: true);
+        var other = Db.AddUser("Olly Other");
+        var type = Db.AddVacationType();
+        Db.VacationRequests.AddRange(
+            NewRequest(user.Id, type, VacationRequestStatus.Pending),
+            NewRequest(other.Id, type, VacationRequestStatus.Pending));
+        await Db.SaveChangesAsync();
+
+        await NewService().DeleteEmployeeAsync(user.Id);
+
+        var left = await NewContext().VacationRequests.Select(r => r.UserId).ToListAsync();
+        Assert.Equal([other.Id], left);
+    }
 }

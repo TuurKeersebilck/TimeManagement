@@ -41,32 +41,32 @@ public class SettlementService(
 
     private async Task GenerateForEmployeeAsync(string userId, int year, int month, CancellationToken ct)
     {
-        var exists = await db.MonthlySettlements.AnyAsync(
+        var existing = await db.MonthlySettlements.FirstOrDefaultAsync(
             s => s.UserId == userId && s.Year == year && s.Month == month, ct);
 
-        if (exists)
+        if (existing is { Status: SettlementStatus.Settled })
         {
-            logger.LogDebug("Settlement for {UserId} {Year}-{Month:00} already exists — skipping.", userId, year, month);
+            logger.LogDebug("Settlement for {UserId} {Year}-{Month:00} is confirmed — skipping.", userId, year, month);
             return;
         }
 
-        var overtime = await overtimeService.CalculateAsync(userId, year, month, ct);
-
-        var netBalance = overtime.RunningBalanceHours;
-        var overtimeHours = netBalance > 0 ? netBalance : 0m;
-        var deficitHours = netBalance < 0 ? -netBalance : 0m;
+        // Not confirmed yet, so nothing was decided on it: refresh it with whatever changed since
+        // (e.g. a sick day registered afterwards).
+        if (existing != null)
+        {
+            await RecalculateAsync(existing, ct);
+            await db.SaveChangesAsync(ct);
+            return;
+        }
 
         var settlement = new MonthlySettlement
         {
             UserId = userId,
             Year = year,
             Month = month,
-            NetBalanceHours = netBalance,
-            OvertimeHours = overtimeHours,
-            DeficitHours = deficitHours,
             Status = SettlementStatus.PendingReview,
-            GeneratedAt = DateTimeOffset.UtcNow,
         };
+        await RecalculateAsync(settlement, ct);
 
         db.MonthlySettlements.Add(settlement);
 
@@ -75,7 +75,7 @@ public class SettlementService(
             await db.SaveChangesAsync(ct);
             logger.LogInformation(
                 "Generated MonthlySettlement for {UserId} {Year}-{Month:00}: net={Net}h.",
-                userId, year, month, netBalance);
+                userId, year, month, settlement.NetBalanceHours);
         }
         catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
         {
@@ -226,10 +226,68 @@ public class SettlementService(
 
         await db.SaveChangesAsync(ct);
 
+        // Next month's balance opens with this carry-over; refresh it if it was generated already.
+        // The confirmation is saved by now, so a failure here must not turn it into an error.
+        try { await RecalculateNextMonthAsync(settlement, ct); }
+        catch (Exception ex) { logger.LogError(ex, "Failed to recalculate the settlement after {Id}.", id); }
+
         var msg = BuildEmployeeMessage(settlement, paidOut, carried);
 
         try { await notificationService.NotifyUserAsync(settlement.UserId, msg, NotificationType.MonthlySettlement, ct); }
         catch (Exception ex) { logger.LogError(ex, "Failed to send MonthlySettlement notification for settlement {Id}.", id); }
+    }
+
+    public async Task<MonthlySettlementDto> RecalculateAsync(int id, CancellationToken ct = default)
+    {
+        var settlement = await db.MonthlySettlements.FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw new ResourceNotFoundException("Settlement not found.");
+
+        if (settlement.Status == SettlementStatus.PendingReview)
+        {
+            await RecalculateAsync(settlement, ct);
+            await db.SaveChangesAsync(ct);
+        }
+
+        return await GetSettlementDetailAsync(id, ct);
+    }
+
+    public async Task<MonthlySettlementDto> ReopenAsync(int id, CancellationToken ct = default)
+    {
+        var settlement = await db.MonthlySettlements.FirstOrDefaultAsync(s => s.Id == id, ct)
+            ?? throw new ResourceNotFoundException("Settlement not found.");
+
+        if (settlement.Status != SettlementStatus.Settled)
+            throw new ValidationException("Only a confirmed settlement can be reopened.");
+
+        // A confirmed next month already opened with this month's carry-over, so it has to be
+        // reopened first; otherwise its numbers would silently stop adding up.
+        var next = new DateOnly(settlement.Year, settlement.Month, 1).AddMonths(1);
+        var nextSettled = await db.MonthlySettlements.AnyAsync(s =>
+            s.UserId == settlement.UserId && s.Year == next.Year && s.Month == next.Month &&
+            s.Status == SettlementStatus.Settled, ct);
+        if (nextSettled)
+            throw new ValidationException(
+                $"The {next:yyyy-MM} settlement is already confirmed and builds on this one. Reopen that one first.");
+
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        // The carry-over belongs to the confirmation being undone; confirming again recreates it.
+        await db.TimeBankAdjustments.Where(a => a.SourceSettlementId == settlement.Id).ExecuteDeleteAsync(ct);
+
+        settlement.Status = SettlementStatus.PendingReview;
+        settlement.PaidOutHours = null;
+        settlement.CarriedForwardHours = null;
+        settlement.Outcome = null;
+        settlement.ReviewedByUserId = null;
+        settlement.ReviewedAt = null;
+        await RecalculateAsync(settlement, ct);
+        await db.SaveChangesAsync(ct);
+
+        await RecalculateNextMonthAsync(settlement, ct);
+        await tx.CommitAsync(ct);
+
+        logger.LogInformation("Reopened MonthlySettlement {Id} ({Year}-{Month:00}).", id, settlement.Year, settlement.Month);
+        return await GetSettlementDetailAsync(id, ct);
     }
 
     public async Task<IEnumerable<MonthlySettlementDto>> GetEmployeeHistoryAsync(string userId, CancellationToken ct = default)
@@ -241,6 +299,29 @@ public class SettlementService(
             .ThenByDescending(s => s.Month)
             .ProjectTo<MonthlySettlementDto>(mapper.ConfigurationProvider)
             .ToListAsync(ct);
+    }
+
+    /// <summary>Recomputes a settlement's balance from the live flex numbers of its month.</summary>
+    private async Task RecalculateAsync(MonthlySettlement settlement, CancellationToken ct)
+    {
+        var overtime = await overtimeService.CalculateAsync(settlement.UserId, settlement.Year, settlement.Month, ct);
+        var netBalance = overtime.RunningBalanceHours;
+        settlement.NetBalanceHours = netBalance;
+        settlement.OvertimeHours = netBalance > 0 ? netBalance : 0m;
+        settlement.DeficitHours = netBalance < 0 ? -netBalance : 0m;
+        settlement.GeneratedAt = DateTimeOffset.UtcNow;
+    }
+
+    private async Task RecalculateNextMonthAsync(MonthlySettlement settlement, CancellationToken ct)
+    {
+        var next = new DateOnly(settlement.Year, settlement.Month, 1).AddMonths(1);
+        var nextPending = await db.MonthlySettlements.FirstOrDefaultAsync(s =>
+            s.UserId == settlement.UserId && s.Year == next.Year && s.Month == next.Month &&
+            s.Status == SettlementStatus.PendingReview, ct);
+        if (nextPending == null) return;
+
+        await RecalculateAsync(nextPending, ct);
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>

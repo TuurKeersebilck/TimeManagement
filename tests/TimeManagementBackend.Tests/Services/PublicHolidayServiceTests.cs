@@ -116,6 +116,32 @@ public class PublicHolidayServiceTests(PostgresFixture fixture) : DatabaseTestBa
     }
 
     [Fact]
+    public async Task VacationRequestEmails_DefaultOnAndCanBeSwitchedOffWithoutTouchingTheOthers()
+    {
+        Assert.True((await NewService(StubHttpMessageHandler.Failing()).GetConfigurationAsync()).EnableVacationRequestEmails);
+
+        var config = await NewService(StubHttpMessageHandler.Failing())
+            .SetNotificationTogglesAsync(true, false, enableSettlementEmails: true, enableVacationRequestEmails: false);
+
+        Assert.False(config.EnableVacationRequestEmails);
+        Assert.True(config.EnableAdjustmentRequestEmails);
+        Assert.False(config.EnableMissedClockInEmails);
+        Assert.True(config.EnableSettlementEmails);
+    }
+
+    [Fact]
+    public async Task VacationRequestEmails_AreLeftAloneByAClientThatDoesNotSendTheToggle()
+    {
+        await NewService(StubHttpMessageHandler.Failing())
+            .SetNotificationTogglesAsync(true, true, enableVacationRequestEmails: false);
+
+        var config = await NewService(StubHttpMessageHandler.Failing())
+            .SetNotificationTogglesAsync(true, true, enableSettlementEmails: true);
+
+        Assert.False(config.EnableVacationRequestEmails);
+    }
+
+    [Fact]
     public async Task MinimumBreakMinutes_CanBeSetAndCleared()
     {
         Assert.Equal(30, (await NewService(StubHttpMessageHandler.Failing())

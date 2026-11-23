@@ -131,6 +131,11 @@ const routes: Array<RouteRecordRaw> = [
             component: () => import("../views/admin/AdjustmentRequestsView.vue"),
           },
           {
+            path: "vacation-requests",
+            name: "admin-vacation-requests",
+            component: () => import("../views/admin/VacationRequestsView.vue"),
+          },
+          {
             path: "settlements",
             name: "admin-settlements",
             component: () => import("../views/admin/SettlementsView.vue"),
@@ -169,7 +174,7 @@ router.beforeEach(async (to, from, next) => {
   const isAuthenticated = authService.isAuthenticated();
 
   if (to.meta.requiresAuth && !isAuthenticated) {
-    next("/login");
+    next(to.fullPath === "/" ? "/login" : { path: "/login", query: { redirect: to.fullPath } });
     return;
   }
 

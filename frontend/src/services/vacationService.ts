@@ -10,6 +10,11 @@ export interface VacationBalance {
   isAdminOnly: boolean;
   yearlyBalance: number | null;
   usedDays: number;
+  /** Days in requests still awaiting review; not part of usedDays or remainingDays yet. */
+  pendingDays: number;
+  /** Days in the employee's drafts, planned but not sent yet. */
+  draftDays: number;
+  /** Yearly balance minus used days. Drafts and pending requests are not subtracted. */
   remainingDays: number | null;
 }
 
