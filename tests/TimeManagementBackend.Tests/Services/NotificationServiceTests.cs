@@ -126,4 +126,64 @@ public class NotificationServiceTests(PostgresFixture fixture) : DatabaseTestBas
         Assert.Equal(0, await NewService().GetUnreadCountAsync(user.Id));
         Assert.Equal(1, await NewService().GetUnreadCountAsync(colleague.Id));
     }
+
+    // ── Removing ──────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Delete_RemovesOnlyTheCallersOwnNotification()
+    {
+        var user = Db.AddUser();
+        var intruder = Db.AddUser("Ivan Intruder");
+        await Db.SaveChangesAsync();
+        await NewService().NotifyUserAsync(user.Id, "keep me", NotificationType.Vacation);
+        await NewService().NotifyUserAsync(user.Id, "remove me", NotificationType.Vacation);
+        var mine = await NewService().GetNotificationsAsync(user.Id);
+        var target = mine.Single(n => n.Message == "remove me");
+
+        await NewService().DeleteAsync(target.Id, intruder.Id); // someone else's: ignored
+        Assert.Equal(2, await NewContext().Notifications.CountAsync());
+
+        await NewService().DeleteAsync(target.Id, user.Id);
+        await NewService().DeleteAsync(999, user.Id); // unknown: must not throw
+
+        Assert.Equal(["keep me"], await NewContext().Notifications.Select(n => n.Message).ToListAsync());
+    }
+
+    [Fact]
+    public async Task DeleteOlderThan_RemovesOnlyOldOnesForEveryone()
+    {
+        var user = Db.AddUser();
+        var colleague = Db.AddUser("Colin Colleague");
+        await Db.SaveChangesAsync();
+        var now = DateTimeOffset.UtcNow;
+        Db.Notifications.AddRange(
+            new Notification { RecipientUserId = user.Id, Message = "ancient", Type = NotificationType.Vacation, CreatedAt = now.AddDays(-120) },
+            new Notification { RecipientUserId = colleague.Id, Message = "ancient too", Type = NotificationType.Vacation, CreatedAt = now.AddDays(-91), IsRead = false },
+            new Notification { RecipientUserId = user.Id, Message = "recent", Type = NotificationType.Vacation, CreatedAt = now.AddDays(-89) });
+        await Db.SaveChangesAsync();
+
+        var removed = await NewService().DeleteOlderThanAsync(now - NotificationService.RetentionPeriod);
+
+        Assert.Equal(2, removed);
+        Assert.Equal(["recent"], await NewContext().Notifications.Select(n => n.Message).ToListAsync());
+    }
+
+    [Fact]
+    public async Task GetNotifications_ListsAtMostTheNewestHundred()
+    {
+        var user = Db.AddUser();
+        await Db.SaveChangesAsync();
+        var start = DateTimeOffset.UtcNow.AddDays(-10);
+        Db.Notifications.AddRange(Enumerable.Range(1, NotificationService.MaxListed + 5).Select(i => new Notification
+        {
+            RecipientUserId = user.Id, Message = $"n{i}", Type = NotificationType.Vacation, CreatedAt = start.AddMinutes(i),
+        }));
+        await Db.SaveChangesAsync();
+
+        var listed = await NewService().GetNotificationsAsync(user.Id);
+
+        Assert.Equal(NotificationService.MaxListed, listed.Count);
+        Assert.Equal($"n{NotificationService.MaxListed + 5}", listed[0].Message); // newest first
+        Assert.DoesNotContain(listed, n => n.Message == "n5"); // the oldest ones are left out
+    }
 }

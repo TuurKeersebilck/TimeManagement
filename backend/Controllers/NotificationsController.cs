@@ -47,6 +47,16 @@ public class NotificationsController(
         return NoContent();
     }
 
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+
+        await _notificationService.DeleteAsync(id, user.Id, ct);
+        return NoContent();
+    }
+
     [HttpPut("read-all")]
     public async Task<IActionResult> MarkAllAsRead(CancellationToken ct)
     {

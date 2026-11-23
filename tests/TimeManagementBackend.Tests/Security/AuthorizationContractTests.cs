@@ -102,6 +102,7 @@ public class AuthorizationContractTests
             "AuthController.UpdateProfile",
             "CalendarController.GetToken",
             "CalendarController.RegenerateToken",
+            "NotificationsController.Delete",
             "NotificationsController.GetNotifications",
             "NotificationsController.GetUnreadCount",
             "NotificationsController.MarkAllAsRead",

@@ -15,6 +15,7 @@ public class MissedClockInReminderService(
     private DateOnly _lastRunDate = DateOnly.MinValue;
     private DateOnly _lastSettlementRunDate = DateOnly.MinValue;
     private DateOnly _lastCalendarExpiryWeekStart = DateOnly.MinValue;
+    private DateOnly _lastNotificationCleanupDate = DateOnly.MinValue;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -58,7 +59,34 @@ public class MissedClockInReminderService(
                 }
             }
 
+            if (DateOnly.FromDateTime(now) != _lastNotificationCleanupDate)
+            {
+                _lastNotificationCleanupDate = DateOnly.FromDateTime(now);
+                await CleanUpOldNotificationsAsync(stoppingToken);
+            }
+
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
+        }
+    }
+
+    // ── Notification cleanup ──────────────────────────────────────────────────
+
+    /// <summary>Keeps the bell short: notifications older than the retention period are deleted daily.</summary>
+    private async Task CleanUpOldNotificationsAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var removed = await notifications.DeleteOlderThanAsync(
+                DateTimeOffset.UtcNow - NotificationService.RetentionPeriod, ct);
+            if (removed > 0)
+                logger.LogInformation("Removed {Count} notification(s) older than {Days} days.",
+                    removed, NotificationService.RetentionPeriod.TotalDays);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Cleaning up old notifications failed.");
         }
     }
 

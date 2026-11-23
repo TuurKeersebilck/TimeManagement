@@ -9,6 +9,12 @@ public class NotificationService(AppDbContext db) : INotificationService
 {
     private readonly AppDbContext _db = db;
 
+    /// <summary>The bell shows at most this many; older ones are cleaned up after 90 days anyway.</summary>
+    public const int MaxListed = 100;
+
+    /// <summary>How long notifications are kept before the daily cleanup removes them.</summary>
+    public static readonly TimeSpan RetentionPeriod = TimeSpan.FromDays(90);
+
     public async Task NotifyAdminsAsync(string message, NotificationType type, CancellationToken ct = default)
     {
         var adminIds = await _db.Users
@@ -48,6 +54,8 @@ public class NotificationService(AppDbContext db) : INotificationService
             .AsNoTracking()
             .Where(n => n.RecipientUserId == adminUserId)
             .OrderByDescending(n => n.CreatedAt)
+            .ThenByDescending(n => n.Id)
+            .Take(MaxListed)
             .Select(n => new NotificationDto
             {
                 Id = n.Id,
@@ -72,6 +80,16 @@ public class NotificationService(AppDbContext db) : INotificationService
         notification.IsRead = true;
         await _db.SaveChangesAsync(ct);
     }
+
+    public async Task DeleteAsync(int id, string userId, CancellationToken ct = default)
+    {
+        await _db.Notifications
+            .Where(n => n.Id == id && n.RecipientUserId == userId)
+            .ExecuteDeleteAsync(ct);
+    }
+
+    public Task<int> DeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default)
+        => _db.Notifications.Where(n => n.CreatedAt < cutoff).ExecuteDeleteAsync(ct);
 
     public async Task MarkAllAsReadAsync(string adminUserId, CancellationToken ct = default)
     {
