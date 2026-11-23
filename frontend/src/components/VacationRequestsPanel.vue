@@ -208,10 +208,6 @@ onMounted(load);
   <div class="space-y-8">
     <!-- Pending -->
     <section>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
-        Approving books the days; the employee gets an email either way.
-      </p>
-
       <div v-if="loading && requests.length === 0" class="grid gap-3">
         <div
           v-for="i in 2"
@@ -234,11 +230,14 @@ onMounted(load);
         <li v-for="r in pending" :key="r.id" class="card p-4 sm:p-5">
           <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div class="min-w-0">
-              <p class="font-semibold text-slate-900 dark:text-slate-100">
-                {{ r.employeeName }}
+              <!-- Flex gaps, not template whitespace, keep these apart: Vue drops line breaks between tags. -->
+              <p
+                class="flex flex-wrap items-center gap-x-1.5 font-semibold text-slate-900 dark:text-slate-100"
+              >
+                <span>{{ r.employeeName }}</span>
                 <span class="font-normal text-slate-500 dark:text-slate-400">requested</span>
                 <span
-                  class="inline-flex items-center gap-1.5 ml-0.5 font-medium text-slate-700 dark:text-slate-200"
+                  class="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200"
                 >
                   <span
                     class="size-2 rounded-full shrink-0"
@@ -320,7 +319,11 @@ onMounted(load);
                 Nobody else on these days
               </p>
               <ul v-else class="space-y-0.5">
-                <li v-for="o in r.overlaps" :key="o.employeeName + o.isPending">
+                <li
+                  v-for="o in r.overlaps"
+                  :key="o.employeeName + o.isPending"
+                  class="flex flex-wrap items-baseline gap-x-2"
+                >
                   <span class="font-medium">{{ o.employeeName }}</span>
                   <span class="text-slate-500 dark:text-slate-400">
                     {{ fmtShortDates(o.dates) }}<span v-if="o.isPending"> (requested)</span>

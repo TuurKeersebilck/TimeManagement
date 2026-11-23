@@ -8,7 +8,7 @@ import VacationRequestsPanel from "@/components/VacationRequestsPanel.vue";
       <div class="mb-6">
         <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">Vacation Requests</h1>
         <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-          Vacation employees asked for, waiting for your approval
+          Approving books the days. The employee gets an email either way.
         </p>
       </div>
       <VacationRequestsPanel />
