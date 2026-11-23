@@ -98,6 +98,8 @@ try
         User     = Environment.GetEnvironmentVariable("SMTP_USER")     ?? string.Empty,
         Password = Environment.GetEnvironmentVariable("SMTP_PASS")     ?? string.Empty,
         From     = Environment.GetEnvironmentVariable("SMTP_FROM")     ?? string.Empty,
+        CheckCertificateRevocation = SmtpConfig.ParseCheckCertificateRevocation(
+            Environment.GetEnvironmentVariable("SMTP_CHECK_CERTIFICATE_REVOCATION")),
     };
     builder.Services.AddSingleton(smtpConfig);
     builder.Services.AddScoped<IEmailService, EmailService>();
@@ -110,6 +112,8 @@ try
     }.Where(x => string.IsNullOrEmpty(x.Item1)).Select(x => x.Item2).ToList();
     if (missingSmtp.Count > 0)
         Log.Warning("SMTP misconfigured — email sending will fail. Missing or empty: {Vars}", string.Join(", ", missingSmtp));
+    if (!smtpConfig.CheckCertificateRevocation)
+        Log.Warning("SMTP certificate revocation checks are off (SMTP_CHECK_CERTIFICATE_REVOCATION=false). Meant for local development only.");
 
     // Expose APP_URL / BACKEND_URL to configuration
     builder.Configuration["AppUrl"] = Environment.GetEnvironmentVariable("APP_URL") ?? "http://localhost:5173";

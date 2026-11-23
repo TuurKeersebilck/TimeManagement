@@ -252,7 +252,7 @@ public class EmailService(SmtpConfig config, ILogger<EmailService> logger) : IEm
     private async Task SendMessageAsync(MimeMessage message, string context)
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(TimeoutSeconds));
-        using var client = new SmtpClient();
+        using var client = new SmtpClient { CheckCertificateRevocation = config.CheckCertificateRevocation };
         try
         {
             await client.ConnectAsync(config.Host, config.Port, SecureSocketOptions.StartTls, cts.Token);
